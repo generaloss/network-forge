@@ -6,10 +6,10 @@
     <groupId>networkforge</groupId>
     <artifactId>network-forge</artifactId>
     <version>25.8.1-SNAPSHOT-1</version>
-    <name>network-forge</name>
+    <name>${artifactId}</name>
 
     <description>Network Library</description>
-    <url>https://github.com/generaloss/network-forge</url>
+    <url>https://github.com/generaloss/${artifactId}</url>
 
     <dependencies>
         <dependency>
@@ -39,9 +39,9 @@
     </properties>
 
     <scm>
-        <connection>scm:git:git://github.com/generaloss/network-forge.git</connection>
-        <developerConnection>scm:git:ssh://github.com:generaloss/network-forge.git</developerConnection>
-        <url>https://github.com/generaloss/network-forge/tree/master</url>
+        <connection>scm:git:git://github.com/generaloss/${artifactId}.git</connection>
+        <developerConnection>scm:git:ssh://github.com:generaloss/${artifactId}.git</developerConnection>
+        <url>https://github.com/generaloss/${artifactId}/tree/master</url>
     </scm>
 
     <developers>
@@ -115,6 +115,7 @@
                 <version>0.3.0</version>
                 <extensions>true</extensions>
                 <configuration>
+                    <deploymentName>${artifactId}:${version}</deploymentName>
                     <publishingServerId>central</publishingServerId>
                     <tokenAuth>true</tokenAuth>
                 </configuration>
