@@ -47,8 +47,8 @@ public class TCPClient {
         return this;
     }
 
-    public TCPClient setConnectionType(TCPConnectionType type) {
-        this.connectionFactory = TCPConnection.getFactory(type);
+    public TCPClient setConnectionType(TCPConnectionType connectionType) {
+        this.connectionFactory = TCPConnection.getFactory(connectionType);
         return this;
     }
 
@@ -248,21 +248,21 @@ public class TCPClient {
     }
 
 
-    public TCPClient encodeOutput(Cipher encryptCipher) {
+    public TCPClient encryptOutput(Cipher encryptCipher) {
         if(this.isConnected())
-            connection.encodeOutput(encryptCipher);
+            connection.encryptOutput(encryptCipher);
         return this;
     }
 
-    public TCPClient encodeInput(Cipher decryptCipher) {
+    public TCPClient encryptInput(Cipher decryptCipher) {
         if(this.isConnected())
-            connection.encodeInput(decryptCipher);
+            connection.encryptInput(decryptCipher);
         return this;
     }
 
-    public TCPClient encode(Cipher encryptCipher, Cipher decryptCipher) {
+    public TCPClient encrypt(Cipher encryptCipher, Cipher decryptCipher) {
         if(this.isConnected())
-            connection.encode(encryptCipher, decryptCipher);
+            connection.encrypt(encryptCipher, decryptCipher);
         return this;
     }
 

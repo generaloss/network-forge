@@ -44,8 +44,8 @@ public class TCPServer {
         return this;
     }
 
-    public TCPServer setConnectionType(TCPConnectionType type) {
-        this.connectionFactory = TCPConnection.getFactory(type);
+    public TCPServer setConnectionType(TCPConnectionType connectionType) {
+        this.connectionFactory = TCPConnection.getFactory(connectionType);
         return this;
     }
 
@@ -272,14 +272,6 @@ public class TCPServer {
         return result;
     }
 
-    public boolean broadcast(BinaryStreamWriter streamWriter) {
-        return this.broadcast(BinaryStreamWriter.writeBytes(streamWriter));
-    }
-
-    public boolean broadcast(TCPConnection except, BinaryStreamWriter streamWriter) {
-        return this.broadcast(except, BinaryStreamWriter.writeBytes(streamWriter));
-    }
-
     public boolean broadcast(NetPacket<?> packet) {
         return this.broadcast(stream -> {
             stream.writeShort(packet.getPacketID());
@@ -292,6 +284,14 @@ public class TCPServer {
             stream.writeShort(packet.getPacketID());
             packet.write(stream);
         });
+    }
+
+    public boolean broadcast(BinaryStreamWriter streamWriter) {
+        return this.broadcast(BinaryStreamWriter.writeBytes(streamWriter));
+    }
+
+    public boolean broadcast(TCPConnection except, BinaryStreamWriter streamWriter) {
+        return this.broadcast(except, BinaryStreamWriter.writeBytes(streamWriter));
     }
 
 }

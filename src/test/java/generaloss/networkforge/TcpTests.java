@@ -171,7 +171,7 @@ public class TcpTests {
         final String message = "Hello, World!";
 
         final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> connection.encode(encryptCipher, decryptCipher))
+            .setOnConnect((connection) -> connection.encrypt(encryptCipher, decryptCipher))
             .setOnReceive((sender, bytes) -> {
                 final String received = new String(bytes);
                 Assert.assertEquals(message, received);
@@ -181,7 +181,7 @@ public class TcpTests {
 
         final TCPClient client = new TCPClient();
         client.connect("localhost", 5405);
-        client.encode(encryptCipher, decryptCipher);
+        client.encrypt(encryptCipher, decryptCipher);
         client.send(message.getBytes());
 
         TimeUtils.waitFor(client::isClosed);
@@ -198,7 +198,7 @@ public class TcpTests {
 
         final AtomicInteger counter = new AtomicInteger();
         final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> connection.encode(encryptCipher, decryptCipher))
+            .setOnConnect((connection) -> connection.encrypt(encryptCipher, decryptCipher))
             .setOnReceive((sender, bytes) -> {
                 final String received = new String(bytes);
                 counter.incrementAndGet();
@@ -211,7 +211,7 @@ public class TcpTests {
 
         final TCPClient client = new TCPClient();
         client.connect("localhost", 5408 + (int) Math.round(Math.random()));
-        client.encode(encryptCipher, decryptCipher);
+        client.encrypt(encryptCipher, decryptCipher);
 
         final int iterations = 10000;
         for(int i = 0; i < iterations; i++)

@@ -25,7 +25,7 @@ public abstract class TCPConnection implements Closeable {
     protected final SelectionKey selectionKey;
     protected final TCPCloseable onClose;
     protected final TCPSocketOptions options;
-    private final Queue<ByteBuffer> writeQueue;
+    private final Queue<ByteBuffer> sendQueue;
     private Cipher encryptCipher, decryptCipher;
     private String name;
     private Object attachment;
@@ -35,7 +35,7 @@ public abstract class TCPConnection implements Closeable {
         this.selectionKey = selectionKey;
         this.onClose = onClose;
         this.options = new TCPSocketOptions(channel.socket());
-        this.writeQueue = new ConcurrentLinkedQueue<>();
+        this.sendQueue = new ConcurrentLinkedQueue<>();
         this.name = (this.getClass().getSimpleName() + "#" + this.hashCode());
     }
 
@@ -66,6 +66,8 @@ public abstract class TCPConnection implements Closeable {
     }
 
     public void setName(String name) {
+        if(name == null)
+            throw new NullPointerException("Name is null");
         this.name = name;
     }
 
@@ -80,17 +82,17 @@ public abstract class TCPConnection implements Closeable {
 
 
 
-    public void encodeOutput(Cipher encryptCipher) {
+    public void encryptOutput(Cipher encryptCipher) {
         this.encryptCipher = encryptCipher;
     }
 
-    public void encodeInput(Cipher decryptCipher) {
+    public void encryptInput(Cipher decryptCipher) {
         this.decryptCipher = decryptCipher;
     }
 
-    public void encode(Cipher encryptCipher, Cipher decryptCipher) {
-        this.encodeOutput(encryptCipher);
-        this.encodeInput(decryptCipher);
+    public void encrypt(Cipher encryptCipher, Cipher decryptCipher) {
+        this.encryptOutput(encryptCipher);
+        this.encryptInput(decryptCipher);
     }
 
     protected byte[] tryToEncryptBytes(byte[] bytes) {
@@ -132,11 +134,11 @@ public abstract class TCPConnection implements Closeable {
 
     protected boolean toWriteQueue(ByteBuffer buffer) {
         try{
-            if(writeQueue.isEmpty())
+            if(sendQueue.isEmpty())
                 channel.write(buffer);
 
             if(buffer.hasRemaining()) {
-                writeQueue.add(buffer);
+                sendQueue.add(buffer);
                 selectionKey.interestOpsOr(SelectionKey.OP_WRITE);
                 selectionKey.selector().wakeup();
             }
@@ -149,14 +151,14 @@ public abstract class TCPConnection implements Closeable {
 
     protected void processWriteQueue(SelectionKey key) {
         try{
-            synchronized(writeQueue) {
-                while(!writeQueue.isEmpty()) {
-                    final ByteBuffer buffer = writeQueue.peek();
-                    channel.write(buffer);
+            synchronized(sendQueue) {
+                while(!sendQueue.isEmpty()) {
+                    final ByteBuffer sendBuffer = sendQueue.peek();
+                    channel.write(sendBuffer);
 
-                    if(buffer.hasRemaining())
+                    if(sendBuffer.hasRemaining())
                         return;
-                    writeQueue.poll();
+                    sendQueue.poll();
                 }
                 key.interestOps(SelectionKey.OP_READ);
             }
@@ -165,8 +167,8 @@ public abstract class TCPConnection implements Closeable {
         }
     }
 
-    public int getWriteQueueSize() {
-        return writeQueue.size();
+    public int getSendQueueSize() {
+        return sendQueue.size();
     }
 
 
@@ -237,8 +239,8 @@ public abstract class TCPConnection implements Closeable {
         return FACTORY_BY_CLASS.get(connectionClass);
     }
 
-    public static Factory getFactory(TCPConnectionType type) {
-        return getFactory(type.getConnectionClass());
+    public static Factory getFactory(TCPConnectionType connectionType) {
+        return getFactory(connectionType.getConnectionClass());
     }
 
     public static TCPConnection create(Class<?> connectionClass, SocketChannel channel, SelectionKey selectionKey, TCPSocketOptions options, TCPCloseable onClose) {
