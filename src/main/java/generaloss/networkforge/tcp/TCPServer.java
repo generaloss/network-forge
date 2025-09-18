@@ -188,7 +188,7 @@ public class TCPServer {
     private void processKey(SelectionKey key) {
         if(key.isValid() && key.isReadable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
-            final byte[] bytes = connection.read();
+            final byte[] bytes = connection.read(false);
             this.invokeOnReceive(connection, bytes);
         }
         if(key.isValid() && key.isWritable()){

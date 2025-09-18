@@ -116,7 +116,7 @@ public abstract class TCPConnection implements Closeable {
     }
 
 
-    protected abstract byte[] read();
+    protected abstract byte[] read(boolean control);
 
     public abstract boolean send(byte[] bytes);
 
@@ -175,6 +175,8 @@ public abstract class TCPConnection implements Closeable {
     protected void close(String message) {
         if(this.isClosed())
             return;
+
+        System.out.println("Close " + name + " (" + message + ")");
 
         if(onClose != null)
             onClose.close(this, message);

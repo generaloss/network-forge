@@ -142,8 +142,7 @@ public class TCPClient {
         if(this.isConnected())
             throw new AlreadyConnectedException();
 
-        if(selector != null)
-            ResUtils.close(selector);
+        ResUtils.close(selector);
 
         try{
             // channel
@@ -176,8 +175,9 @@ public class TCPClient {
                 throw new ConnectException("Connection failed");
             }
         }catch(Exception e){
-            ResUtils.close(selector);
             throw new RuntimeException("Failed to connect TCP client: ", e);
+        }finally{
+            ResUtils.close(selector);
         }
         return this;
     }
@@ -197,27 +197,34 @@ public class TCPClient {
 
     private void startSelectorThread() {
         selectorThread = new Thread(() -> {
-            while(!Thread.interrupted() && !this.isClosed())
-                this.selectKeys();
+            while(!Thread.interrupted() && !this.isClosed()) {
+                final boolean selected = this.selectKeys();
+                if(!selected)
+                    connection.read(true);
+            }
         }, "TCP client selector thread #" + this.hashCode());
+
         selectorThread.setDaemon(true);
         selectorThread.start();
     }
 
-    private void selectKeys() {
+    private boolean selectKeys() {
         try{
-            selector.select();
+            if(selector.select() == 0)
+                return false;
             final Set<SelectionKey> selectedKeys = selector.selectedKeys();
             for(SelectionKey key: selectedKeys)
                 this.processKey(key);
             selectedKeys.clear();
 
+            return true;
         }catch(Exception ignored) { }
+        return false;
     }
 
     private void processKey(SelectionKey key) {
         if(key.isValid() && key.isReadable()){
-            final byte[] bytes = connection.read();
+            final byte[] bytes = connection.read(false);
             this.invokeOnReceive(connection, bytes);
         }
         if(key.isValid() && key.isWritable())

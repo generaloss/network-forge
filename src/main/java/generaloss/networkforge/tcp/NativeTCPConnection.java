@@ -16,7 +16,7 @@ public class NativeTCPConnection extends TCPConnection {
     }
 
     @Override
-    protected byte[] read() {
+    protected byte[] read(boolean control) {
         try{
             // read all available data
             final ByteArrayOutputStream bytes = new ByteArrayOutputStream();

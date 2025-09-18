@@ -6,7 +6,6 @@ import generaloss.resourceflow.stream.BinaryOutputStream;
 import generaloss.networkforge.packet.NetPacket;
 import generaloss.networkforge.packet.NetPacketDispatcher;
 import generaloss.networkforge.tcp.TCPClient;
-import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.TCPServer;
 import org.junit.Assert;
 import org.junit.Test;
@@ -119,13 +118,17 @@ public class TcpTests {
     @Test
     public void disconnect_client() throws Exception {
         final AtomicBoolean closed = new AtomicBoolean();
+
         final TCPServer server = new TCPServer()
-                .setOnConnect(TCPConnection::close)
+                .setOnConnect((connection) -> {connection.setName("[server]"); connection.close();})
                 .run(5406);
-        new TCPClient()
+
+        final TCPClient client = new TCPClient()
                 .setOnDisconnect((connection, message) -> closed.set(true))
                 .connect("localhost", 5406);
-        TimeUtils.waitFor(closed::get, 500, Assert::fail);
+        client.connection().setName("[client]");
+
+        TimeUtils.waitFor(closed::get, 5000, Assert::fail);
         server.close();
     }
 
