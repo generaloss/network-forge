@@ -188,7 +188,7 @@ public class TCPServer {
     private void processKey(SelectionKey key) {
         if(key.isValid() && key.isReadable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
-            final byte[] bytes = connection.read(false);
+            final byte[] bytes = connection.read();
             this.invokeOnReceive(connection, bytes);
         }
         if(key.isValid() && key.isWritable()){
@@ -210,6 +210,7 @@ public class TCPServer {
             final SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
 
             final TCPConnection connection = connectionFactory.create(channel, key, this::onConnectionClosed);
+            connection.setName("TCPServer-connection #" + this.hashCode());
             connections.add(connection);
             key.attach(connection);
 

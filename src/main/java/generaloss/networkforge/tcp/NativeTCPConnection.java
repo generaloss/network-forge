@@ -16,21 +16,21 @@ public class NativeTCPConnection extends TCPConnection {
     }
 
     @Override
-    protected byte[] read(boolean control) {
-        try{
+    protected byte[] read() {
+        try {
             // read all available data
             final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
             int length = super.channel.read(dataBuffer);
-            while(length > 0){
+            while(length > 0) {
                 dataBuffer.flip();
                 bytes.write(dataBuffer.array(), 0, length);
                 dataBuffer.clear();
                 length = super.channel.read(dataBuffer);
             }
 
+            // check remote close
             if(length == -1) {
-                // connection closed
                 super.close("Connection closed on other side");
                 return null;
             }

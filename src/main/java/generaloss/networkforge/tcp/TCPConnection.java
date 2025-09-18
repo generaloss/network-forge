@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.HashMap;
@@ -25,10 +26,14 @@ public abstract class TCPConnection implements Closeable {
     protected final SelectionKey selectionKey;
     protected final TCPCloseable onClose;
     protected final TCPSocketOptions options;
-    private final Queue<ByteBuffer> sendQueue;
+    private volatile boolean closed;
+
     private Cipher encryptCipher, decryptCipher;
     private String name;
     private Object attachment;
+
+    private final Queue<ByteBuffer> sendQueue;
+    private final Object writeLock = new Object();
 
     public TCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
         this.channel = channel;
@@ -95,28 +100,28 @@ public abstract class TCPConnection implements Closeable {
         this.encryptInput(decryptCipher);
     }
 
-    protected byte[] tryToEncryptBytes(byte[] bytes) {
+    protected synchronized byte[] tryToEncryptBytes(byte[] bytes) {
         if(encryptCipher == null)
             return bytes;
-        try{
+        try {
             return encryptCipher.doFinal(bytes);
-        }catch(IllegalBlockSizeException | BadPaddingException e){
+        }catch(IllegalBlockSizeException | BadPaddingException e) {
             throw new IllegalStateException("Encryption error: " + e.getMessage());
         }
     }
 
-    protected byte[] tryToDecryptBytes(byte[] bytes) {
+    protected synchronized byte[] tryToDecryptBytes(byte[] bytes) {
         if(decryptCipher == null)
             return bytes;
-        try{
+        try {
             return decryptCipher.doFinal(bytes);
-        }catch(IllegalBlockSizeException | BadPaddingException e){
+        }catch(IllegalBlockSizeException | BadPaddingException e) {
             throw new IllegalStateException("Decryption error: " + e.getMessage());
         }
     }
 
 
-    protected abstract byte[] read(boolean control);
+    protected abstract byte[] read();
 
     public abstract boolean send(byte[] bytes);
 
@@ -133,36 +138,39 @@ public abstract class TCPConnection implements Closeable {
 
 
     protected boolean toWriteQueue(ByteBuffer buffer) {
-        try{
-            if(sendQueue.isEmpty())
-                channel.write(buffer);
+        try {
+            synchronized(writeLock) {
+                if(sendQueue.isEmpty())
+                    channel.write(buffer);
 
-            if(buffer.hasRemaining()) {
-                sendQueue.add(buffer);
-                selectionKey.interestOpsOr(SelectionKey.OP_WRITE);
-                selectionKey.selector().wakeup();
+                if(buffer.hasRemaining()) {
+                    sendQueue.add(buffer);
+                    selectionKey.interestOpsOr(SelectionKey.OP_WRITE);
+                    selectionKey.selector().wakeup();
+
+                    this.processWriteQueue(selectionKey);
+                }
             }
             return true;
-        }catch(IOException e){
+        }catch(IOException | CancelledKeyException e) {
             this.close(e);
             return false;
         }
     }
 
     protected void processWriteQueue(SelectionKey key) {
-        try{
-            synchronized(sendQueue) {
+        try {
+            synchronized(writeLock) {
                 while(!sendQueue.isEmpty()) {
                     final ByteBuffer sendBuffer = sendQueue.peek();
                     channel.write(sendBuffer);
-
                     if(sendBuffer.hasRemaining())
                         return;
                     sendQueue.poll();
                 }
                 key.interestOps(SelectionKey.OP_READ);
             }
-        }catch(Exception e){
+        }catch(Exception e) {
             this.close(e);
         }
     }
@@ -173,10 +181,9 @@ public abstract class TCPConnection implements Closeable {
 
 
     protected void close(String message) {
-        if(this.isClosed())
+        if(closed)
             return;
-
-        System.out.println("Close " + name + " (" + message + ")");
+        closed = true;
 
         if(onClose != null)
             onClose.close(this, message);
@@ -186,7 +193,7 @@ public abstract class TCPConnection implements Closeable {
     }
 
     protected void close(Exception e) {
-        this.close("Error occured. Close connection: " + e.getMessage());
+        this.close("Error occurred. Close connection: " + e);
     }
 
     @Override
@@ -196,11 +203,11 @@ public abstract class TCPConnection implements Closeable {
 
 
     public boolean isConnected() {
-        return channel.isConnected();
+        return (channel.isConnected() && !closed);
     }
 
     public boolean isClosed() {
-        return !this.isConnected();
+        return closed;
     }
 
     public int getPort() {

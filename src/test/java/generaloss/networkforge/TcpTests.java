@@ -1,6 +1,7 @@
 package generaloss.networkforge;
 
 import generaloss.chronokit.TimeUtils;
+import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.resourceflow.stream.BinaryOutputStream;
 import generaloss.networkforge.packet.NetPacket;
@@ -120,13 +121,12 @@ public class TcpTests {
         final AtomicBoolean closed = new AtomicBoolean();
 
         final TCPServer server = new TCPServer()
-                .setOnConnect((connection) -> {connection.setName("[server]"); connection.close();})
+                .setOnConnect(TCPConnection::close)
                 .run(5406);
 
         final TCPClient client = new TCPClient()
                 .setOnDisconnect((connection, message) -> closed.set(true))
                 .connect("localhost", 5406);
-        client.connection().setName("[client]");
 
         TimeUtils.waitFor(closed::get, 5000, Assert::fail);
         server.close();
@@ -246,7 +246,7 @@ public class TcpTests {
 
     @Test
     public void send_a_lot_of_data_to_server() throws Exception {
-        final String message = "Hello, Data! ".repeat(100000);
+        final String message = "Hello, Data! ".repeat(10000000);
 
         final TCPServer server = new TCPServer()
             .setOnReceive((sender, bytes) -> {

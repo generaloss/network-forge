@@ -129,15 +129,6 @@ public class TCPClient {
     }
 
 
-    private void createConnection(SocketChannel channel) throws IOException {
-        final SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
-
-        connection = connectionFactory.create(channel, key, this::invokeOnDisconnect);
-        this.invokeOnConnect(connection);
-
-        this.startSelectorThread();
-    }
-
     public TCPClient connect(SocketAddress socketAddress, long timeoutMillis) {
         if(this.isConnected())
             throw new AlreadyConnectedException();
@@ -175,9 +166,8 @@ public class TCPClient {
                 throw new ConnectException("Connection failed");
             }
         }catch(Exception e){
-            throw new RuntimeException("Failed to connect TCP client: ", e);
-        }finally{
             ResUtils.close(selector);
+            throw new RuntimeException("Failed to connect TCP client: ", e);
         }
         return this;
     }
@@ -195,36 +185,41 @@ public class TCPClient {
     }
 
 
+    private void createConnection(SocketChannel channel) throws IOException {
+        final SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
+
+        connection = connectionFactory.create(channel, key, this::invokeOnDisconnect);
+        connection.setName("TCPClient-connection #" + this.hashCode());
+
+        this.invokeOnConnect(connection);
+        this.startSelectorThread();
+    }
+
     private void startSelectorThread() {
         selectorThread = new Thread(() -> {
-            while(!Thread.interrupted() && !this.isClosed()) {
-                final boolean selected = this.selectKeys();
-                if(!selected)
-                    connection.read(true);
-            }
+            while(!Thread.interrupted() && !this.isClosed())
+                this.selectKeys();
         }, "TCP client selector thread #" + this.hashCode());
 
         selectorThread.setDaemon(true);
         selectorThread.start();
     }
 
-    private boolean selectKeys() {
+    private void selectKeys() {
         try{
             if(selector.select() == 0)
-                return false;
+                return;
+
             final Set<SelectionKey> selectedKeys = selector.selectedKeys();
             for(SelectionKey key: selectedKeys)
                 this.processKey(key);
             selectedKeys.clear();
-
-            return true;
         }catch(Exception ignored) { }
-        return false;
     }
 
     private void processKey(SelectionKey key) {
         if(key.isValid() && key.isReadable()){
-            final byte[] bytes = connection.read(false);
+            final byte[] bytes = connection.read();
             this.invokeOnReceive(connection, bytes);
         }
         if(key.isValid() && key.isWritable())
