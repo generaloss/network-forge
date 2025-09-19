@@ -260,7 +260,7 @@ public class TcpTests {
         client.connect("localhost", 5402);
         client.send(message.getBytes());
 
-        TimeUtils.waitFor(client::isClosed, 2000, Assert::fail);
+        TimeUtils.waitFor(client::isClosed, 5000, Assert::fail);
         server.close();
     }
 

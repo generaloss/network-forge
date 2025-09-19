@@ -3,13 +3,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>networkforge</groupId>
+    <groupId>io.github.generaloss</groupId>
     <artifactId>network-forge</artifactId>
-    <version>25.9.1</version>
-    <name>${artifactId}</name>
+    <version>25.9.1-SNAPSHOT-2</version>
+    <name>${project.artifactId}</name>
 
     <description>Network Library</description>
-    <url>https://github.com/generaloss/${artifactId}</url>
+    <url>https://github.com/generaloss/${project.artifactId}</url>
 
     <dependencies>
         <dependency>
@@ -39,9 +39,9 @@
     </properties>
 
     <scm>
-        <connection>scm:git:git://github.com/generaloss/${artifactId}.git</connection>
-        <developerConnection>scm:git:ssh://github.com:generaloss/${artifactId}.git</developerConnection>
-        <url>https://github.com/generaloss/${artifactId}/tree/master</url>
+        <connection>scm:git:git://github.com/generaloss/${project.artifactId}.git</connection>
+        <developerConnection>scm:git:ssh://github.com:generaloss/${project.artifactId}.git</developerConnection>
+        <url>https://github.com/generaloss/${project.artifactId}/tree/master</url>
     </scm>
 
     <developers>
@@ -115,7 +115,7 @@
                 <version>0.8.0</version>
                 <extensions>true</extensions>
                 <configuration>
-                    <deploymentName>${artifactId}:${version}</deploymentName>
+                    <deploymentName>${project.artifactId}:${project.version}</deploymentName>
                     <publishingServerId>central</publishingServerId>
                 </configuration>
             </plugin>
