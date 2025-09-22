@@ -1,5 +1,6 @@
 package generaloss.networkforge.tcp;
 
+import generaloss.networkforge.NetCloseCause;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 import generaloss.resourceflow.stream.BinaryInputStream;
@@ -20,10 +21,10 @@ import java.util.function.Consumer;
 
 public class TCPServer {
 
-    private TCPConnection.Factory connectionFactory;
+    private TCPConnectionFactory connectionFactory;
 
     private Consumer<TCPConnection> onConnect;
-    private TCPCloseable onDisconnect;
+    private TCPCloseable onClose;
     private TCPReceiver onReceive;
     private TCPErrorHandler onError;
 
@@ -55,8 +56,8 @@ public class TCPServer {
         return this;
     }
 
-    public TCPServer setOnDisconnect(TCPCloseable onDisconnect) {
-        this.onDisconnect = onDisconnect;
+    public TCPServer setOnDisconnect(TCPCloseable onClose) {
+        this.onClose = onClose;
         return this;
     }
 
@@ -90,19 +91,19 @@ public class TCPServer {
 
         try {
             onConnect.accept(connection);
-        }catch(Exception e) {
-            this.invokeOnError(connection, "onConnect callback", e);
+        }catch(Exception onconnectException) {
+            this.invokeOnError(connection, "onConnect callback", onconnectException);
         }
     }
 
-    private void invokeOnDisconnect(TCPConnection connection, String message) {
-        if(onDisconnect == null)
+    private void invokeOnDisconnect(TCPConnection connection, NetCloseCause netCloseCause, Exception e) {
+        if(onClose == null)
             return;
 
         try {
-            onDisconnect.close(connection, message);
-        }catch(Exception e) {
-            this.invokeOnError(connection, "onDisconnect callback", e);
+            onClose.close(connection, netCloseCause, e);
+        }catch(Exception oncloseException) {
+            this.invokeOnError(connection, "onDisconnect callback", oncloseException);
         }
     }
 
@@ -112,15 +113,15 @@ public class TCPServer {
 
         try {
             onReceive.receive(connection, bytes);
-        }catch(Exception e) {
-            this.invokeOnError(connection, "onReceive callback", e);
+        }catch(Exception onreceiveException) {
+            this.invokeOnError(connection, "onReceive callback", onreceiveException);
         }
     }
 
     private void invokeOnError(TCPConnection connection, String source, Exception exception) {
         try {
             onError.error(connection, source, exception);
-        }catch(Exception e) {
+        }catch(Exception onerrorException) {
             TCPErrorHandler.printErrorCatch(connection, "onError callback", exception);
         }
     }
@@ -193,7 +194,7 @@ public class TCPServer {
         }
         if(key.isValid() && key.isWritable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
-            connection.processWriteQueue(key);
+            connection.processWriteKey(key);
         }
         if(key.isValid() && key.isAcceptable()){
             this.acceptNewConnection((ServerSocketChannel) key.channel());
@@ -218,9 +219,9 @@ public class TCPServer {
         }catch(IOException ignored){ }
     }
 
-    private void onConnectionClosed(TCPConnection connection, String message) {
+    private void onConnectionClosed(TCPConnection connection, NetCloseCause netCloseCause, Exception e) {
         connections.remove(connection);
-        this.invokeOnDisconnect(connection, message);
+        this.invokeOnDisconnect(connection, netCloseCause, e);
     }
 
 
@@ -246,7 +247,7 @@ public class TCPServer {
         }
 
         for(TCPConnection connection: connections)
-            connection.close("Server closed");
+            connection.close(NetCloseCause.CLOSE_SERVER, null);
         connections.clear();
 
         for(ServerSocketChannel serverChannel: serverChannels)

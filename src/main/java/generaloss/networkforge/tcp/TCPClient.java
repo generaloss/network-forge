@@ -1,5 +1,6 @@
 package generaloss.networkforge.tcp;
 
+import generaloss.networkforge.NetCloseCause;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.networkforge.packet.NetPacket;
@@ -10,6 +11,7 @@ import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -21,10 +23,10 @@ import java.util.function.Consumer;
 
 public class TCPClient {
 
-    private TCPConnection.Factory connectionFactory;
+    private TCPConnectionFactory connectionFactory;
 
     private Consumer<TCPConnection> onConnect;
-    private TCPCloseable onDisconnect;
+    private TCPCloseable onClose;
     private TCPReceiver onReceive;
     private TCPErrorHandler onError;
 
@@ -58,8 +60,8 @@ public class TCPClient {
         return this;
     }
 
-    public TCPClient setOnDisconnect(TCPCloseable onDisconnect) {
-        this.onDisconnect = onDisconnect;
+    public TCPClient setOnDisconnect(TCPCloseable onClose) {
+        this.onClose = onClose;
         return this;
     }
 
@@ -93,19 +95,19 @@ public class TCPClient {
 
         try {
             onConnect.accept(connection);
-        }catch(Exception e) {
-            this.invokeOnError(connection, "onConnect callback", e);
+        }catch(Exception onconnectException) {
+            this.invokeOnError(connection, "onConnect callback", onconnectException);
         }
     }
 
-    private void invokeOnDisconnect(TCPConnection connection, String message) {
-        if(onDisconnect == null)
+    private void invokeOnDisconnect(TCPConnection connection, NetCloseCause netCloseCause, Exception e) {
+        if(onClose == null)
             return;
 
         try {
-            onDisconnect.close(connection, message);
-        }catch(Exception e) {
-            this.invokeOnError(connection, "onDisconnect callback", e);
+            onClose.close(connection, netCloseCause, e);
+        }catch(Exception oncloseException) {
+            this.invokeOnError(connection, "onDisconnect callback", oncloseException);
         }
     }
 
@@ -115,15 +117,15 @@ public class TCPClient {
 
         try {
             onReceive.receive(connection, bytes);
-        }catch(Exception e) {
-            this.invokeOnError(connection, "onReceive callback", e);
+        }catch(Exception onreceiveException) {
+            this.invokeOnError(connection, "onReceive callback", onreceiveException);
         }
     }
 
     private void invokeOnError(TCPConnection connection, String source, Exception exception) {
         try {
             onError.error(connection, source, exception);
-        }catch(Exception e) {
+        }catch(Exception onerrorException) {
             TCPErrorHandler.printErrorCatch(connection, "onError callback", exception);
         }
     }
@@ -176,12 +178,12 @@ public class TCPClient {
         return this.connect(socketAddress, 0L);
     }
 
-    public TCPClient connect(String host, int port, long timeoutMillis) {
-        return this.connect(new InetSocketAddress(host, port), timeoutMillis);
+    public TCPClient connect(String hostname, int port, long timeoutMillis) {
+        return this.connect(new InetSocketAddress(hostname, port), timeoutMillis);
     }
 
-    public TCPClient connect(String host, int port) {
-        return this.connect(host, port, 0L);
+    public TCPClient connect(String hostname, int port) {
+        return this.connect(hostname, port, 0L);
     }
 
 
@@ -223,7 +225,7 @@ public class TCPClient {
             this.invokeOnReceive(connection, bytes);
         }
         if(key.isValid() && key.isWritable())
-            connection.processWriteQueue(key);
+            connection.processWriteKey(key);
     }
 
 
@@ -235,7 +237,7 @@ public class TCPClient {
         return (connection == null || connection.isClosed());
     }
 
-    public TCPClient disconnect() {
+    public TCPClient close() {
         if(this.isClosed())
             return this;
 
@@ -244,7 +246,7 @@ public class TCPClient {
             selector.wakeup();
         }
 
-        connection.close("Client closed");
+        connection.close(NetCloseCause.CLOSE_CLIENT, null);
         ResUtils.close(selector);
         return this;
     }
@@ -252,37 +254,43 @@ public class TCPClient {
 
     public TCPClient encryptOutput(Cipher encryptCipher) {
         if(this.isConnected())
-            connection.encryptOutput(encryptCipher);
+            connection.encrypter().encryptOutput(encryptCipher);
         return this;
     }
 
     public TCPClient encryptInput(Cipher decryptCipher) {
         if(this.isConnected())
-            connection.encryptInput(decryptCipher);
+            connection.encrypter().encryptInput(decryptCipher);
         return this;
     }
 
     public TCPClient encrypt(Cipher encryptCipher, Cipher decryptCipher) {
         if(this.isConnected())
-            connection.encrypt(encryptCipher, decryptCipher);
+            connection.encrypter().encrypt(encryptCipher, decryptCipher);
         return this;
     }
 
 
+    public boolean send(ByteBuffer buffer) {
+        if(connection != null)
+            return connection.send(buffer);
+        return false;
+    }
+
     public boolean send(byte[] bytes) {
-        if(this.isConnected())
+        if(connection != null)
             return connection.send(bytes);
         return false;
     }
 
     public boolean send(BinaryStreamWriter streamWriter) {
-        if(this.isConnected())
+        if(connection != null)
             return connection.send(streamWriter);
         return false;
     }
 
     public boolean send(NetPacket<?> packet) {
-        if(this.isConnected())
+        if(connection != null)
             return connection.send(packet);
         return false;
     }

@@ -2,6 +2,7 @@ package generaloss.networkforge;
 
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.tcp.TCPConnection;
+import generaloss.networkforge.tcp.TCPConnectionType;
 import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.resourceflow.stream.BinaryOutputStream;
 import generaloss.networkforge.packet.NetPacket;
@@ -61,6 +62,7 @@ public class TcpTests {
 
     public static void main(String[] args) {
         reliabilityTest();
+        // closeOnOtherSideTest();
     }
 
     private static void reliabilityTest() {
@@ -81,21 +83,44 @@ public class TcpTests {
         }
     }
 
-    private static void closeOnOtherSideTest() throws Exception {
-        final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> System.out.println("[Server] Connected"))
-            .setOnDisconnect((connection, message) -> System.out.println("[Server] Disconnected: " + message))
-            .run(65000);
+    private static void closeOnOtherSideTest() {
+        try {
+            final TCPServer server = new TCPServer().setOnConnect(
+                    (connection) -> System.out.println("[Server] Connected"))
+                .setOnDisconnect((connection, reason, e) -> System.out.println("[Server] Disconnected: " + reason))
+                .run(65000);
 
-        final TCPClient client = new TCPClient()
-            .setOnConnect((connection) -> System.out.println("[Client] Connected"))
-            .setOnDisconnect((connection, message) -> System.out.println("[Client] Disconnected: " + message));
-        for(int i = 0; i < 3; i++){
-            client.connect("localhost", 65000);
-            client.disconnect();
+            final TCPClient client = new TCPClient().setOnConnect(
+                    (connection) -> System.out.println("[Client] Connected"))
+                .setOnDisconnect((connection, reason, e) -> System.out.println("[Client] Disconnected: " + reason));
+            for(int i = 0; i < 3; i++) {
+                client.connect("localhost", 65000);
+                client.close();
+                TimeUtils.delayMillis(500);
+            }
+            TimeUtils.delayMillis(2000);
+            server.close();
+        }catch(Exception e) {
+            throw new RuntimeException(e);
         }
-        TimeUtils.delayMillis(2000);
-        server.close();
+    }
+
+    @Test
+    public void webpage_connect() throws Exception {
+        final TCPClient client = new TCPClient()
+            .setConnectionType(TCPConnectionType.NATIVE)
+            .setOnConnect(connection -> System.out.println("Connected"))
+            .setOnDisconnect((connection, cause, e) -> System.out.println(cause.getMessage()))
+            .setOnReceive((connection, bytes) -> {
+                System.out.println("Received:\n" + new String(bytes));
+                connection.close();
+            })
+            .connect("google.com", 80);
+
+        final String httpRequest = "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n";
+        client.send(httpRequest.getBytes());
+
+        TimeUtils.waitFor(client::isClosed);
     }
 
     @Test
@@ -104,13 +129,13 @@ public class TcpTests {
         final AtomicInteger counter = new AtomicInteger();
         final TCPServer server = new TCPServer()
                 .setOnConnect((connection) -> counter.incrementAndGet())
-                .setOnDisconnect((connection, message) -> counter.incrementAndGet())
+                .setOnDisconnect((connection, reason, e) -> counter.incrementAndGet())
                 .run(65000);
 
         final TCPClient client = new TCPClient();
         for(int i = 0; i < reconnectsNum; i++){
             client.connect("localhost", 65000);
-            client.disconnect();
+            client.close();
         }
         TimeUtils.waitFor(() -> counter.get() == reconnectsNum * 2, 500, () -> Assert.fail(counter.get() + " / " + (reconnectsNum * 2)));
         server.close();
@@ -125,7 +150,7 @@ public class TcpTests {
                 .run(5406);
 
         final TCPClient client = new TCPClient()
-                .setOnDisconnect((connection, message) -> closed.set(true))
+                .setOnDisconnect((connection, reason, e) -> closed.set(true))
                 .connect("localhost", 5406);
 
         TimeUtils.waitFor(closed::get, 5000, Assert::fail);
@@ -136,11 +161,11 @@ public class TcpTests {
     public void close_server_connection() throws Exception {
         final AtomicBoolean closed = new AtomicBoolean();
         final TCPServer server = new TCPServer()
-                .setOnDisconnect((connection, message) -> closed.set(true))
+                .setOnDisconnect((connection, reason, e) -> closed.set(true))
                 .run(5407);
         final TCPClient client = new TCPClient();
         client.connect("localhost", 5407);
-        client.disconnect();
+        client.close();
         TimeUtils.waitFor(closed::get, 500, Assert::fail);
         server.close();
     }
@@ -174,7 +199,7 @@ public class TcpTests {
         final String message = "Hello, World!";
 
         final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> connection.encrypt(encryptCipher, decryptCipher))
+            .setOnConnect((connection) -> connection.encrypter().encrypt(encryptCipher, decryptCipher))
             .setOnReceive((sender, bytes) -> {
                 final String received = new String(bytes);
                 Assert.assertEquals(message, received);
@@ -201,7 +226,7 @@ public class TcpTests {
 
         final AtomicInteger counter = new AtomicInteger();
         final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> connection.encrypt(encryptCipher, decryptCipher))
+            .setOnConnect((connection) -> connection.encrypter().encrypt(encryptCipher, decryptCipher))
             .setOnReceive((sender, bytes) -> {
                 final String received = new String(bytes);
                 counter.incrementAndGet();
@@ -288,7 +313,7 @@ public class TcpTests {
         for(TCPClient client: clients)
             new Thread(() -> {
                 client.send(message.getBytes());
-                client.disconnect();
+                client.close();
             }).start();
 
         int prevDone = -1;

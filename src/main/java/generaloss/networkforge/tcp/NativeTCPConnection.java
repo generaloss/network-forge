@@ -1,5 +1,7 @@
 package generaloss.networkforge.tcp;
 
+import generaloss.networkforge.NetCloseCause;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -8,41 +10,13 @@ import java.nio.channels.SocketChannel;
 
 public class NativeTCPConnection extends TCPConnection {
 
-    private final ByteBuffer dataBuffer;
+    private static final int BUFFER_SIZE = 8192; // 8 kb
+
+    private final ByteBuffer readBuffer;
 
     protected NativeTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
         super(channel, selectionKey, onClose);
-        this.dataBuffer = ByteBuffer.allocate(2048);
-    }
-
-    @Override
-    protected byte[] read() {
-        try {
-            // read all available data
-            final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-
-            int length = super.channel.read(dataBuffer);
-            while(length > 0) {
-                dataBuffer.flip();
-                bytes.write(dataBuffer.array(), 0, length);
-                dataBuffer.clear();
-                length = super.channel.read(dataBuffer);
-            }
-
-            // check remote close
-            if(length == -1) {
-                super.close("Connection closed on other side");
-                return null;
-            }
-            if(bytes.size() == 0) // nothing to return
-                return null;
-
-            return super.tryToDecryptBytes(bytes.toByteArray());
-
-        }catch(IOException e) {
-            super.close(e);
-            return null;
-        }
+        this.readBuffer = ByteBuffer.allocate(BUFFER_SIZE);
     }
 
     @Override
@@ -50,12 +24,49 @@ public class NativeTCPConnection extends TCPConnection {
         if(super.isClosed())
             return false;
 
-        bytes = this.tryToEncryptBytes(bytes);
+        bytes = super.encrypter.tryToEncryptBytes(bytes);
 
         final ByteBuffer buffer = ByteBuffer.allocate(bytes.length);
         buffer.put(bytes);
         buffer.flip();
-        return super.toWriteQueue(buffer);
+        return super.write(buffer);
+    }
+
+    @Override
+    protected byte[] read() {
+        try {
+            // read all available data
+            final ByteArrayOutputStream bytesStream = new ByteArrayOutputStream();
+
+            int length;
+            while(true) {
+                length = super.channel.read(readBuffer);
+                if(length < 1)
+                    break;
+
+                // write buffer to bytesStream
+                readBuffer.flip();
+                final byte[] chunk = new byte[length];
+                readBuffer.get(chunk);
+                bytesStream.write(chunk);
+                readBuffer.clear();
+            }
+
+            if(length == -1) {
+                super.close(NetCloseCause.CLOSE_BY_OTHER_SIDE, null);
+                return null;
+            }
+
+            if(bytesStream.size() == 0)
+                return null;
+
+            final byte[] allReadBytes = bytesStream.toByteArray();
+            return super.encrypter.tryToDecryptBytes(allReadBytes);
+
+        }catch(IOException e) {
+            super.close(NetCloseCause.INTERNAL_ERROR, e);
+            return null;
+        }
     }
 
 }

@@ -1,5 +1,7 @@
 package generaloss.networkforge.tcp;
 
+import generaloss.networkforge.NetCloseCause;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -12,7 +14,21 @@ public class PacketTCPConnection extends TCPConnection {
 
     protected PacketTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
         super(channel, selectionKey, onClose);
-        this.lengthBuffer = ByteBuffer.allocate(4);
+        this.lengthBuffer = ByteBuffer.allocate(Integer.BYTES);
+    }
+
+    @Override
+    public boolean send(byte[] bytes) {
+        if(super.isClosed())
+            return false;
+
+        bytes = super.encrypter.tryToEncryptBytes(bytes);
+
+        final ByteBuffer buffer = ByteBuffer.allocate(4 + bytes.length);
+        buffer.putInt(bytes.length); // length
+        buffer.put(bytes); // data
+        buffer.flip();
+        return super.write(buffer);
     }
 
     @Override
@@ -23,7 +39,7 @@ public class PacketTCPConnection extends TCPConnection {
                 // read length
                 final boolean lengthFullyRead = this.readPartiallyTo(lengthBuffer);
                 if(!lengthFullyRead)
-                    return null; // continue to read length
+                    return null; // continue reading length next time
 
                 // allocate data buffer with length
                 lengthBuffer.flip();
@@ -34,7 +50,7 @@ public class PacketTCPConnection extends TCPConnection {
             // read data
             final boolean dataFullyRead = this.readPartiallyTo(dataBuffer);
             if(!dataFullyRead)
-                return null; // continue to read data
+                return null; // continue reading data next time
 
             // reset length
             lengthBuffer.clear();
@@ -42,7 +58,7 @@ public class PacketTCPConnection extends TCPConnection {
             return this.getDecryptedData();
 
         }catch(IOException e) {
-            super.close(e);
+            super.close(NetCloseCause.INTERNAL_ERROR, e);
             return null;
         }
     }
@@ -56,7 +72,7 @@ public class PacketTCPConnection extends TCPConnection {
         final int bytesRead = super.channel.read(buffer);
         // check remote close
         if(bytesRead == -1){
-            super.close("Connection closed on other side");
+            super.close(NetCloseCause.CLOSE_BY_OTHER_SIDE, null);
             return false; // continue to read
         }
 
@@ -69,22 +85,7 @@ public class PacketTCPConnection extends TCPConnection {
         final byte[] data = new byte[dataBuffer.remaining()];
         dataBuffer.get(data);
 
-        return super.tryToDecryptBytes(data);
-    }
-
-
-    @Override
-    public boolean send(byte[] bytes) {
-        if(super.isClosed())
-            return false;
-
-        bytes = super.tryToEncryptBytes(bytes);
-
-        final ByteBuffer buffer = ByteBuffer.allocate(4 + bytes.length);
-        buffer.putInt(bytes.length);
-        buffer.put(bytes);
-        buffer.flip();
-        return super.toWriteQueue(buffer);
+        return super.encrypter.tryToDecryptBytes(data);
     }
 
 }

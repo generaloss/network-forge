@@ -1,12 +1,11 @@
 package generaloss.networkforge.tcp;
 
+import generaloss.networkforge.NetCloseCause;
+import generaloss.networkforge.Encrypter;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 import generaloss.networkforge.packet.NetPacket;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -26,13 +25,12 @@ public abstract class TCPConnection implements Closeable {
     protected final SelectionKey selectionKey;
     protected final TCPCloseable onClose;
     protected final TCPSocketOptions options;
+    protected final Encrypter encrypter;
     private volatile boolean closed;
-
-    private Cipher encryptCipher, decryptCipher;
-    private String name;
     private Object attachment;
+    private String name;
 
-    private final Queue<ByteBuffer> sendQueue;
+    private final Queue<ByteBuffer> writeQueue;
     private final Object writeLock = new Object();
 
     public TCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
@@ -40,7 +38,8 @@ public abstract class TCPConnection implements Closeable {
         this.selectionKey = selectionKey;
         this.onClose = onClose;
         this.options = new TCPSocketOptions(channel.socket());
-        this.sendQueue = new ConcurrentLinkedQueue<>();
+        this.encrypter = new Encrypter();
+        this.writeQueue = new ConcurrentLinkedQueue<>();
         this.name = (this.getClass().getSimpleName() + "#" + this.hashCode());
     }
 
@@ -60,21 +59,10 @@ public abstract class TCPConnection implements Closeable {
         return options;
     }
 
-
-    @Override
-    public String toString() {
-        return name;
+    public Encrypter encrypter() {
+        return encrypter;
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        if(name == null)
-            throw new NullPointerException("Name is null");
-        this.name = name;
-    }
 
     @SuppressWarnings("unchecked")
     public <O> O attachment() {
@@ -86,129 +74,21 @@ public abstract class TCPConnection implements Closeable {
     }
 
 
-
-    public void encryptOutput(Cipher encryptCipher) {
-        this.encryptCipher = encryptCipher;
+    public String getName() {
+        return name;
     }
 
-    public void encryptInput(Cipher decryptCipher) {
-        this.decryptCipher = decryptCipher;
-    }
-
-    public void encrypt(Cipher encryptCipher, Cipher decryptCipher) {
-        this.encryptOutput(encryptCipher);
-        this.encryptInput(decryptCipher);
-    }
-
-    protected synchronized byte[] tryToEncryptBytes(byte[] bytes) {
-        if(encryptCipher == null)
-            return bytes;
-        try {
-            return encryptCipher.doFinal(bytes);
-        }catch(IllegalBlockSizeException | BadPaddingException e) {
-            throw new IllegalStateException("Encryption error: " + e.getMessage());
-        }
-    }
-
-    protected synchronized byte[] tryToDecryptBytes(byte[] bytes) {
-        if(decryptCipher == null)
-            return bytes;
-        try {
-            return decryptCipher.doFinal(bytes);
-        }catch(IllegalBlockSizeException | BadPaddingException e) {
-            throw new IllegalStateException("Decryption error: " + e.getMessage());
-        }
-    }
-
-
-    protected abstract byte[] read();
-
-    public abstract boolean send(byte[] bytes);
-
-    public boolean send(BinaryStreamWriter streamWriter) {
-        return this.send(BinaryStreamWriter.writeBytes(streamWriter));
-    }
-
-    public boolean send(NetPacket<?> packet) {
-        return this.send(stream -> {
-            stream.writeShort(packet.getPacketID());
-            packet.write(stream);
-        });
-    }
-
-
-    protected boolean toWriteQueue(ByteBuffer buffer) {
-        try {
-            synchronized(writeLock) {
-                if(sendQueue.isEmpty())
-                    channel.write(buffer);
-
-                if(buffer.hasRemaining()) {
-                    sendQueue.add(buffer);
-                    selectionKey.interestOpsOr(SelectionKey.OP_WRITE);
-                    selectionKey.selector().wakeup();
-
-                    this.processWriteQueue(selectionKey);
-                }
-            }
-            return true;
-        }catch(IOException | CancelledKeyException e) {
-            this.close(e);
-            return false;
-        }
-    }
-
-    protected void processWriteQueue(SelectionKey key) {
-        try {
-            synchronized(writeLock) {
-                while(!sendQueue.isEmpty()) {
-                    final ByteBuffer sendBuffer = sendQueue.peek();
-                    channel.write(sendBuffer);
-                    if(sendBuffer.hasRemaining())
-                        return;
-                    sendQueue.poll();
-                }
-                key.interestOps(SelectionKey.OP_READ);
-            }
-        }catch(Exception e) {
-            this.close(e);
-        }
-    }
-
-    public int getSendQueueSize() {
-        return sendQueue.size();
-    }
-
-
-    protected void close(String message) {
-        if(closed)
-            return;
-        closed = true;
-
-        if(onClose != null)
-            onClose.close(this, message);
-
-        selectionKey.cancel();
-        ResUtils.close(channel);
-    }
-
-    protected void close(Exception e) {
-        this.close("Error occurred. Close connection: " + e);
+    public void setName(String name) {
+        if(name == null)
+            throw new NullPointerException("Name is null");
+        this.name = name;
     }
 
     @Override
-    public void close() {
-        this.close("Connection closed");
+    public String toString() {
+        return name;
     }
 
-
-    public boolean isConnected() {
-        return (channel.isConnected() && !closed);
-    }
-
-    public boolean isClosed() {
-        return closed;
-    }
 
     public int getPort() {
         return this.socket().getPort();
@@ -227,13 +107,122 @@ public abstract class TCPConnection implements Closeable {
     }
 
 
-    public interface Factory {
-        TCPConnection create(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose);
+    public boolean isConnected() {
+        return (channel.isConnected() && !closed);
     }
 
-    private static final Map<Class<?>, Factory> FACTORY_BY_CLASS = new HashMap<>();
+    public boolean isClosed() {
+        return closed;
+    }
 
-    public static void registerFactory(Class<?> connectionClass, Factory factory) {
+    protected void close(NetCloseCause netCloseCause, Exception e) {
+        if(closed)
+            return;
+        closed = true;
+
+        if(onClose != null)
+            onClose.close(this, netCloseCause, e);
+
+        selectionKey.cancel();
+        ResUtils.close(channel);
+    }
+
+    @Override
+    public void close() {
+        this.close(NetCloseCause.CLOSE_CONNECTION, null);
+    }
+
+
+    protected boolean write(ByteBuffer buffer) {
+        try {
+            synchronized(writeLock) {
+                // if first in queue
+                if(writeQueue.isEmpty())
+                    channel.write(buffer); // write now
+
+                // if data not (fully) written
+                if(buffer.hasRemaining()) {
+                    // add to queue
+                    writeQueue.add(buffer);
+                    // enable write operation
+                    selectionKey.interestOpsOr(SelectionKey.OP_WRITE);
+                    selectionKey.selector().wakeup();
+                }
+            }
+            return true;
+        }catch(IOException | CancelledKeyException e) {
+            this.close(NetCloseCause.INTERNAL_ERROR, e);
+            return false;
+        }
+    }
+
+    protected void processWriteKey(SelectionKey key) {
+        try {
+            synchronized(writeLock) {
+                final boolean queueFullyWritten = this.tryToWriteQueuedData();
+                if(!queueFullyWritten)
+                    return; // continue writing next time
+
+                // all queue written => disable write operation
+                key.interestOps(SelectionKey.OP_READ);
+            }
+        }catch(Exception e) {
+            this.close(NetCloseCause.INTERNAL_ERROR, e);
+        }
+    }
+
+    private boolean tryToWriteQueuedData() throws Exception {
+        while(!writeQueue.isEmpty()) {
+            final ByteBuffer buffer = writeQueue.peek();
+
+            channel.write(buffer);
+
+            // check is it can no longer write
+            if(buffer.hasRemaining())
+                return false;
+
+            writeQueue.poll();
+        }
+        // all queue written
+        return true;
+    }
+
+
+    protected abstract byte[] read();
+
+    public abstract boolean send(byte[] bytes);
+
+
+    public boolean send(ByteBuffer buffer) {
+        if(this.isClosed())
+            return false;
+
+        final byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        return this.send(bytes);
+    }
+
+    public boolean send(BinaryStreamWriter streamWriter) {
+        if(this.isClosed())
+            return false;
+
+        return this.send(BinaryStreamWriter.writeBytes(streamWriter));
+    }
+
+    public boolean send(NetPacket<?> packet) {
+        if(this.isClosed())
+            return false;
+
+        return this.send(stream -> {
+            stream.writeShort(packet.getPacketID());
+            packet.write(stream);
+        });
+    }
+
+
+    private static final Map<Class<?>, TCPConnectionFactory> FACTORY_BY_CLASS = new HashMap<>();
+
+    public static void registerFactory(Class<?> connectionClass, TCPConnectionFactory factory) {
         FACTORY_BY_CLASS.put(connectionClass, factory);
     }
 
@@ -242,18 +231,18 @@ public abstract class TCPConnection implements Closeable {
         registerFactory(NativeTCPConnection.class, NativeTCPConnection::new);
     }
 
-    public static Factory getFactory(Class<?> connectionClass) {
+    public static TCPConnectionFactory getFactory(Class<?> connectionClass) {
         if(!FACTORY_BY_CLASS.containsKey(connectionClass))
             throw new Error("Class '" + connectionClass + "' is not registered as a TCP connection factory");
         return FACTORY_BY_CLASS.get(connectionClass);
     }
 
-    public static Factory getFactory(TCPConnectionType connectionType) {
+    public static TCPConnectionFactory getFactory(TCPConnectionType connectionType) {
         return getFactory(connectionType.getConnectionClass());
     }
 
-    public static TCPConnection create(Class<?> connectionClass, SocketChannel channel, SelectionKey selectionKey, TCPSocketOptions options, TCPCloseable onClose) {
-        final Factory factory = getFactory(connectionClass);
+    public static TCPConnection create(Class<?> connectionClass, SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
+        final TCPConnectionFactory factory = getFactory(connectionClass);
         return factory.create(channel, selectionKey, onClose);
     }
 
