@@ -1,7 +1,7 @@
 package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.NetCloseCause;
-import generaloss.networkforge.Encrypter;
+import generaloss.networkforge.CipherPair;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 import generaloss.networkforge.packet.NetPacket;
@@ -24,23 +24,25 @@ public abstract class TCPConnection implements Closeable {
     protected final SocketChannel channel;
     protected final SelectionKey selectionKey;
     protected final TCPCloseable onClose;
-    protected final TCPSocketOptions options;
-    protected final Encrypter encrypter;
+    protected final TCPConnectionOptions options;
+    protected final CipherPair ciphers;
     private volatile boolean closed;
     private Object attachment;
     private String name;
 
     private final Queue<ByteBuffer> writeQueue;
-    private final Object writeLock = new Object();
+    private final Object writeLock;
 
     public TCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
         this.channel = channel;
         this.selectionKey = selectionKey;
         this.onClose = onClose;
-        this.options = new TCPSocketOptions(channel.socket());
-        this.encrypter = new Encrypter();
-        this.writeQueue = new ConcurrentLinkedQueue<>();
+        this.options = new TCPConnectionOptions(channel.socket());
+        this.ciphers = new CipherPair();
         this.name = (this.getClass().getSimpleName() + "#" + this.hashCode());
+
+        this.writeQueue = new ConcurrentLinkedQueue<>();
+        this.writeLock = new Object();
     }
 
     public SocketChannel channel() {
@@ -55,12 +57,12 @@ public abstract class TCPConnection implements Closeable {
         return selectionKey;
     }
 
-    public TCPSocketOptions options() {
+    public TCPConnectionOptions options() {
         return options;
     }
 
-    public Encrypter encrypter() {
-        return encrypter;
+    public CipherPair ciphers() {
+        return ciphers;
     }
 
 
@@ -200,6 +202,10 @@ public abstract class TCPConnection implements Closeable {
         final byte[] bytes = new byte[buffer.remaining()];
         buffer.get(bytes);
         return this.send(bytes);
+    }
+
+    public boolean send(String str) {
+        return this.send(str.getBytes());
     }
 
     public boolean send(BinaryStreamWriter streamWriter) {

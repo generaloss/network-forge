@@ -106,19 +106,16 @@ public class TcpTests {
     }
 
     @Test
-    public void webpage_connect() throws Exception {
+    public void webpage_connect() {
         final TCPClient client = new TCPClient()
             .setConnectionType(TCPConnectionType.NATIVE)
-            .setOnConnect(connection -> System.out.println("Connected"))
-            .setOnDisconnect((connection, cause, e) -> System.out.println(cause.getMessage()))
             .setOnReceive((connection, bytes) -> {
-                System.out.println("Received:\n" + new String(bytes));
+                Assert.assertTrue(new String(bytes).startsWith("HTTP/1.1 200 OK"));
                 connection.close();
             })
             .connect("google.com", 80);
 
-        final String httpRequest = "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n";
-        client.send(httpRequest.getBytes());
+        client.send("GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n");
 
         TimeUtils.waitFor(client::isClosed);
     }
@@ -184,7 +181,7 @@ public class TcpTests {
 
         final TCPClient client = new TCPClient();
         client.connect("localhost", 5400);
-        client.send(message.getBytes());
+        client.send(message);
 
         TimeUtils.waitFor(client::isClosed, 1000, Assert::fail);
         server.close();
@@ -199,7 +196,7 @@ public class TcpTests {
         final String message = "Hello, World!";
 
         final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> connection.encrypter().encrypt(encryptCipher, decryptCipher))
+            .setOnConnect((connection) -> connection.ciphers().setCiphers(encryptCipher, decryptCipher))
             .setOnReceive((sender, bytes) -> {
                 final String received = new String(bytes);
                 Assert.assertEquals(message, received);
@@ -209,8 +206,8 @@ public class TcpTests {
 
         final TCPClient client = new TCPClient();
         client.connect("localhost", 5405);
-        client.encrypt(encryptCipher, decryptCipher);
-        client.send(message.getBytes());
+        client.setCiphers(encryptCipher, decryptCipher);
+        client.send(message);
 
         TimeUtils.waitFor(client::isClosed);
         server.close();
@@ -226,7 +223,7 @@ public class TcpTests {
 
         final AtomicInteger counter = new AtomicInteger();
         final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> connection.encrypter().encrypt(encryptCipher, decryptCipher))
+            .setOnConnect((connection) -> connection.ciphers().setCiphers(encryptCipher, decryptCipher))
             .setOnReceive((sender, bytes) -> {
                 final String received = new String(bytes);
                 counter.incrementAndGet();
@@ -239,11 +236,11 @@ public class TcpTests {
 
         final TCPClient client = new TCPClient();
         client.connect("localhost", 5408 + (int) Math.round(Math.random()));
-        client.encrypt(encryptCipher, decryptCipher);
+        client.setCiphers(encryptCipher, decryptCipher);
 
         final int iterations = 10000;
         for(int i = 0; i < iterations; i++)
-            client.send(message.getBytes());
+            client.send(message);
 
         TimeUtils.waitFor(() -> counter.get() == iterations, 5000, Assert::fail);
         server.close();
@@ -254,7 +251,7 @@ public class TcpTests {
         final String message = "Hello, World!";
 
         final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> connection.send(message.getBytes()))
+            .setOnConnect((connection) -> connection.send(message))
             .run(5401);
 
         final TCPClient client = new TCPClient();
@@ -271,7 +268,7 @@ public class TcpTests {
 
     @Test
     public void send_a_lot_of_data_to_server() throws Exception {
-        final String message = "Hello, Data! ".repeat(10000000);
+        final String message = "Hello, Data! ".repeat(1000000);
 
         final TCPServer server = new TCPServer()
             .setOnReceive((sender, bytes) -> {
@@ -281,11 +278,39 @@ public class TcpTests {
             })
             .run(5402);
 
-        final TCPClient client = new TCPClient();
-        client.connect("localhost", 5402);
-        client.send(message.getBytes());
+        final TCPClient client = new TCPClient()
+            .connect("localhost", 5402);
+
+        client.send(message);
 
         TimeUtils.waitFor(client::isClosed, 5000, Assert::fail);
+        server.close();
+    }
+
+    @Test
+    public void ignore_too_large_packets() throws Exception {
+        final String message = "Hello, Message! ";
+
+        final TCPServer server = new TCPServer()
+            .setOnReceive((sender, bytes) -> {
+                final String received = new String(bytes);
+                Assert.assertEquals(message, received);
+                sender.close();
+            })
+            .setOnConnect(connection ->
+                connection.options()
+                    .setCloseOnPacketLimit(false)
+                    .setMaxPacketSize(message.length())
+            )
+            .run(5402);
+
+        final TCPClient client = new TCPClient()
+            .connect("localhost", 5402);
+
+        client.send(message.repeat(2)); // reach bytes limit => will be ignored
+        client.send(message);
+
+        TimeUtils.waitFor(client::isClosed, 1000, Assert::fail);
         server.close();
     }
 

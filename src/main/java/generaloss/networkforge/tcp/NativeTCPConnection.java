@@ -20,15 +20,28 @@ public class NativeTCPConnection extends TCPConnection {
     }
 
     @Override
-    public boolean send(byte[] bytes) {
+    public boolean send(byte[] byteArray) {
         if(super.isClosed())
             return false;
 
-        bytes = super.encrypter.tryToEncryptBytes(bytes);
+        // encrypt bytes
+        final byte[] data = super.ciphers.encrypt(byteArray);
 
-        final ByteBuffer buffer = ByteBuffer.allocate(bytes.length);
-        buffer.put(bytes);
+        // check size
+        final int size = data.length;
+        if(size > super.options.getMaxWritePacketSize()) {
+            System.err.printf("[%1$s] Packet to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
+                NativeTCPConnection.class.getSimpleName(), size, super.options.getMaxWritePacketSize()
+            );
+            return false;
+        }
+
+        // create buffer
+        final ByteBuffer buffer = ByteBuffer.allocate(size);
+        buffer.put(data);
         buffer.flip();
+
+        // write buffer
         return super.write(buffer);
     }
 
@@ -50,8 +63,19 @@ public class NativeTCPConnection extends TCPConnection {
                 readBuffer.get(chunk);
                 bytesStream.write(chunk);
                 readBuffer.clear();
+
+                // check size
+                if(bytesStream.size() > super.options.getMaxReadPacketSize()) {
+                    // close connection
+                    if(super.options.isCloseOnPacketLimit())
+                        super.close(NetCloseCause.PACKET_SIZE_LIMIT_EXCEEDED, null);
+
+                    this.discardAvailableBytes();
+                    return null;
+                }
             }
 
+            // check remote close
             if(length == -1) {
                 super.close(NetCloseCause.CLOSE_BY_OTHER_SIDE, null);
                 return null;
@@ -61,11 +85,28 @@ public class NativeTCPConnection extends TCPConnection {
                 return null;
 
             final byte[] allReadBytes = bytesStream.toByteArray();
-            return super.encrypter.tryToDecryptBytes(allReadBytes);
+            return super.ciphers.decrypt(allReadBytes);
 
         }catch(IOException e) {
             super.close(NetCloseCause.INTERNAL_ERROR, e);
             return null;
+        }
+    }
+
+    private void discardAvailableBytes() throws IOException {
+        readBuffer.clear();
+        while(true) {
+            // read
+            final int read = this.channel.read(readBuffer);
+            readBuffer.clear();
+            // check if no data
+            if(read == 0)
+                return;
+            // check remote close
+            if(read == -1) {
+                this.close(NetCloseCause.CLOSE_BY_OTHER_SIDE, null);
+                return;
+            }
         }
     }
 

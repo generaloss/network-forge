@@ -3,18 +3,64 @@ package generaloss.networkforge.tcp;
 import java.net.Socket;
 import java.net.SocketException;
 
-public class TCPSocketOptions {
+public class TCPConnectionOptions {
+
+    private static final int DEFAULT_MAX_PACKET_SIZE = (64 * 1024 * 1024); // 64 Mb.  (Integer.MAX_VALUE ≈ 2 Gb)
 
     private final Socket socket;
+    private int maxReadPacketSize;
+    private int maxWritePacketSize;
+    private boolean closeOnPacketLimit;
 
-    public TCPSocketOptions(Socket socket) {
+    public TCPConnectionOptions(Socket socket) {
         if(socket == null)
             throw new NullPointerException("socket is null");
         this.socket = socket;
+
+        this.maxReadPacketSize = DEFAULT_MAX_PACKET_SIZE;
+        this.maxWritePacketSize = DEFAULT_MAX_PACKET_SIZE;
+        this.closeOnPacketLimit = true;
     }
 
     public Socket socket() {
         return socket;
+    }
+
+
+    public int getMaxReadPacketSize() {
+        return maxReadPacketSize;
+    }
+
+    public TCPConnectionOptions setMaxReadPacketSize(int maxSize) {
+        maxReadPacketSize = maxSize;
+        return this;
+    }
+
+
+    public int getMaxWritePacketSize() {
+        return maxWritePacketSize;
+    }
+
+    public TCPConnectionOptions setMaxWritePacketSize(int maxSize) {
+        maxWritePacketSize = maxSize;
+        return this;
+    }
+
+
+    public TCPConnectionOptions setMaxPacketSize(int maxSize) {
+        maxReadPacketSize = maxSize;
+        maxWritePacketSize = maxSize;
+        return this;
+    }
+
+
+    public boolean isCloseOnPacketLimit() {
+        return closeOnPacketLimit;
+    }
+
+    public TCPConnectionOptions setCloseOnPacketLimit(boolean closeOnPacketLimit) {
+        this.closeOnPacketLimit = closeOnPacketLimit;
+        return this;
     }
 
 
@@ -26,7 +72,7 @@ public class TCPSocketOptions {
         }
     }
 
-    public TCPSocketOptions setTcpNoDelay(boolean on) {
+    public TCPConnectionOptions setTcpNoDelay(boolean on) {
         try{
             socket.setTcpNoDelay(on);
         }catch(SocketException e){
@@ -44,7 +90,7 @@ public class TCPSocketOptions {
         }
     }
 
-    public TCPSocketOptions setSoLinger(boolean on, int linger) {
+    public TCPConnectionOptions setSoLinger(boolean on, int linger) {
         try{
             socket.setSoLinger(on, linger);
         }catch(SocketException e){
@@ -62,7 +108,7 @@ public class TCPSocketOptions {
         }
     }
 
-    public TCPSocketOptions setKeepAlive(boolean on) {
+    public TCPConnectionOptions setKeepAlive(boolean on) {
         try{
             socket.setKeepAlive(on);
         }catch(SocketException e){
@@ -80,7 +126,7 @@ public class TCPSocketOptions {
         }
     }
 
-    public TCPSocketOptions setSendBufferSize(int size) {
+    public TCPConnectionOptions setSendBufferSize(int size) {
         try{
             socket.setSendBufferSize(size);
         }catch(SocketException e){
@@ -98,7 +144,7 @@ public class TCPSocketOptions {
         }
     }
 
-    public TCPSocketOptions setReceiveBufferSize(int size) {
+    public TCPConnectionOptions setReceiveBufferSize(int size) {
         try{
             socket.setReceiveBufferSize(size);
         }catch(SocketException e){
@@ -116,7 +162,7 @@ public class TCPSocketOptions {
         }
     }
 
-    public TCPSocketOptions setTrafficClass(int typeOfService) {
+    public TCPConnectionOptions setTrafficClass(int typeOfService) {
         try{
             socket.setTrafficClass(typeOfService);
         }catch(SocketException e){
@@ -134,7 +180,7 @@ public class TCPSocketOptions {
         }
     }
 
-    public TCPSocketOptions setReuseAddress(boolean on) {
+    public TCPConnectionOptions setReuseAddress(boolean on) {
         try{
             socket.setReuseAddress(on);
         }catch(SocketException e){
@@ -152,7 +198,7 @@ public class TCPSocketOptions {
         }
     }
 
-    public TCPSocketOptions setOOBInline(boolean on) {
+    public TCPConnectionOptions setOOBInline(boolean on) {
         try{
             socket.setOOBInline(on);
         }catch(SocketException e){

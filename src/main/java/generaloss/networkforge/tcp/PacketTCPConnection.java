@@ -9,42 +9,78 @@ import java.nio.channels.SocketChannel;
 
 public class PacketTCPConnection extends TCPConnection {
 
-    private final ByteBuffer lengthBuffer;
+    private final ByteBuffer sizeBuffer;
     private ByteBuffer dataBuffer;
+    private boolean discardReading;
 
     protected PacketTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
         super(channel, selectionKey, onClose);
-        this.lengthBuffer = ByteBuffer.allocate(Integer.BYTES);
+        this.sizeBuffer = ByteBuffer.allocate(Integer.BYTES);
     }
 
     @Override
-    public boolean send(byte[] bytes) {
+    public boolean send(byte[] byteArray) {
         if(super.isClosed())
             return false;
 
-        bytes = super.encrypter.tryToEncryptBytes(bytes);
+        // encrypt bytes
+        final byte[] data = super.ciphers.encrypt(byteArray);
 
-        final ByteBuffer buffer = ByteBuffer.allocate(4 + bytes.length);
-        buffer.putInt(bytes.length); // length
-        buffer.put(bytes); // data
+        // check size
+        final int size = data.length;
+        if(size > super.options.getMaxWritePacketSize()) {
+            System.err.printf("[%1$s] Packet to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
+                PacketTCPConnection.class.getSimpleName(), size, super.options.getMaxWritePacketSize()
+            );
+            return false;
+        }
+
+        // create buffer
+        final int capacity = (Integer.BYTES + size);
+        final ByteBuffer buffer = ByteBuffer.allocate(capacity);
+
+        buffer.putInt(size); // size
+        buffer.put(data); // data
         buffer.flip();
+
+        // write buffer
         return super.write(buffer);
     }
 
     @Override
     protected byte[] read() {
         try{
-            // is needed to read length
-            if(lengthBuffer.hasRemaining()) {
-                // read length
-                final boolean lengthFullyRead = this.readPartiallyTo(lengthBuffer);
-                if(!lengthFullyRead)
-                    return null; // continue reading length next time
+            // is needed to read size
+            if(sizeBuffer.hasRemaining() && !discardReading) {
+                // read size
+                final boolean sizeFullyRead = this.readPartiallyTo(sizeBuffer);
+                if(!sizeFullyRead)
+                    return null; // continue reading size next time
 
-                // allocate data buffer with length
-                lengthBuffer.flip();
-                final int length = lengthBuffer.getInt();
-                dataBuffer = ByteBuffer.allocate(length);
+                // get size
+                sizeBuffer.flip();
+                final int size = sizeBuffer.getInt();
+
+                // check size
+                if(size > super.options.getMaxReadPacketSize()) {
+                    // close connection
+                    if(super.options.isCloseOnPacketLimit()) {
+                        super.close(NetCloseCause.PACKET_SIZE_LIMIT_EXCEEDED, null);
+                        return null;
+                    }
+
+                    // enter discard mode, partially read all to {size}
+                    discardReading = true;
+                    dataBuffer = ByteBuffer.allocate(size);
+                    this.readPartiallyTo(dataBuffer);
+
+                    // reset size buffer for next packet
+                    sizeBuffer.clear();
+                    return null;
+                }
+
+                // allocate data buffer
+                dataBuffer = ByteBuffer.allocate(size);
             }
 
             // read data
@@ -52,8 +88,14 @@ public class PacketTCPConnection extends TCPConnection {
             if(!dataFullyRead)
                 return null; // continue reading data next time
 
-            // reset length
-            lengthBuffer.clear();
+            // all bytes to discard fully read => enter normal mode
+            if(discardReading) {
+                discardReading = false;
+                return null;
+            }
+
+            // reset size buffer for next packet
+            sizeBuffer.clear();
             // get data
             return this.getDecryptedData();
 
@@ -85,7 +127,7 @@ public class PacketTCPConnection extends TCPConnection {
         final byte[] data = new byte[dataBuffer.remaining()];
         dataBuffer.get(data);
 
-        return super.encrypter.tryToDecryptBytes(data);
+        return super.ciphers.decrypt(data);
     }
 
 }

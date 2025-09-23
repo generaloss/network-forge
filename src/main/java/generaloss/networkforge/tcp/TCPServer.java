@@ -92,7 +92,7 @@ public class TCPServer {
         try {
             onConnect.accept(connection);
         }catch(Exception onconnectException) {
-            this.invokeOnError(connection, "onConnect callback", onconnectException);
+            this.invokeOnError(connection, TCPErrorSource.CONNECT_CALLBACK, onconnectException);
         }
     }
 
@@ -103,7 +103,7 @@ public class TCPServer {
         try {
             onClose.close(connection, netCloseCause, e);
         }catch(Exception oncloseException) {
-            this.invokeOnError(connection, "onDisconnect callback", oncloseException);
+            this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, oncloseException);
         }
     }
 
@@ -114,15 +114,15 @@ public class TCPServer {
         try {
             onReceive.receive(connection, bytes);
         }catch(Exception onreceiveException) {
-            this.invokeOnError(connection, "onReceive callback", onreceiveException);
+            this.invokeOnError(connection, TCPErrorSource.RECEIVE_CALLBACK, onreceiveException);
         }
     }
 
-    private void invokeOnError(TCPConnection connection, String source, Exception exception) {
+    private void invokeOnError(TCPConnection connection, TCPErrorSource source, Exception exception) {
         try {
             onError.error(connection, source, exception);
         }catch(Exception onerrorException) {
-            TCPErrorHandler.printErrorCatch(connection, "onError callback", exception);
+            TCPErrorHandler.printErrorCatch(connection, TCPErrorSource.ERROR_CALLBACK, exception);
         }
     }
 

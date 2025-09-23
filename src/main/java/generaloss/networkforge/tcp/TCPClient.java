@@ -1,5 +1,6 @@
 package generaloss.networkforge.tcp;
 
+import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.NetCloseCause;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryInputStream;
@@ -41,6 +42,18 @@ public class TCPClient {
 
     public TCPConnection connection() {
         return connection;
+    }
+
+    public TCPConnectionOptions options() {
+        if(connection == null)
+            return null;
+        return connection.options;
+    }
+
+    public CipherPair ciphers() {
+        if(connection == null)
+            return null;
+        return connection.ciphers;
     }
 
 
@@ -96,7 +109,7 @@ public class TCPClient {
         try {
             onConnect.accept(connection);
         }catch(Exception onconnectException) {
-            this.invokeOnError(connection, "onConnect callback", onconnectException);
+            this.invokeOnError(connection, TCPErrorSource.CONNECT_CALLBACK, onconnectException);
         }
     }
 
@@ -107,7 +120,7 @@ public class TCPClient {
         try {
             onClose.close(connection, netCloseCause, e);
         }catch(Exception oncloseException) {
-            this.invokeOnError(connection, "onDisconnect callback", oncloseException);
+            this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, oncloseException);
         }
     }
 
@@ -118,15 +131,15 @@ public class TCPClient {
         try {
             onReceive.receive(connection, bytes);
         }catch(Exception onreceiveException) {
-            this.invokeOnError(connection, "onReceive callback", onreceiveException);
+            this.invokeOnError(connection, TCPErrorSource.RECEIVE_CALLBACK, onreceiveException);
         }
     }
 
-    private void invokeOnError(TCPConnection connection, String source, Exception exception) {
+    private void invokeOnError(TCPConnection connection, TCPErrorSource source, Exception exception) {
         try {
             onError.error(connection, source, exception);
         }catch(Exception onerrorException) {
-            TCPErrorHandler.printErrorCatch(connection, "onError callback", exception);
+            TCPErrorHandler.printErrorCatch(connection, TCPErrorSource.ERROR_CALLBACK, exception);
         }
     }
 
@@ -252,47 +265,59 @@ public class TCPClient {
     }
 
 
-    public TCPClient encryptOutput(Cipher encryptCipher) {
-        if(this.isConnected())
-            connection.encrypter().encryptOutput(encryptCipher);
+    public TCPClient setEncryptCipher(Cipher encryptCipher) {
+        if(connection == null)
+            throw new IllegalStateException("TCPClient is not connected");
+
+        connection.ciphers().setEncryptCipher(encryptCipher);
         return this;
     }
 
-    public TCPClient encryptInput(Cipher decryptCipher) {
-        if(this.isConnected())
-            connection.encrypter().encryptInput(decryptCipher);
+    public TCPClient setDecryptCipher(Cipher decryptCipher) {
+        if(connection == null)
+            throw new IllegalStateException("TCPClient is not connected");
+
+        connection.ciphers().setDecryptCipher(decryptCipher);
         return this;
     }
 
-    public TCPClient encrypt(Cipher encryptCipher, Cipher decryptCipher) {
-        if(this.isConnected())
-            connection.encrypter().encrypt(encryptCipher, decryptCipher);
+    public TCPClient setCiphers(Cipher encryptCipher, Cipher decryptCipher) {
+        if(connection == null)
+            throw new IllegalStateException("TCPClient is not connected");
+
+        connection.ciphers().setCiphers(encryptCipher, decryptCipher);
         return this;
     }
 
-
-    public boolean send(ByteBuffer buffer) {
-        if(connection != null)
-            return connection.send(buffer);
-        return false;
-    }
 
     public boolean send(byte[] bytes) {
-        if(connection != null)
-            return connection.send(bytes);
-        return false;
+        if(connection == null)
+            return false;
+        return connection.send(bytes);
+    }
+
+    public boolean send(ByteBuffer buffer) {
+        if(connection == null)
+            return false;
+        return connection.send(buffer);
+    }
+
+    public boolean send(String str) {
+        if(connection == null)
+            return false;
+        return connection.send(str);
     }
 
     public boolean send(BinaryStreamWriter streamWriter) {
-        if(connection != null)
-            return connection.send(streamWriter);
-        return false;
+        if(connection == null)
+            return false;
+        return connection.send(streamWriter);
     }
 
     public boolean send(NetPacket<?> packet) {
-        if(connection != null)
-            return connection.send(packet);
-        return false;
+        if(connection == null)
+            return false;
+        return connection.send(packet);
     }
 
 }
