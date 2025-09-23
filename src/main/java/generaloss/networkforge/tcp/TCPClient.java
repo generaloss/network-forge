@@ -37,7 +37,9 @@ public class TCPClient {
 
     public TCPClient() {
         this.setConnectionType(TCPConnectionType.DEFAULT);
-        this.setOnError(TCPErrorHandler::printErrorCatch);
+        this.setOnError((connection, source, throwable) ->
+            TCPErrorHandler.printErrorCatch(TCPClient.class, connection, source, throwable)
+        );
     }
 
     public TCPConnection connection() {
@@ -108,8 +110,8 @@ public class TCPClient {
 
         try {
             onConnect.accept(connection);
-        }catch(Exception onconnectException) {
-            this.invokeOnError(connection, TCPErrorSource.CONNECT_CALLBACK, onconnectException);
+        }catch(Throwable onConnectThrowable) {
+            this.invokeOnError(connection, TCPErrorSource.CONNECT_CALLBACK, onConnectThrowable);
         }
     }
 
@@ -119,8 +121,8 @@ public class TCPClient {
 
         try {
             onClose.close(connection, netCloseCause, e);
-        }catch(Exception oncloseException) {
-            this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, oncloseException);
+        }catch(Throwable onCloseThrowable) {
+            this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, onCloseThrowable);
         }
     }
 
@@ -130,72 +132,69 @@ public class TCPClient {
 
         try {
             onReceive.receive(connection, bytes);
-        }catch(Exception onreceiveException) {
-            this.invokeOnError(connection, TCPErrorSource.RECEIVE_CALLBACK, onreceiveException);
+        }catch(Throwable onReceiveThrowable) {
+            this.invokeOnError(connection, TCPErrorSource.RECEIVE_CALLBACK, onReceiveThrowable);
         }
     }
 
-    private void invokeOnError(TCPConnection connection, TCPErrorSource source, Exception exception) {
+    private void invokeOnError(TCPConnection connection, TCPErrorSource source, Throwable throwable) {
         try {
-            onError.error(connection, source, exception);
-        }catch(Exception onerrorException) {
-            TCPErrorHandler.printErrorCatch(connection, TCPErrorSource.ERROR_CALLBACK, exception);
+            onError.error(connection, source, throwable);
+        }catch(Throwable onErrorThrowable) {
+            TCPErrorHandler.printErrorCatch(TCPClient.class, connection, TCPErrorSource.ERROR_CALLBACK, onErrorThrowable);
         }
     }
 
 
-    public TCPClient connect(SocketAddress socketAddress, long timeoutMillis) {
+    public TCPClient connect(SocketAddress socketAddress, long timeoutMillis) throws IOException, TimeoutException {
         if(this.isConnected())
             throw new AlreadyConnectedException();
 
         ResUtils.close(selector);
 
-        try{
-            // channel
-            final SocketChannel channel = SocketChannel.open();
-            channel.configureBlocking(false);
-            final boolean connectedInstantly = channel.connect(socketAddress);
+        // channel
+        final SocketChannel channel = SocketChannel.open();
+        channel.configureBlocking(false);
 
-            selector = Selector.open();
+        final boolean connectedInstantly = channel.connect(socketAddress);
+        selector = Selector.open();
 
-            if(connectedInstantly) {
-                this.createConnection(channel);
-                return this;
-            }
-
-            // wait for connection
-            channel.register(selector, SelectionKey.OP_CONNECT);
-            if(selector.select(timeoutMillis) == 0) {
-                channel.close();
-                throw new TimeoutException("Connection timed out");
-            }
-
-            // get key and connect
-            final Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
-            final SelectionKey connectKey = keyIterator.next();
-            keyIterator.remove();
-
-            if(connectKey.isConnectable() && channel.finishConnect()) {
-                this.createConnection(channel);
-            }else{
-                throw new ConnectException("Connection failed");
-            }
-        }catch(Exception e){
-            ResUtils.close(selector);
-            throw new RuntimeException("Failed to connect TCP client: ", e);
+        if(connectedInstantly) {
+            this.createConnection(channel);
+            return this;
         }
+
+        // wait for connection
+        channel.register(selector, SelectionKey.OP_CONNECT);
+        if(selector.select(timeoutMillis) == 0) {
+            channel.close();
+            throw new TimeoutException("Connection timed out after " + timeoutMillis + " ms");
+        }
+
+        // get key and connect
+        final Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
+        final SelectionKey connectKey = keyIterator.next();
+        keyIterator.remove();
+
+        if(connectKey.isConnectable() && channel.finishConnect()) {
+            this.createConnection(channel);
+        }else{
+            channel.close();
+            throw new ConnectException("Connection failed");
+        }
+
         return this;
     }
 
-    public TCPClient connect(SocketAddress socketAddress) {
+    public TCPClient connect(SocketAddress socketAddress) throws IOException, TimeoutException  {
         return this.connect(socketAddress, 0L);
     }
 
-    public TCPClient connect(String hostname, int port, long timeoutMillis) {
+    public TCPClient connect(String hostname, int port, long timeoutMillis) throws IOException, TimeoutException  {
         return this.connect(new InetSocketAddress(hostname, port), timeoutMillis);
     }
 
-    public TCPClient connect(String hostname, int port) {
+    public TCPClient connect(String hostname, int port) throws IOException, TimeoutException  {
         return this.connect(hostname, port, 0L);
     }
 
@@ -214,7 +213,7 @@ public class TCPClient {
         selectorThread = new Thread(() -> {
             while(!Thread.interrupted() && !this.isClosed())
                 this.selectKeys();
-        }, "TCP client selector thread #" + this.hashCode());
+        }, "TCP-client-selector-thread-#" + this.hashCode());
 
         selectorThread.setDaemon(true);
         selectorThread.start();

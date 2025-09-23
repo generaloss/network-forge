@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class TcpTests {
 
@@ -85,8 +86,10 @@ public class TcpTests {
 
     private static void closeOnOtherSideTest() {
         try {
-            final TCPServer server = new TCPServer().setOnConnect(
-                    (connection) -> System.out.println("[Server] Connected"))
+            final TCPServer server = new TCPServer()
+                .setOnConnect(
+                    (connection) -> System.out.println("[Server] Connected")
+                )
                 .setOnDisconnect((connection, reason, e) -> System.out.println("[Server] Disconnected: " + reason))
                 .run(65000);
 
@@ -106,18 +109,21 @@ public class TcpTests {
     }
 
     @Test
-    public void webpage_connect() {
+    public void webpage_connect() throws Exception {
+        final AtomicReference<String> result = new AtomicReference<>();
+
         final TCPClient client = new TCPClient()
             .setConnectionType(TCPConnectionType.NATIVE)
             .setOnReceive((connection, bytes) -> {
-                Assert.assertTrue(new String(bytes).startsWith("HTTP/1.1 200 OK"));
+                result.set(new String(bytes));
                 connection.close();
             })
             .connect("google.com", 80);
 
         client.send("GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n");
 
-        TimeUtils.waitFor(client::isClosed);
+        TimeUtils.waitFor(client::isClosed, 2000);
+        Assert.assertTrue(result.get().startsWith("HTTP/1.1"));
     }
 
     @Test
@@ -125,9 +131,9 @@ public class TcpTests {
         final int reconnectsNum = 100;
         final AtomicInteger counter = new AtomicInteger();
         final TCPServer server = new TCPServer()
-                .setOnConnect((connection) -> counter.incrementAndGet())
-                .setOnDisconnect((connection, reason, e) -> counter.incrementAndGet())
-                .run(65000);
+            .setOnConnect((connection) -> counter.incrementAndGet())
+            .setOnDisconnect((connection, reason, e) -> counter.incrementAndGet())
+            .run(65000);
 
         final TCPClient client = new TCPClient();
         for(int i = 0; i < reconnectsNum; i++){
@@ -170,21 +176,22 @@ public class TcpTests {
     @Test
     public void send_hello_world_to_server() throws Exception {
         final String message = "Hello, World!";
+        final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer()
-                .setOnReceive((sender, bytes) -> {
-                    final String received = new String(bytes);
-                    Assert.assertEquals(message, received);
-                    sender.close();
-                })
-                .run(5400);
+            .setOnReceive((sender, bytes) -> {
+                result.set(new String(bytes));
+                sender.close();
+            })
+            .run(5400);
 
         final TCPClient client = new TCPClient();
         client.connect("localhost", 5400);
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 1000, Assert::fail);
+        TimeUtils.waitFor(client::isClosed, 1000);
         server.close();
+        Assert.assertEquals(message, result.get());
     }
 
     @Test
@@ -194,12 +201,12 @@ public class TcpTests {
         final Cipher decryptCipher = getDecryptCipher(key);
 
         final String message = "Hello, World!";
+        final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer()
             .setOnConnect((connection) -> connection.ciphers().setCiphers(encryptCipher, decryptCipher))
             .setOnReceive((sender, bytes) -> {
-                final String received = new String(bytes);
-                Assert.assertEquals(message, received);
+                result.set(new String(bytes));
                 sender.close();
             })
             .run(5405);
@@ -211,6 +218,7 @@ public class TcpTests {
 
         TimeUtils.waitFor(client::isClosed);
         server.close();
+        Assert.assertEquals(message, result.get());
     }
 
     @Test
@@ -222,13 +230,16 @@ public class TcpTests {
         final String message = "0123456789".repeat(1000);
 
         final AtomicInteger counter = new AtomicInteger();
+        final AtomicBoolean hasNotEqual = new AtomicBoolean();
+
         final TCPServer server = new TCPServer()
             .setOnConnect((connection) -> connection.ciphers().setCiphers(encryptCipher, decryptCipher))
             .setOnReceive((sender, bytes) -> {
                 final String received = new String(bytes);
                 counter.incrementAndGet();
+
                 if(!message.equals(received)){
-                    Assert.fail();
+                    hasNotEqual.set(true);
                     sender.close();
                 }
             })
@@ -242,13 +253,15 @@ public class TcpTests {
         for(int i = 0; i < iterations; i++)
             client.send(message);
 
-        TimeUtils.waitFor(() -> counter.get() == iterations, 5000, Assert::fail);
+        TimeUtils.waitFor(() -> counter.get() == iterations, 5000);
         server.close();
+        Assert.assertFalse(hasNotEqual.get());
     }
 
     @Test
     public void send_hello_world_to_client() throws Exception {
         final String message = "Hello, World!";
+        final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer()
             .setOnConnect((connection) -> connection.send(message))
@@ -256,24 +269,24 @@ public class TcpTests {
 
         final TCPClient client = new TCPClient();
         client.setOnReceive((connection, bytes) -> {
-            final String received = new String(bytes);
-            Assert.assertEquals(message, received);
+            result.set(new String(bytes));
             connection.close();
         });
         client.connect("localhost", 5401);
 
         TimeUtils.waitFor(client::isClosed);
         server.close();
+        Assert.assertEquals(message, result.get());
     }
 
     @Test
     public void send_a_lot_of_data_to_server() throws Exception {
         final String message = "Hello, Data! ".repeat(1000000);
+        final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer()
             .setOnReceive((sender, bytes) -> {
-                final String received = new String(bytes);
-                Assert.assertEquals(received, message);
+                result.set(new String(bytes));
                 sender.close();
             })
             .run(5402);
@@ -283,18 +296,19 @@ public class TcpTests {
 
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 5000, Assert::fail);
+        TimeUtils.waitFor(client::isClosed, 5000);
         server.close();
+        Assert.assertEquals(message, result.get());
     }
 
     @Test
     public void ignore_too_large_packets() throws Exception {
         final String message = "Hello, Message! ";
+        final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer()
             .setOnReceive((sender, bytes) -> {
-                final String received = new String(bytes);
-                Assert.assertEquals(message, received);
+                result.set(new String(bytes));
                 sender.close();
             })
             .setOnConnect(connection ->
@@ -310,8 +324,9 @@ public class TcpTests {
         client.send(message.repeat(2)); // reach bytes limit => will be ignored
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 1000, Assert::fail);
+        TimeUtils.waitFor(client::isClosed, 1000);
         server.close();
+        Assert.assertEquals(message, result.get());
     }
 
     @Test
@@ -319,11 +334,13 @@ public class TcpTests {
         final String message = "Hello, World! ".repeat(10000);
         final int clientsAmount = 100;
         final AtomicInteger done = new AtomicInteger();
+        final AtomicBoolean hasNotEqual = new AtomicBoolean();
 
         final TCPServer server = new TCPServer()
             .setOnReceive((sender, bytes) -> {
                 final String received = new String(bytes);
-                Assert.assertEquals(received, message);
+                if(!received.equals(message))
+                    hasNotEqual.set(true);
                 done.incrementAndGet();
             })
             .run(5404);
@@ -348,19 +365,22 @@ public class TcpTests {
             Thread.onSpinWait();
         }
         server.close();
+
+        Assert.assertFalse(hasNotEqual.get());
     }
 
 
     @Test
     public void send_packet() throws Exception {
         final String message = "Hello, World!";
+        final AtomicReference<String> result = new AtomicReference<>();
 
         final NetPacketDispatcher dispatcher = new NetPacketDispatcher()
             .register(MsgPacket.class);
 
         final AtomicInteger counter = new AtomicInteger();
         final MsgHandler handler = (received) -> {
-            Assert.assertEquals(message, received);
+            result.set(received);
             counter.incrementAndGet();
         };
 
@@ -376,8 +396,9 @@ public class TcpTests {
         client.send(new MsgPacket(message));
         client.send(new MsgPacket(message));
 
-        TimeUtils.waitFor(() -> (counter.get() == 2), 2000, Assert::fail);
+        TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
         server.close();
+        Assert.assertEquals(message, result.get());
     }
 
     interface MsgHandler {

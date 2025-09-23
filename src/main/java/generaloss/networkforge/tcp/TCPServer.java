@@ -7,9 +7,9 @@ import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.networkforge.packet.NetPacket;
 
 import java.io.IOException;
+import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -35,7 +35,9 @@ public class TCPServer {
 
     public TCPServer() {
         this.setConnectionType(TCPConnectionType.DEFAULT);
-        this.setOnError(TCPErrorHandler::printErrorCatch);
+        this.setOnError((connection, source, throwable) ->
+            TCPErrorHandler.printErrorCatch(TCPServer.class, connection, source, throwable)
+        );
         this.connections = new CopyOnWriteArrayList<>();
     }
 
@@ -91,8 +93,8 @@ public class TCPServer {
 
         try {
             onConnect.accept(connection);
-        }catch(Exception onconnectException) {
-            this.invokeOnError(connection, TCPErrorSource.CONNECT_CALLBACK, onconnectException);
+        }catch(Throwable onConnectThrowable) {
+            this.invokeOnError(connection, TCPErrorSource.CONNECT_CALLBACK, onConnectThrowable);
         }
     }
 
@@ -102,8 +104,8 @@ public class TCPServer {
 
         try {
             onClose.close(connection, netCloseCause, e);
-        }catch(Exception oncloseException) {
-            this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, oncloseException);
+        }catch(Throwable onCloseThrowable) {
+            this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, onCloseThrowable);
         }
     }
 
@@ -113,64 +115,65 @@ public class TCPServer {
 
         try {
             onReceive.receive(connection, bytes);
-        }catch(Exception onreceiveException) {
-            this.invokeOnError(connection, TCPErrorSource.RECEIVE_CALLBACK, onreceiveException);
+        }catch(Throwable onReceiveThrowable) {
+            this.invokeOnError(connection, TCPErrorSource.RECEIVE_CALLBACK, onReceiveThrowable);
         }
     }
 
-    private void invokeOnError(TCPConnection connection, TCPErrorSource source, Exception exception) {
+    private void invokeOnError(TCPConnection connection, TCPErrorSource source, Throwable throwable) {
         try {
-            onError.error(connection, source, exception);
-        }catch(Exception onerrorException) {
-            TCPErrorHandler.printErrorCatch(connection, TCPErrorSource.ERROR_CALLBACK, exception);
+            onError.error(connection, source, throwable);
+        }catch(Throwable onErrorThrowable) {
+            TCPErrorHandler.printErrorCatch(TCPServer.class, connection, TCPErrorSource.ERROR_CALLBACK, onErrorThrowable);
         }
     }
 
 
-    public TCPServer run(InetAddress address, int... ports) {
+    public TCPServer run(InetAddress address, int... ports) throws IOException {
         if(ports.length < 1)
             throw new IllegalArgumentException("At least one port must be specified");
 
         if(this.isRunning())
             throw new IllegalStateException("TCP server is already running");
 
-        try{
-            connections.clear();
-            selector = Selector.open();
+        connections.clear();
+        selector = Selector.open();
 
-            serverChannels = new ServerSocketChannel[ports.length];
-            for(int i = 0; i < ports.length; i++) {
-                final int port = ports[i];
+        serverChannels = new ServerSocketChannel[ports.length];
+        for(int i = 0; i < ports.length; i++) {
+            final int port = ports[i];
 
-                final ServerSocketChannel channel = ServerSocketChannel.open();
+            final ServerSocketChannel channel = ServerSocketChannel.open();
+            try {
                 channel.bind(new InetSocketAddress(address, port));
-                channel.configureBlocking(false);
-                channel.register(selector, SelectionKey.OP_ACCEPT);
-                serverChannels[i] = channel;
+            }catch(BindException e) {
+                throw new BindException("Failed to bind TCP server to port " + port + ": " + e.getMessage());
             }
 
-            this.startSelectorThread();
+            channel.configureBlocking(false);
+            channel.register(selector, SelectionKey.OP_ACCEPT);
 
-        }catch(Exception e){
-            throw new IllegalStateException("Failed to start TCP server: " + e.getMessage());
+            serverChannels[i] = channel;
         }
+
+        this.startSelectorThread();
 
         return this;
     }
 
-    public TCPServer run(String hostname, int... ports) throws UnknownHostException {
+    public TCPServer run(String hostname, int... ports) throws IOException {
         return this.run(InetAddress.getByName(hostname), ports);
     }
 
-    public TCPServer run(int... ports) throws UnknownHostException {
-        return this.run(InetAddress.getByName("0.0.0.0"), ports);
+    public TCPServer run(int... ports) throws IOException {
+        return this.run("0.0.0.0", ports);
     }
 
     private void startSelectorThread() {
         selectorThread = new Thread(() -> {
             while(!Thread.interrupted() && !this.isClosed())
                 this.selectKeys();
-        }, "TCP server selector thread #" + this.hashCode());
+        }, "TCP-server-selector-thread-#" + this.hashCode());
         selectorThread.setDaemon(true);
         selectorThread.start();
     }
@@ -211,7 +214,7 @@ public class TCPServer {
             final SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
 
             final TCPConnection connection = connectionFactory.create(channel, key, this::onConnectionClosed);
-            connection.setName("TCPServer-connection #" + this.hashCode());
+            connection.setName("TCPServer-connection-#" + this.hashCode());
             connections.add(connection);
             key.attach(connection);
 

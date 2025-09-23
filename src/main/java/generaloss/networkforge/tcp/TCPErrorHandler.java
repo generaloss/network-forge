@@ -2,15 +2,15 @@ package generaloss.networkforge.tcp;
 
 public interface TCPErrorHandler {
 
-    void error(TCPConnection connection, TCPErrorSource source, Exception exception);
+    void error(TCPConnection connection, TCPErrorSource source, Throwable throwable);
 
-    static void printErrorCatch(TCPConnection connection, TCPErrorSource source, Exception exception) {
+    static void printErrorCatch(Class<?> c, TCPConnection connection, TCPErrorSource source, Throwable throwable) {
         System.err.println(
-            "[TCPServer ErrorHandler] Exception in " + source + ".\n" +
+            "[" + c.getSimpleName() + "-ErrorHandler] Error in " + source + ".\n" +
             "TCPConnection name: '" + connection.getName() + "'.\n" +
             "Caught and ignored to prevent server crash:\n"
         );
-        exception.printStackTrace(System.err);
+        throwable.printStackTrace(System.err);
     }
 
 }
