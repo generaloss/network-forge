@@ -1,6 +1,5 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.NetCloseCause;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 import generaloss.resourceflow.stream.BinaryInputStream;
@@ -98,12 +97,12 @@ public class TCPServer {
         }
     }
 
-    private void invokeOnDisconnect(TCPConnection connection, NetCloseCause netCloseCause, Exception e) {
+    private void invokeOnDisconnect(TCPConnection connection, TCPCloseCause TCPCloseCause, Exception e) {
         if(onClose == null)
             return;
 
         try {
-            onClose.close(connection, netCloseCause, e);
+            onClose.close(connection, TCPCloseCause, e);
         }catch(Throwable onCloseThrowable) {
             this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, onCloseThrowable);
         }
@@ -222,9 +221,9 @@ public class TCPServer {
         }catch(IOException ignored){ }
     }
 
-    private void onConnectionClosed(TCPConnection connection, NetCloseCause netCloseCause, Exception e) {
+    private void onConnectionClosed(TCPConnection connection, TCPCloseCause TCPCloseCause, Exception e) {
         connections.remove(connection);
-        this.invokeOnDisconnect(connection, netCloseCause, e);
+        this.invokeOnDisconnect(connection, TCPCloseCause, e);
     }
 
 
@@ -250,7 +249,7 @@ public class TCPServer {
         }
 
         for(TCPConnection connection: connections)
-            connection.close(NetCloseCause.CLOSE_SERVER, null);
+            connection.close(TCPCloseCause.CLOSE_SERVER, null);
         connections.clear();
 
         for(ServerSocketChannel serverChannel: serverChannels)

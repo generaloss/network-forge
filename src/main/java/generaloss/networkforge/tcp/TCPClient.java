@@ -1,7 +1,6 @@
 package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
-import generaloss.networkforge.NetCloseCause;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.networkforge.packet.NetPacket;
@@ -115,12 +114,12 @@ public class TCPClient {
         }
     }
 
-    private void invokeOnDisconnect(TCPConnection connection, NetCloseCause netCloseCause, Exception e) {
+    private void invokeOnDisconnect(TCPConnection connection, TCPCloseCause TCPCloseCause, Exception e) {
         if(onClose == null)
             return;
 
         try {
-            onClose.close(connection, netCloseCause, e);
+            onClose.close(connection, TCPCloseCause, e);
         }catch(Throwable onCloseThrowable) {
             this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, onCloseThrowable);
         }
@@ -258,7 +257,7 @@ public class TCPClient {
             selector.wakeup();
         }
 
-        connection.close(NetCloseCause.CLOSE_CLIENT, null);
+        connection.close(TCPCloseCause.CLOSE_CLIENT, null);
         ResUtils.close(selector);
         return this;
     }

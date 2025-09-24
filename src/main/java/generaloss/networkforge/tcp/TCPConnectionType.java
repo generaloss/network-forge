@@ -2,8 +2,8 @@ package generaloss.networkforge.tcp;
 
 public enum TCPConnectionType {
 
-    NATIVE (NativeTCPConnection.class),
-    PACKET (PacketTCPConnection.class);
+    PACKET (PacketTCPConnection.class),
+    STREAM (StreamTCPConnection.class);
 
     private final Class<?> conectionClass;
 

@@ -1,7 +1,5 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.NetCloseCause;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -65,7 +63,7 @@ public class PacketTCPConnection extends TCPConnection {
                 if(size > super.options.getMaxReadPacketSize()) {
                     // close connection
                     if(super.options.isCloseOnPacketLimit()) {
-                        super.close(NetCloseCause.PACKET_SIZE_LIMIT_EXCEEDED, null);
+                        super.close(TCPCloseCause.PACKET_SIZE_LIMIT_EXCEEDED, null);
                         return null;
                     }
 
@@ -100,7 +98,7 @@ public class PacketTCPConnection extends TCPConnection {
             return this.getDecryptedData();
 
         }catch(IOException e) {
-            super.close(NetCloseCause.INTERNAL_ERROR, e);
+            super.close(TCPCloseCause.INTERNAL_ERROR, e);
             return null;
         }
     }
@@ -114,7 +112,7 @@ public class PacketTCPConnection extends TCPConnection {
         final int bytesRead = super.channel.read(buffer);
         // check remote close
         if(bytesRead == -1){
-            super.close(NetCloseCause.CLOSE_BY_OTHER_SIDE, null);
+            super.close(TCPCloseCause.CLOSE_BY_OTHER_SIDE, null);
             return false; // continue to read
         }
 

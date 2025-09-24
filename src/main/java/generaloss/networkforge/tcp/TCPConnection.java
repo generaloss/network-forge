@@ -1,6 +1,5 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.NetCloseCause;
 import generaloss.networkforge.CipherPair;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
@@ -117,13 +116,13 @@ public abstract class TCPConnection implements Closeable {
         return closed;
     }
 
-    protected void close(NetCloseCause netCloseCause, Exception e) {
+    protected void close(TCPCloseCause TCPCloseCause, Exception e) {
         if(closed)
             return;
         closed = true;
 
         if(onClose != null)
-            onClose.close(this, netCloseCause, e);
+            onClose.close(this, TCPCloseCause, e);
 
         selectionKey.cancel();
         ResUtils.close(channel);
@@ -131,7 +130,7 @@ public abstract class TCPConnection implements Closeable {
 
     @Override
     public void close() {
-        this.close(NetCloseCause.CLOSE_CONNECTION, null);
+        this.close(TCPCloseCause.CLOSE_CONNECTION, null);
     }
 
 
@@ -153,7 +152,7 @@ public abstract class TCPConnection implements Closeable {
             }
             return true;
         }catch(IOException | CancelledKeyException e) {
-            this.close(NetCloseCause.INTERNAL_ERROR, e);
+            this.close(TCPCloseCause.INTERNAL_ERROR, e);
             return false;
         }
     }
@@ -169,7 +168,7 @@ public abstract class TCPConnection implements Closeable {
                 key.interestOps(SelectionKey.OP_READ);
             }
         }catch(Exception e) {
-            this.close(NetCloseCause.INTERNAL_ERROR, e);
+            this.close(TCPCloseCause.INTERNAL_ERROR, e);
         }
     }
 
@@ -234,7 +233,7 @@ public abstract class TCPConnection implements Closeable {
 
     static {
         registerFactory(PacketTCPConnection.class, PacketTCPConnection::new);
-        registerFactory(NativeTCPConnection.class, NativeTCPConnection::new);
+        registerFactory(StreamTCPConnection.class, StreamTCPConnection::new);
     }
 
     public static TCPConnectionFactory getFactory(Class<?> connectionClass) {

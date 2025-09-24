@@ -1,20 +1,18 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.NetCloseCause;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
-public class NativeTCPConnection extends TCPConnection {
+public class StreamTCPConnection extends TCPConnection {
 
     private static final int BUFFER_SIZE = 8192; // 8 kb
 
     private final ByteBuffer readBuffer;
 
-    protected NativeTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
+    protected StreamTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
         super(channel, selectionKey, onClose);
         this.readBuffer = ByteBuffer.allocate(BUFFER_SIZE);
     }
@@ -31,7 +29,7 @@ public class NativeTCPConnection extends TCPConnection {
         final int size = data.length;
         if(size > super.options.getMaxWritePacketSize()) {
             System.err.printf("[%1$s] Packet to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
-                NativeTCPConnection.class.getSimpleName(), size, super.options.getMaxWritePacketSize()
+                              StreamTCPConnection.class.getSimpleName(), size, super.options.getMaxWritePacketSize()
             );
             return false;
         }
@@ -68,7 +66,7 @@ public class NativeTCPConnection extends TCPConnection {
                 if(bytesStream.size() > super.options.getMaxReadPacketSize()) {
                     // close connection
                     if(super.options.isCloseOnPacketLimit())
-                        super.close(NetCloseCause.PACKET_SIZE_LIMIT_EXCEEDED, null);
+                        super.close(TCPCloseCause.PACKET_SIZE_LIMIT_EXCEEDED, null);
 
                     this.discardAvailableBytes();
                     return null;
@@ -77,7 +75,7 @@ public class NativeTCPConnection extends TCPConnection {
 
             // check remote close
             if(length == -1) {
-                super.close(NetCloseCause.CLOSE_BY_OTHER_SIDE, null);
+                super.close(TCPCloseCause.CLOSE_BY_OTHER_SIDE, null);
                 return null;
             }
 
@@ -88,7 +86,7 @@ public class NativeTCPConnection extends TCPConnection {
             return super.ciphers.decrypt(allReadBytes);
 
         }catch(IOException e) {
-            super.close(NetCloseCause.INTERNAL_ERROR, e);
+            super.close(TCPCloseCause.INTERNAL_ERROR, e);
             return null;
         }
     }
@@ -104,7 +102,7 @@ public class NativeTCPConnection extends TCPConnection {
                 return;
             // check remote close
             if(read == -1) {
-                this.close(NetCloseCause.CLOSE_BY_OTHER_SIDE, null);
+                this.close(TCPCloseCause.CLOSE_BY_OTHER_SIDE, null);
                 return;
             }
         }

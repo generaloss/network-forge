@@ -113,7 +113,7 @@ public class TcpTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPClient client = new TCPClient()
-            .setConnectionType(TCPConnectionType.NATIVE)
+            .setConnectionType(TCPConnectionType.STREAM)
             .setOnReceive((connection, bytes) -> {
                 result.set(new String(bytes));
                 connection.close();

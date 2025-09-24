@@ -1,6 +1,6 @@
-package generaloss.networkforge;
+package generaloss.networkforge.tcp;
 
-public enum NetCloseCause {
+public enum TCPCloseCause {
 
     CLOSE_CONNECTION           ("Connection closed"                  , false),
     CLOSE_CLIENT               ("Client closed"                      , false),
@@ -12,7 +12,7 @@ public enum NetCloseCause {
     private final String message;
     private final boolean hasException;
 
-    NetCloseCause(String message, boolean hasException) {
+    TCPCloseCause(String message, boolean hasException) {
         this.message = message;
         this.hasException = hasException;
     }

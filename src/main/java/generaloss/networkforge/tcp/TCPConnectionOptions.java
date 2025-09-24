@@ -5,27 +5,23 @@ import java.net.SocketException;
 
 public class TCPConnectionOptions {
 
-    private static final int DEFAULT_MAX_PACKET_SIZE = (64 * 1024 * 1024); // 64 Mb.  (Integer.MAX_VALUE ≈ 2 Gb)
+    private static final int DEFAULT_MAX_PACKET_SIZE = (8 * 1024 * 1024); // 8 Mb.  (Integer.MAX_VALUE ≈ 2 Gb)
 
     private final Socket socket;
-    private int maxReadPacketSize;
-    private int maxWritePacketSize;
-    private boolean closeOnPacketLimit;
 
     public TCPConnectionOptions(Socket socket) {
         if(socket == null)
             throw new NullPointerException("socket is null");
         this.socket = socket;
-
-        this.maxReadPacketSize = DEFAULT_MAX_PACKET_SIZE;
-        this.maxWritePacketSize = DEFAULT_MAX_PACKET_SIZE;
-        this.closeOnPacketLimit = true;
     }
 
     public Socket socket() {
         return socket;
     }
 
+
+    // Maximum Read Packet Size
+    private int maxReadPacketSize = DEFAULT_MAX_PACKET_SIZE;
 
     public int getMaxReadPacketSize() {
         return maxReadPacketSize;
@@ -37,6 +33,9 @@ public class TCPConnectionOptions {
     }
 
 
+    // Maximum Write Packet Size
+    private int maxWritePacketSize = DEFAULT_MAX_PACKET_SIZE;
+
     public int getMaxWritePacketSize() {
         return maxWritePacketSize;
     }
@@ -46,13 +45,15 @@ public class TCPConnectionOptions {
         return this;
     }
 
-
     public TCPConnectionOptions setMaxPacketSize(int maxSize) {
         maxReadPacketSize = maxSize;
         maxWritePacketSize = maxSize;
         return this;
     }
 
+
+    // Close If Packet Limit Reached
+    private boolean closeOnPacketLimit = true;
 
     public boolean isCloseOnPacketLimit() {
         return closeOnPacketLimit;
