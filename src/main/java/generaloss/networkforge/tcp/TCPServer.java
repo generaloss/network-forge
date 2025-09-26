@@ -1,5 +1,8 @@
 package generaloss.networkforge.tcp;
 
+import generaloss.networkforge.tcp.listener.*;
+import generaloss.networkforge.tcp.options.TCPConnectionOptions;
+import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 import generaloss.resourceflow.stream.BinaryInputStream;
@@ -9,6 +12,7 @@ import java.io.IOException;
 import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketOption;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -21,6 +25,7 @@ import java.util.function.Consumer;
 public class TCPServer {
 
     private TCPConnectionFactory connectionFactory;
+    private TCPConnectionOptionsHolder initialOptions;
 
     private Consumer<TCPConnection> onConnect;
     private TCPCloseable onClose;
@@ -40,6 +45,11 @@ public class TCPServer {
         this.connections = new CopyOnWriteArrayList<>();
     }
 
+    public TCPServer(TCPConnectionOptionsHolder initialOptions) {
+        this();
+        this.setInitialOptions(initialOptions);
+    }
+
 
     public TCPServer setConnectionType(Class<?> tcpConnectionClass) {
         this.connectionFactory = TCPConnection.getFactory(tcpConnectionClass);
@@ -48,6 +58,12 @@ public class TCPServer {
 
     public TCPServer setConnectionType(TCPConnectionType connectionType) {
         this.connectionFactory = TCPConnection.getFactory(connectionType);
+        return this;
+    }
+
+
+    public TCPServer setInitialOptions(TCPConnectionOptionsHolder initialOptions) {
+        this.initialOptions = initialOptions;
         return this;
     }
 
@@ -143,6 +159,12 @@ public class TCPServer {
             final int port = ports[i];
 
             final ServerSocketChannel channel = ServerSocketChannel.open();
+
+            System.out.println("  Options:");
+            Set<SocketOption<?>> availOp = channel.supportedOptions();
+            for(SocketOption<?> socketOption: availOp)
+                System.out.println(socketOption.type() + " " + socketOption.name());
+
             try {
                 channel.bind(new InetSocketAddress(address, port));
             }catch(BindException e) {
@@ -208,11 +230,15 @@ public class TCPServer {
             final SocketChannel channel = serverChannel.accept();
             if(channel == null)
                 return;
-
             channel.configureBlocking(false);
+
+            final TCPConnectionOptions options = new TCPConnectionOptions(channel.socket());
+            initialOptions.applyPreConnectOn(options);
+            initialOptions.applyPostConnectOn(options);
+
             final SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
 
-            final TCPConnection connection = connectionFactory.create(channel, key, this::onConnectionClosed);
+            final TCPConnection connection = connectionFactory.create(channel, key, this::onConnectionClosed, options);
             connection.setName("TCPServer-connection-#" + this.hashCode());
             connections.add(connection);
             key.attach(connection);

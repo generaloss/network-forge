@@ -1,4 +1,4 @@
-package generaloss.networkforge.tcp;
+package generaloss.networkforge.tcp.listener;
 
 public enum TCPErrorSource {
 

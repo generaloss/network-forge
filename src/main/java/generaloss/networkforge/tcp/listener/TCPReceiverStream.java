@@ -1,5 +1,6 @@
-package generaloss.networkforge.tcp;
+package generaloss.networkforge.tcp.listener;
 
+import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.resourceflow.stream.BinaryInputStream;
 
 @FunctionalInterface

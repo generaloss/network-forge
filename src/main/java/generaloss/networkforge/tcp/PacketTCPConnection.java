@@ -1,5 +1,9 @@
 package generaloss.networkforge.tcp;
 
+import generaloss.networkforge.tcp.listener.TCPCloseCause;
+import generaloss.networkforge.tcp.listener.TCPCloseable;
+import generaloss.networkforge.tcp.options.TCPConnectionOptions;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -7,12 +11,14 @@ import java.nio.channels.SocketChannel;
 
 public class PacketTCPConnection extends TCPConnection {
 
+    public static final int DEFAULT_MAX_PACKET_SIZE = (8 * 1024 * 1024); // 8 Mb.  (Integer.MAX_VALUE ≈ 2 Gb)
+
     private final ByteBuffer sizeBuffer;
     private ByteBuffer dataBuffer;
     private boolean discardReading;
 
-    protected PacketTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
-        super(channel, selectionKey, onClose);
+    protected PacketTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose, TCPConnectionOptions options) {
+        super(channel, selectionKey, onClose, options);
         this.sizeBuffer = ByteBuffer.allocate(Integer.BYTES);
     }
 
@@ -26,9 +32,9 @@ public class PacketTCPConnection extends TCPConnection {
 
         // check size
         final int size = data.length;
-        if(size > super.options.getMaxWritePacketSize()) {
+        if(size > super.options.getMaxPacketSizeWrite()) {
             System.err.printf("[%1$s] Packet to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
-                PacketTCPConnection.class.getSimpleName(), size, super.options.getMaxWritePacketSize()
+                PacketTCPConnection.class.getSimpleName(), size, super.options.getMaxPacketSizeWrite()
             );
             return false;
         }
@@ -60,7 +66,7 @@ public class PacketTCPConnection extends TCPConnection {
                 final int size = sizeBuffer.getInt();
 
                 // check size
-                if(size > super.options.getMaxReadPacketSize()) {
+                if(size > super.options.getMaxPacketSizeRead()) {
                     // close connection
                     if(super.options.isCloseOnPacketLimit()) {
                         super.close(TCPCloseCause.PACKET_SIZE_LIMIT_EXCEEDED, null);

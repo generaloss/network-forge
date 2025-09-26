@@ -149,12 +149,12 @@ public class TcpTests {
         final AtomicBoolean closed = new AtomicBoolean();
 
         final TCPServer server = new TCPServer()
-                .setOnConnect(TCPConnection::close)
-                .run(5406);
+            .setOnConnect(TCPConnection::close)
+            .run(5406);
 
         final TCPClient client = new TCPClient()
-                .setOnDisconnect((connection, reason, e) -> closed.set(true))
-                .connect("localhost", 5406);
+            .setOnDisconnect((connection, reason, e) -> closed.set(true))
+            .connect("localhost", 5406);
 
         TimeUtils.waitFor(closed::get, 5000, Assert::fail);
         server.close();
@@ -164,8 +164,8 @@ public class TcpTests {
     public void close_server_connection() throws Exception {
         final AtomicBoolean closed = new AtomicBoolean();
         final TCPServer server = new TCPServer()
-                .setOnDisconnect((connection, reason, e) -> closed.set(true))
-                .run(5407);
+            .setOnDisconnect((connection, reason, e) -> closed.set(true))
+            .run(5407);
         final TCPClient client = new TCPClient();
         client.connect("localhost", 5407);
         client.close();

@@ -1,6 +1,9 @@
 package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
+import generaloss.networkforge.tcp.listener.*;
+import generaloss.networkforge.tcp.options.TCPConnectionOptions;
+import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.networkforge.packet.NetPacket;
@@ -24,6 +27,7 @@ import java.util.function.Consumer;
 public class TCPClient {
 
     private TCPConnectionFactory connectionFactory;
+    private TCPConnectionOptionsHolder initialOptions;
 
     private Consumer<TCPConnection> onConnect;
     private TCPCloseable onClose;
@@ -40,6 +44,12 @@ public class TCPClient {
             TCPErrorHandler.printErrorCatch(TCPClient.class, connection, source, throwable)
         );
     }
+
+    public TCPClient(TCPConnectionOptionsHolder initialOptions) {
+        this();
+        this.setInitialOptions(initialOptions);
+    }
+
 
     public TCPConnection connection() {
         return connection;
@@ -65,6 +75,12 @@ public class TCPClient {
 
     public TCPClient setConnectionType(TCPConnectionType connectionType) {
         this.connectionFactory = TCPConnection.getFactory(connectionType);
+        return this;
+    }
+
+
+    public TCPClient setInitialOptions(TCPConnectionOptionsHolder initialOptions) {
+        this.initialOptions = initialOptions;
         return this;
     }
 
@@ -154,12 +170,15 @@ public class TCPClient {
         // channel
         final SocketChannel channel = SocketChannel.open();
         channel.configureBlocking(false);
+        // options
+        final TCPConnectionOptions options = new TCPConnectionOptions(channel.socket());
+        initialOptions.applyPreConnectOn(options);
 
         final boolean connectedInstantly = channel.connect(socketAddress);
         selector = Selector.open();
 
         if(connectedInstantly) {
-            this.createConnection(channel);
+            this.createConnection(channel, options);
             return this;
         }
 
@@ -176,7 +195,7 @@ public class TCPClient {
         keyIterator.remove();
 
         if(connectKey.isConnectable() && channel.finishConnect()) {
-            this.createConnection(channel);
+            this.createConnection(channel, options);
         }else{
             channel.close();
             throw new ConnectException("Connection failed");
@@ -198,10 +217,12 @@ public class TCPClient {
     }
 
 
-    private void createConnection(SocketChannel channel) throws IOException {
+    private void createConnection(SocketChannel channel, TCPConnectionOptions options) throws IOException {
+        initialOptions.applyPostConnectOn(options);
+
         final SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
 
-        connection = connectionFactory.create(channel, key, this::invokeOnDisconnect);
+        connection = connectionFactory.create(channel, key, this::invokeOnDisconnect, options);
         connection.setName("TCPClient-connection #" + this.hashCode());
 
         this.invokeOnConnect(connection);

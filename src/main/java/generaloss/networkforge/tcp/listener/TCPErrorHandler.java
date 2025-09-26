@@ -1,4 +1,6 @@
-package generaloss.networkforge.tcp;
+package generaloss.networkforge.tcp.listener;
+
+import generaloss.networkforge.tcp.TCPConnection;
 
 public interface TCPErrorHandler {
 

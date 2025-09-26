@@ -15,6 +15,6 @@ public enum TCPConnectionType {
         return conectionClass;
     }
 
-    static final TCPConnectionType DEFAULT = PACKET;
+    public static final TCPConnectionType DEFAULT = PACKET;
 
 }

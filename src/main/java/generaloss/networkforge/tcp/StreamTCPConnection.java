@@ -1,5 +1,9 @@
 package generaloss.networkforge.tcp;
 
+import generaloss.networkforge.tcp.listener.TCPCloseCause;
+import generaloss.networkforge.tcp.listener.TCPCloseable;
+import generaloss.networkforge.tcp.options.TCPConnectionOptions;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -12,8 +16,8 @@ public class StreamTCPConnection extends TCPConnection {
 
     private final ByteBuffer readBuffer;
 
-    protected StreamTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
-        super(channel, selectionKey, onClose);
+    protected StreamTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose, TCPConnectionOptions options) {
+        super(channel, selectionKey, onClose, options);
         this.readBuffer = ByteBuffer.allocate(BUFFER_SIZE);
     }
 
@@ -27,9 +31,9 @@ public class StreamTCPConnection extends TCPConnection {
 
         // check size
         final int size = data.length;
-        if(size > super.options.getMaxWritePacketSize()) {
+        if(size > super.options.getMaxPacketSizeWrite()) {
             System.err.printf("[%1$s] Packet to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
-                              StreamTCPConnection.class.getSimpleName(), size, super.options.getMaxWritePacketSize()
+                              StreamTCPConnection.class.getSimpleName(), size, super.options.getMaxPacketSizeWrite()
             );
             return false;
         }
@@ -63,7 +67,7 @@ public class StreamTCPConnection extends TCPConnection {
                 readBuffer.clear();
 
                 // check size
-                if(bytesStream.size() > super.options.getMaxReadPacketSize()) {
+                if(bytesStream.size() > super.options.getMaxPacketSizeRead()) {
                     // close connection
                     if(super.options.isCloseOnPacketLimit())
                         super.close(TCPCloseCause.PACKET_SIZE_LIMIT_EXCEEDED, null);

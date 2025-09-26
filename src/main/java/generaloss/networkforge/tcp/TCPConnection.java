@@ -1,6 +1,9 @@
 package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
+import generaloss.networkforge.tcp.listener.TCPCloseCause;
+import generaloss.networkforge.tcp.listener.TCPCloseable;
+import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 import generaloss.networkforge.packet.NetPacket;
@@ -32,11 +35,11 @@ public abstract class TCPConnection implements Closeable {
     private final Queue<ByteBuffer> writeQueue;
     private final Object writeLock;
 
-    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
+    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose, TCPConnectionOptions options) {
         this.channel = channel;
         this.selectionKey = selectionKey;
         this.onClose = onClose;
-        this.options = new TCPConnectionOptions(channel.socket());
+        this.options = options;
         this.ciphers = new CipherPair();
         this.name = (this.getClass().getSimpleName() + "#" + this.hashCode());
 
@@ -244,11 +247,6 @@ public abstract class TCPConnection implements Closeable {
 
     public static TCPConnectionFactory getFactory(TCPConnectionType connectionType) {
         return getFactory(connectionType.getConnectionClass());
-    }
-
-    public static TCPConnection create(Class<?> connectionClass, SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
-        final TCPConnectionFactory factory = getFactory(connectionClass);
-        return factory.create(channel, selectionKey, onClose);
     }
 
 }

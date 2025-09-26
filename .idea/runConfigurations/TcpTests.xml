@@ -3,7 +3,7 @@
     <module name="network-forge" />
     <extension name="coverage">
       <pattern>
-        <option name="PATTERN" value="generaloss.networkforge.tcp.*" />
+        <option name="PATTERN" value="generaloss.networkforge.tcp.options.*" />
         <option name="ENABLED" value="true" />
       </pattern>
     </extension>
