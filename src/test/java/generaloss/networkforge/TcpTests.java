@@ -3,6 +3,7 @@ package generaloss.networkforge;
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.TCPConnectionType;
+import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.resourceflow.stream.BinaryOutputStream;
 import generaloss.networkforge.packet.NetPacket;
@@ -107,6 +108,7 @@ public class TcpTests {
             throw new RuntimeException(e);
         }
     }
+
 
     @Test
     public void webpage_connect() throws Exception {
@@ -245,9 +247,9 @@ public class TcpTests {
             })
             .run(5408, 5409);
 
-        final TCPClient client = new TCPClient();
-        client.connect("localhost", 5408 + (int) Math.round(Math.random()));
-        client.setCiphers(encryptCipher, decryptCipher);
+        final TCPClient client = new TCPClient()
+            .connect("localhost", 5408 + (int) Math.round(Math.random()))
+            .setCiphers(encryptCipher, decryptCipher);
 
         final int iterations = 10000;
         for(int i = 0; i < iterations; i++)
@@ -267,12 +269,12 @@ public class TcpTests {
             .setOnConnect((connection) -> connection.send(message))
             .run(5401);
 
-        final TCPClient client = new TCPClient();
-        client.setOnReceive((connection, bytes) -> {
-            result.set(new String(bytes));
-            connection.close();
-        });
-        client.connect("localhost", 5401);
+        final TCPClient client = new TCPClient()
+            .setOnReceive((connection, bytes) -> {
+                result.set(new String(bytes));
+                connection.close();
+            })
+            .connect("localhost", 5401);
 
         TimeUtils.waitFor(client::isClosed);
         server.close();
@@ -284,14 +286,17 @@ public class TcpTests {
         final String message = "Hello, Data! ".repeat(1000000);
         final AtomicReference<String> result = new AtomicReference<>();
 
-        final TCPServer server = new TCPServer()
+        final TCPConnectionOptionsHolder options = new TCPConnectionOptionsHolder()
+            .setMaxPacketSize(message.length());
+
+        final TCPServer server = new TCPServer(options)
             .setOnReceive((sender, bytes) -> {
                 result.set(new String(bytes));
                 sender.close();
             })
             .run(5402);
 
-        final TCPClient client = new TCPClient()
+        final TCPClient client = new TCPClient(options)
             .connect("localhost", 5402);
 
         client.send(message);
@@ -376,7 +381,7 @@ public class TcpTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final NetPacketDispatcher dispatcher = new NetPacketDispatcher()
-            .register(MsgPacket.class);
+            .register(MsgPacket.class, MsgPacket::new);
 
         final AtomicInteger counter = new AtomicInteger();
         final MsgHandler handler = (received) -> {

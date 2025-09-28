@@ -2,7 +2,6 @@ package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.tcp.listener.TCPCloseCause;
 import generaloss.networkforge.tcp.listener.TCPCloseable;
-import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -17,8 +16,8 @@ public class PacketTCPConnection extends TCPConnection {
     private ByteBuffer dataBuffer;
     private boolean discardReading;
 
-    protected PacketTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose, TCPConnectionOptions options) {
-        super(channel, selectionKey, onClose, options);
+    protected PacketTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
+        super(channel, selectionKey, onClose);
         this.sizeBuffer = ByteBuffer.allocate(Integer.BYTES);
     }
 
@@ -64,6 +63,11 @@ public class PacketTCPConnection extends TCPConnection {
                 // get size
                 sizeBuffer.flip();
                 final int size = sizeBuffer.getInt();
+
+                if(size < 1) {
+                    super.close(TCPCloseCause.INVALID_PACKET_SIZE, null);
+                    return null;
+                }
 
                 // check size
                 if(size > super.options.getMaxPacketSizeRead()) {

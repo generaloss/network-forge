@@ -38,16 +38,16 @@ public class TCPClient {
     private Thread selectorThread;
     private Selector selector;
 
-    public TCPClient() {
+    public TCPClient(TCPConnectionOptionsHolder initialOptions) {
         this.setConnectionType(TCPConnectionType.DEFAULT);
         this.setOnError((connection, source, throwable) ->
             TCPErrorHandler.printErrorCatch(TCPClient.class, connection, source, throwable)
         );
+        this.setInitialOptions(initialOptions);
     }
 
-    public TCPClient(TCPConnectionOptionsHolder initialOptions) {
-        this();
-        this.setInitialOptions(initialOptions);
+    public TCPClient() {
+        this(new TCPConnectionOptionsHolder());
     }
 
 
@@ -102,13 +102,9 @@ public class TCPClient {
 
     public TCPClient setOnReceiveStream(TCPReceiverStream onReceive) {
         this.onReceive = (sender, bytes) -> {
-            try{
-                final BinaryInputStream stream = new BinaryInputStream(bytes);
-                onReceive.receive(sender, stream);
-                stream.close();
-            }catch(IOException e){
-                throw new RuntimeException(e);
-            }
+            final BinaryInputStream stream = new BinaryInputStream(bytes);
+            onReceive.receive(sender, stream);
+            ResUtils.close(stream);
         };
         return this;
     }
@@ -170,15 +166,13 @@ public class TCPClient {
         // channel
         final SocketChannel channel = SocketChannel.open();
         channel.configureBlocking(false);
-        // options
-        final TCPConnectionOptions options = new TCPConnectionOptions(channel.socket());
-        initialOptions.applyPreConnectOn(options);
+        initialOptions.applyPreConnect(channel);
 
         final boolean connectedInstantly = channel.connect(socketAddress);
         selector = Selector.open();
 
         if(connectedInstantly) {
-            this.createConnection(channel, options);
+            this.createConnection(channel);
             return this;
         }
 
@@ -195,7 +189,7 @@ public class TCPClient {
         keyIterator.remove();
 
         if(connectKey.isConnectable() && channel.finishConnect()) {
-            this.createConnection(channel, options);
+            this.createConnection(channel);
         }else{
             channel.close();
             throw new ConnectException("Connection failed");
@@ -217,13 +211,14 @@ public class TCPClient {
     }
 
 
-    private void createConnection(SocketChannel channel, TCPConnectionOptions options) throws IOException {
-        initialOptions.applyPostConnectOn(options);
+    private void createConnection(SocketChannel channel) throws IOException {
+        initialOptions.applyPostConnect(channel);
 
         final SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
 
-        connection = connectionFactory.create(channel, key, this::invokeOnDisconnect, options);
-        connection.setName("TCPClient-connection #" + this.hashCode());
+        connection = connectionFactory.create(channel, key, this::invokeOnDisconnect);
+        connection.setName("TCPClient-connection-#" + this.hashCode());
+        initialOptions.copyTo(connection.options());
 
         this.invokeOnConnect(connection);
         this.startSelectorThread();

@@ -53,11 +53,10 @@ public class TCPConnectionOptionsHolder extends TCPSocketOptionsHolder {
     }
 
 
-    public void applyPreConnectOn(TCPConnectionOptions options) {
+    public void copyTo(TCPConnectionOptions options) {
         options.setMaxPacketSizeRead(maxPacketSizeRead);
         options.setMaxPacketSizeWrite(maxPacketSizeWrite);
         options.setCloseOnPacketLimit(closeOnPacketLimit);
-        super.applyPreConnectOn(options);
     }
 
 

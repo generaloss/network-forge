@@ -10,7 +10,7 @@ public abstract class NetPacket<H> {
     private final short ID;
 
     public NetPacket() {
-        this.ID = getIDByClass(this.getClass());
+        this.ID = calculatePacketClassID(this.getClass());
     }
 
     public short getPacketID() {
@@ -24,9 +24,10 @@ public abstract class NetPacket<H> {
     abstract public void handle(H handler);
 
 
-    public static short getIDByClass(Class<?> c) {
-        final int nameHash = c.getSimpleName().hashCode();
-        return (short) (nameHash ^ (nameHash << 16));
+    public static short calculatePacketClassID(Class<?> packetClass) {
+        final String className = packetClass.getSimpleName();
+        final int hash = className.hashCode();
+        return (short) (hash ^ (hash << 16));
     }
 
 }

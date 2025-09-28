@@ -29,17 +29,17 @@ public abstract class TCPConnection implements Closeable {
     protected final TCPConnectionOptions options;
     protected final CipherPair ciphers;
     private volatile boolean closed;
-    private Object attachment;
-    private String name;
+    private volatile Object attachment;
+    private volatile String name;
 
     private final Queue<ByteBuffer> writeQueue;
     private final Object writeLock;
 
-    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose, TCPConnectionOptions options) {
+    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
         this.channel = channel;
         this.selectionKey = selectionKey;
         this.onClose = onClose;
-        this.options = options;
+        this.options = new TCPConnectionOptions(channel.socket());
         this.ciphers = new CipherPair();
         this.name = (this.getClass().getSimpleName() + "#" + this.hashCode());
 
@@ -241,7 +241,7 @@ public abstract class TCPConnection implements Closeable {
 
     public static TCPConnectionFactory getFactory(Class<?> connectionClass) {
         if(!FACTORY_BY_CLASS.containsKey(connectionClass))
-            throw new Error("Class '" + connectionClass + "' is not registered as a TCP connection factory");
+            throw new IllegalArgumentException("No factory registered for class: " + connectionClass);
         return FACTORY_BY_CLASS.get(connectionClass);
     }
 

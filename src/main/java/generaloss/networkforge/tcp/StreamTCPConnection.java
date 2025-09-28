@@ -2,7 +2,6 @@ package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.tcp.listener.TCPCloseCause;
 import generaloss.networkforge.tcp.listener.TCPCloseable;
-import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -16,8 +15,8 @@ public class StreamTCPConnection extends TCPConnection {
 
     private final ByteBuffer readBuffer;
 
-    protected StreamTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose, TCPConnectionOptions options) {
-        super(channel, selectionKey, onClose, options);
+    protected StreamTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
+        super(channel, selectionKey, onClose);
         this.readBuffer = ByteBuffer.allocate(BUFFER_SIZE);
     }
 

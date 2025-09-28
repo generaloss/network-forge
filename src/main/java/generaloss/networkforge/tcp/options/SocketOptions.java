@@ -1,19 +1,34 @@
 package generaloss.networkforge.tcp.options;
 
+import generaloss.networkforge.SocketConsumer;
+import generaloss.networkforge.SocketFunction;
 import jdk.net.ExtendedSocketOptions;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.Socket;
-import java.net.SocketException;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
 
-public class TCPSocketOptions {
+/* TCP Socket Options:
+boolean  TCP_NODELAY
+boolean  TCP_QUICKACK
+int      TCP_KEEPIDLE
+int      TCP_KEEPINTERVAL
+int      TCP_KEEPCOUNT
+int      IP_TOS
+boolean  SO_OOBINLINE
+boolean  SO_KEEPALIVE
+boolean  SO_REUSEADDR
+boolean  SO_REUSEPORT
+int      SO_RCVBUF
+int      SO_SNDBUF
+int      SO_LINGER
+*/
+public class SocketOptions {
 
     private final Socket socket;
 
-    public TCPSocketOptions(Socket socket) {
+    public SocketOptions(Socket socket) {
         if(socket == null)
             throw new IllegalArgumentException("socket is null");
         this.socket = socket;
@@ -23,23 +38,33 @@ public class TCPSocketOptions {
         return socket;
     }
 
-    public <T> boolean trySetOption(SocketOption<T> option, T value) {
+
+    private void trySetSocketApi(SocketConsumer setter) {
         try {
-            socket.setOption(option, value);
-            return true;
-        }catch(IOException e) {
-            throw new UncheckedIOException(e);
-        }catch(UnsupportedOperationException e) {
-            return false;
+            setter.accept(socket);
+        }catch(IOException ignored) { }
+    }
+
+    private <T> T tryGetSocketApi(SocketFunction<T> setter) {
+        try {
+            return setter.apply(socket);
+        }catch(IOException ignored) {
+            return null;
         }
     }
 
-    public <T> T tryGetOption(SocketOption<T> option) {
+    private <T> void trySetOption(SocketOption<T> option, T value) {
+        if(value == null)
+            return;
+        try {
+            socket.setOption(option, value);
+        }catch(UnsupportedOperationException | IllegalArgumentException | IOException ignored) { }
+    }
+
+    private <T> T tryGetOption(SocketOption<T> option) {
         try {
             return socket.getOption(option);
-        }catch(IOException e) {
-            throw new UncheckedIOException(e);
-        }catch(UnsupportedOperationException e) {
+        }catch(UnsupportedOperationException | IllegalArgumentException | IOException ignored) {
             return null;
         }
     }
@@ -47,11 +72,11 @@ public class TCPSocketOptions {
 
     // boolean TCP_NODELAY
     public Boolean isTcpNoDelay() {
-        return this.tryGetOption(StandardSocketOptions.TCP_NODELAY);
+        return this.tryGetSocketApi(Socket::getTcpNoDelay);
     }
 
-    public TCPSocketOptions setTcpNoDelay(Boolean tcpNoDelay) {
-        this.trySetOption(StandardSocketOptions.TCP_NODELAY, tcpNoDelay);
+    public SocketOptions setTcpNoDelay(Boolean tcpNoDelay) {
+        this.trySetSocketApi(s -> s.setTcpNoDelay(tcpNoDelay));
         return this;
     }
 
@@ -61,7 +86,7 @@ public class TCPSocketOptions {
         return this.tryGetOption(ExtendedSocketOptions.TCP_QUICKACK);
     }
 
-    public TCPSocketOptions setTcpQuickAck(Boolean tcpQuickAck) {
+    public SocketOptions setTcpQuickAck(Boolean tcpQuickAck) {
         this.trySetOption(ExtendedSocketOptions.TCP_QUICKACK, tcpQuickAck);
         return this;
     }
@@ -72,7 +97,7 @@ public class TCPSocketOptions {
         return this.tryGetOption(ExtendedSocketOptions.TCP_KEEPIDLE);
     }
 
-    public TCPSocketOptions setTcpKeepIdle(Integer tcpKeepIdle) {
+    public SocketOptions setTcpKeepIdle(Integer tcpKeepIdle) {
         this.trySetOption(ExtendedSocketOptions.TCP_KEEPIDLE, tcpKeepIdle);
         return this;
     }
@@ -83,7 +108,7 @@ public class TCPSocketOptions {
         return this.tryGetOption(ExtendedSocketOptions.TCP_KEEPINTERVAL);
     }
 
-    public TCPSocketOptions setTcpKeepInterval(Integer tcpKeepInterval) {
+    public SocketOptions setTcpKeepInterval(Integer tcpKeepInterval) {
         this.trySetOption(ExtendedSocketOptions.TCP_KEEPINTERVAL, tcpKeepInterval);
         return this;
     }
@@ -94,7 +119,7 @@ public class TCPSocketOptions {
         return this.tryGetOption(ExtendedSocketOptions.TCP_KEEPCOUNT);
     }
 
-    public TCPSocketOptions setTcpKeepCount(Integer tcpKeepCount) {
+    public SocketOptions setTcpKeepCount(Integer tcpKeepCount) {
         this.trySetOption(ExtendedSocketOptions.TCP_KEEPCOUNT, tcpKeepCount);
         return this;
     }
@@ -102,52 +127,44 @@ public class TCPSocketOptions {
 
     // int IP_TOS
     public Integer getTrafficClass() {
-        return this.tryGetOption(StandardSocketOptions.IP_TOS);
+        return this.tryGetSocketApi(Socket::getTrafficClass);
     }
 
-    public TCPSocketOptions setTrafficClass(Integer trafficClass) {
-        this.trySetOption(StandardSocketOptions.IP_TOS, trafficClass);
+    public SocketOptions setTrafficClass(Integer trafficClass) {
+        this.trySetSocketApi(s -> s.setTrafficClass(trafficClass));
         return this;
     }
 
 
     // boolean SO_OOBINLINE
     public Boolean isOOBInline() {
-        try{
-            return socket.getOOBInline();
-        }catch(SocketException e){
-            throw new RuntimeException(e);
-        }
+        return this.tryGetSocketApi(Socket::getOOBInline);
     }
 
-    public TCPSocketOptions setOOBInline(Boolean oobInline) {
-        try{
-            socket.setOOBInline(oobInline);
-        }catch(SocketException e){
-            throw new RuntimeException(e);
-        }catch(UnsupportedOperationException ignored) { }
+    public SocketOptions setOOBInline(Boolean oobInline) {
+        this.trySetSocketApi(s -> s.setOOBInline(oobInline));
         return this;
     }
 
 
     // boolean SO_KEEPALIVE
     public Boolean isKeepAlive() {
-        return this.tryGetOption(StandardSocketOptions.SO_KEEPALIVE);
+        return this.tryGetSocketApi(Socket::getKeepAlive);
     }
 
-    public TCPSocketOptions setKeepAlive(Boolean keepAlive) {
-        this.trySetOption(StandardSocketOptions.SO_KEEPALIVE, keepAlive);
+    public SocketOptions setKeepAlive(Boolean keepAlive) {
+        this.trySetSocketApi(s -> s.setKeepAlive(keepAlive));
         return this;
     }
 
 
     // boolean SO_REUSEADDR
     public Boolean isReuseAddress() {
-        return this.tryGetOption(StandardSocketOptions.SO_REUSEADDR);
+        return this.tryGetSocketApi(Socket::getReuseAddress);
     }
 
-    public TCPSocketOptions setReuseAddress(Boolean reuseAddress) {
-        this.trySetOption(StandardSocketOptions.SO_REUSEADDR, reuseAddress);
+    public SocketOptions setReuseAddress(Boolean reuseAddress) {
+        this.trySetSocketApi(s -> s.setReuseAddress(reuseAddress));
         return this;
     }
 
@@ -157,7 +174,7 @@ public class TCPSocketOptions {
         return this.tryGetOption(StandardSocketOptions.SO_REUSEPORT);
     }
 
-    public TCPSocketOptions setReusePort(Boolean reusePort) {
+    public SocketOptions setReusePort(Boolean reusePort) {
         this.trySetOption(StandardSocketOptions.SO_REUSEPORT, reusePort);
         return this;
     }
@@ -165,40 +182,40 @@ public class TCPSocketOptions {
 
     // int SO_RCVBUF
     public Integer getReceiveBufferSize() {
-        return this.tryGetOption(StandardSocketOptions.SO_RCVBUF);
+        return this.tryGetSocketApi(Socket::getReceiveBufferSize);
     }
 
-    public TCPSocketOptions setReceiveBufferSize(Integer receiveBufferSize) {
-        this.trySetOption(StandardSocketOptions.SO_RCVBUF, receiveBufferSize);
+    public SocketOptions setReceiveBufferSize(Integer receiveBufferSize) {
+        this.trySetSocketApi(s -> s.setReceiveBufferSize(receiveBufferSize));
         return this;
     }
 
 
     // int SO_SNDBUF
     public Integer getSendBufferSize() {
-        return this.tryGetOption(StandardSocketOptions.SO_SNDBUF);
+        return this.tryGetSocketApi(Socket::getSendBufferSize);
     }
 
-    public TCPSocketOptions setSendBufferSize(Integer sendBufferSize) {
-        this.trySetOption(StandardSocketOptions.SO_SNDBUF, sendBufferSize);
+    public SocketOptions setSendBufferSize(Integer sendBufferSize) {
+        this.trySetSocketApi(s -> s.setSendBufferSize(sendBufferSize));
         return this;
     }
 
 
     // int SO_LINGER
     public Integer getLinger() {
-        return this.tryGetOption(StandardSocketOptions.SO_LINGER);
+        return this.tryGetSocketApi(Socket::getSoLinger);
     }
 
-    public TCPSocketOptions setLinger(Integer linger) {
-        this.trySetOption(StandardSocketOptions.SO_LINGER, linger);
+    public SocketOptions setLinger(int linger) {
+        this.trySetSocketApi(s -> s.setSoLinger(linger >= 0, linger));
         return this;
     }
 
 
     @Override
     public String toString() {
-        return TCPSocketOptions.class.getSimpleName() + "{" + this.optionsToString() + "}";
+        return SocketOptions.class.getSimpleName() + "{" + this.optionsToString() + "}";
     }
 
     protected String optionsToString() {

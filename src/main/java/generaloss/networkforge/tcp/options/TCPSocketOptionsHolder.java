@@ -1,5 +1,29 @@
 package generaloss.networkforge.tcp.options;
 
+import generaloss.networkforge.SocketConsumer;
+import jdk.net.ExtendedSocketOptions;
+
+import java.io.IOException;
+import java.net.SocketOption;
+import java.net.StandardSocketOptions;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+
+/* TCP Socket Options:
+boolean  TCP_NODELAY       pre-connect
+boolean  TCP_QUICKACK      post-bind
+int      TCP_KEEPIDLE      post-bind
+int      TCP_KEEPINTERVAL  post-bind
+int      TCP_KEEPCOUNT     post-bind
+int      IP_TOS            pre-connect
+boolean  SO_OOBINLINE      pre-connect
+boolean  SO_KEEPALIVE      pre-connect
+boolean  SO_REUSEADDR      pre-connect
+boolean  SO_REUSEPORT      pre-bind
+int      SO_RCVBUF         pre-connect
+int      SO_SNDBUF         pre-connect
+int      SO_LINGER         pre-connect
+*/
 public class TCPSocketOptionsHolder {
 
     // boolean TCP_NODELAY
@@ -67,7 +91,7 @@ public class TCPSocketOptionsHolder {
     }
 
 
-    // int IP_TOS
+    // int IP_TOS (before bind)
     private Integer trafficClass;
 
     public Integer getTrafficClass() {
@@ -106,7 +130,7 @@ public class TCPSocketOptionsHolder {
     }
 
 
-    // boolean SO_REUSEADDR
+    // boolean SO_REUSEADDR (before bind)
     private Boolean reuseAddress;
 
     public Boolean isReuseAddress() {
@@ -119,7 +143,7 @@ public class TCPSocketOptionsHolder {
     }
 
 
-    // boolean SO_REUSEPORT
+    // boolean SO_REUSEPORT (before bind)
     private Boolean reusePort;
 
     public Boolean isReusePort() {
@@ -132,7 +156,7 @@ public class TCPSocketOptionsHolder {
     }
 
 
-    // int SO_RCVBUF
+    // int SO_RCVBUF (before bind)
     private Integer receiveBufferSize;
 
     public Integer getReceiveBufferSize() {
@@ -145,7 +169,7 @@ public class TCPSocketOptionsHolder {
     }
 
 
-    // int SO_SNDBUF
+    // int SO_SNDBUF (before bind)
     private Integer sendBufferSize;
 
     public Integer getSendBufferSize() {
@@ -171,24 +195,38 @@ public class TCPSocketOptionsHolder {
     }
 
 
-    public void applyPreConnectOn(TCPSocketOptions options) {
-        if(trafficClass != null) options.setTrafficClass(trafficClass);
-        if(reuseAddress != null) options.setReuseAddress(reuseAddress);
-        if(reusePort != null) options.setReusePort(reusePort);
-        if(receiveBufferSize != null) options.setReceiveBufferSize(receiveBufferSize);
-        if(sendBufferSize != null) options.setSendBufferSize(sendBufferSize);
+    public void applyPreConnect(SocketChannel channel) {
+        if(channel == null)
+            return;
+        /* TCP_NODELAY  */ trySetSocketApi(channel, s -> { if(tcpNoDelay != null) s.setTcpNoDelay(tcpNoDelay); });
+        /* IP_TOS       */ trySetSocketApi(channel, s -> { if(trafficClass != null) s.setTrafficClass(trafficClass); });
+        /* SO_OOBINLINE */ trySetSocketApi(channel, s -> { if(oobInline != null) s.setOOBInline(oobInline); });
+        /* SO_KEEPALIVE */ trySetSocketApi(channel, s -> { if(keepAlive != null) s.setKeepAlive(keepAlive); });
+        /* SO_RCVBUF    */ trySetOption(channel, StandardSocketOptions.SO_RCVBUF, receiveBufferSize);
+        /* SO_SNDBUF    */ trySetOption(channel, StandardSocketOptions.SO_SNDBUF, sendBufferSize);
+        /* SO_LINGER    */ trySetSocketApi(channel, s -> { if(linger != null) s.setSoLinger(linger >= 0, linger); });
     }
 
-    public void applyPostConnectOn(TCPSocketOptions options) {
-        if(tcpNoDelay != null) options.setTcpNoDelay(tcpNoDelay);
-        if(tcpQuickAck != null) options.setTcpQuickAck(tcpQuickAck);
-        if(tcpKeepIdle != null) options.setTcpKeepIdle(tcpKeepIdle);
-        if(tcpKeepInterval != null) options.setTcpKeepInterval(tcpKeepInterval);
-        if(tcpKeepCount != null) options.setTcpKeepCount(tcpKeepCount);
-        if(oobInline != null) options.setOOBInline(oobInline);
-        if(keepAlive != null) options.setKeepAlive(keepAlive);
-        if(linger != null) options.setLinger(linger);
+    public void applyPostConnect(SocketChannel channel) {
+        if(channel == null)
+            return;
+        /* TCP_QUICKACK     */ trySetOption(channel, ExtendedSocketOptions.TCP_QUICKACK, tcpQuickAck);
+        /* TCP_KEEPIDLE     */ trySetOption(channel, ExtendedSocketOptions.TCP_KEEPIDLE, tcpKeepIdle);
+        /* TCP_KEEPINTERVAL */ trySetOption(channel, ExtendedSocketOptions.TCP_KEEPINTERVAL, tcpKeepInterval);
+        /* TCP_KEEPCOUNT    */ trySetOption(channel, ExtendedSocketOptions.TCP_KEEPCOUNT, tcpKeepCount);
+        // in case:
+        /* SO_KEEPALIVE */ trySetSocketApi(channel, s -> { if(keepAlive != null) s.setKeepAlive(keepAlive); });
+        /* TCP_NODELAY  */ trySetSocketApi(channel, s -> { if(tcpNoDelay != null) s.setTcpNoDelay(tcpNoDelay); });
     }
+
+    public void applyServerPreBind(ServerSocketChannel channel) {
+        if(channel == null)
+            return;
+        /* SO_REUSEADDR */ trySetOption(channel, StandardSocketOptions.SO_REUSEADDR, reuseAddress);
+        /* SO_REUSEPORT */ trySetOption(channel, StandardSocketOptions.SO_REUSEPORT, reusePort);
+        /* SO_RCVBUF    */ trySetOption(channel, StandardSocketOptions.SO_RCVBUF, receiveBufferSize);
+    }
+
 
     @Override
     public String toString() {
@@ -209,6 +247,29 @@ public class TCPSocketOptionsHolder {
             ", SO_RCVBUF=" + receiveBufferSize +
             ", SO_SNDBUF=" + sendBufferSize +
             ", SO_LINGER=" + linger;
+    }
+
+
+    private static <T> void trySetOption(SocketChannel channel, SocketOption<T> option, T value) {
+        if(value == null)
+            return;
+        try {
+            channel.setOption(option, value);
+        }catch(UnsupportedOperationException | IllegalArgumentException | IOException ignored) { }
+    }
+
+    private static <T> void trySetOption(ServerSocketChannel channel, SocketOption<T> option, T value) {
+        if(value == null)
+            return;
+        try {
+            channel.setOption(option, value);
+        }catch(UnsupportedOperationException | IllegalArgumentException | IOException ignored) { }
+    }
+
+    private static void trySetSocketApi(SocketChannel channel, SocketConsumer setter) {
+        try {
+            setter.accept(channel.socket());
+        }catch(Exception ignored) { }
     }
 
 }

@@ -7,6 +7,7 @@ public enum TCPCloseCause {
     CLOSE_SERVER               ("Server closed"                      , false),
     CLOSE_BY_OTHER_SIDE        ("Connection closed by the other side", false),
     PACKET_SIZE_LIMIT_EXCEEDED ("Packet size limit exceeded"         , false),
+    INVALID_PACKET_SIZE        ("Invalid packet size"                , false),
     INTERNAL_ERROR             ("Internal error occurred"            , true);
 
     private final String message;

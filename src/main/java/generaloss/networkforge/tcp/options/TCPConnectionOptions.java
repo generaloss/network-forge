@@ -4,7 +4,7 @@ import generaloss.networkforge.tcp.PacketTCPConnection;
 
 import java.net.Socket;
 
-public class TCPConnectionOptions extends TCPSocketOptions {
+public class TCPConnectionOptions extends SocketOptions {
 
     public TCPConnectionOptions(Socket socket) {
         super(socket);
@@ -66,7 +66,7 @@ public class TCPConnectionOptions extends TCPSocketOptions {
             "MAX_PACKET_SIZE_READ=" + maxPacketSizeRead +
             ", MAX_PACKET_SIZE_WRITE=" + maxPacketSizeWrite +
             ", CLOSE_ON_PACKET_LIMIT=" + closeOnPacketLimit +
-            super.optionsToString() + "}";
+            ", " + super.optionsToString() + "}";
     }
 
 }

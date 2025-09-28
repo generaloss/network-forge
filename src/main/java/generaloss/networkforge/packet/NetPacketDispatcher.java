@@ -4,6 +4,7 @@ import generaloss.resourceflow.stream.BinaryInputStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Constructor;
 import java.util.Map;
 import java.util.Queue;
@@ -12,7 +13,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class NetPacketDispatcher {
 
-    private final Map<Short, Class<? extends NetPacket<?>>> packetClasses;
+    private final Map<Short, NetPacketFactory<?>> packetClasses;
     private final Queue<Runnable> toHandleQueue;
 
     public NetPacketDispatcher() {
@@ -20,32 +21,52 @@ public class NetPacketDispatcher {
         this.toHandleQueue = new ConcurrentLinkedQueue<>();
     }
 
+    public final <H, P extends NetPacket<H>> NetPacketDispatcher register(Class<P> packetClass, NetPacketFactory<H> factory) {
+        final short ID = NetPacket.calculatePacketClassID(packetClass);
+        this.packetClasses.put(ID, factory);
+        return this;
+    }
+
     @SafeVarargs
-    public final NetPacketDispatcher register(Class<? extends NetPacket<?>>... packetClasses) {
-        for(Class<? extends NetPacket<?>> packetClass : packetClasses){
-            final short ID = NetPacket.getIDByClass(packetClass);
-            this.packetClasses.put(ID, packetClass);
+    public final <H, P extends NetPacket<H>> NetPacketDispatcher register(Class<P>... packetClasses) {
+        for(Class<P> packetClass : packetClasses) {
+            final NetPacketFactory<H> factory = () -> instancePacket(packetClass);
+            this.register(packetClass, factory);
         }
         return this;
     }
 
-    public boolean readPacket(byte[] bytes, Object handler) {
+    @SuppressWarnings("unchecked")
+    private static <P extends NetPacket<?>> P instancePacket(Class<P> packetClass) {
         try{
-            // check
+            final Constructor<?> constructor = packetClass.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            return (P) constructor.newInstance();
+
+        }catch(Exception e){
+            throw new IllegalStateException("Unable to instance packet: " + packetClass.getName(), e);
+        }
+    }
+
+
+    @SuppressWarnings("unchecked")
+    public <H> boolean readPacket(byte[] bytes, H handler) {
+        try{
             if(bytes.length < 2) // 'short' (ID) size = 2
                 return false;
 
             // create stream from bytes
             final BinaryInputStream dataStream = new BinaryInputStream(new ByteArrayInputStream(bytes));
 
-            // read ID and get packet class
+            // read ID and get packet factory
             final short ID = dataStream.readShort();
-            final Class<? extends NetPacket<?>> packetClass = packetClasses.get(ID);
-            if(packetClass == null)
+
+            final NetPacketFactory<H> packetFactory = (NetPacketFactory<H>) packetClasses.get(ID);
+            if(packetFactory == null)
                 return false;
 
             // create packet class instance and read remaining data
-            final NetPacket<Object> packetInstance = instancePacket(packetClass);
+            final NetPacket<H> packetInstance = packetFactory.create();
             packetInstance.read(dataStream);
 
             // handle and return
@@ -53,7 +74,7 @@ public class NetPacketDispatcher {
             return true;
 
         }catch(IOException e){
-            throw new RuntimeException("Unable to read packet: " + e);
+            throw new UncheckedIOException("Unable to read packet", e);
         }
     }
 
@@ -65,18 +86,6 @@ public class NetPacketDispatcher {
             handleRunnable.run();
         }
         return count;
-    }
-
-    @SuppressWarnings("unchecked")
-    private NetPacket<Object> instancePacket(Class<?> packetClass) {
-        try{
-            final Constructor<?> constructor = packetClass.getDeclaredConstructor();
-            constructor.setAccessible(true);
-            return (NetPacket<Object>) constructor.newInstance();
-
-        }catch(Exception e){
-            throw new RuntimeException("Unable to instance packet: " + packetClass.getName(), e);
-        }
     }
 
 }
