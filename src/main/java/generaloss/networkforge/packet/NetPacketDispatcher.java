@@ -13,17 +13,17 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class NetPacketDispatcher {
 
-    private final Map<Short, NetPacketFactory<?>> packetClasses;
+    private final Map<Short, NetPacketFactory<?>> factoryByPacketID;
     private final Queue<Runnable> toHandleQueue;
 
     public NetPacketDispatcher() {
-        this.packetClasses = new ConcurrentHashMap<>();
+        this.factoryByPacketID = new ConcurrentHashMap<>();
         this.toHandleQueue = new ConcurrentLinkedQueue<>();
     }
 
     public final <H, P extends NetPacket<H>> NetPacketDispatcher register(Class<P> packetClass, NetPacketFactory<H> factory) {
-        final short ID = NetPacket.calculatePacketClassID(packetClass);
-        this.packetClasses.put(ID, factory);
+        final short packetID = NetPacket.calculatePacketID(packetClass);
+        this.factoryByPacketID.put(packetID, factory);
         return this;
     }
 
@@ -61,7 +61,7 @@ public class NetPacketDispatcher {
             // read ID and get packet factory
             final short ID = dataStream.readShort();
 
-            final NetPacketFactory<H> packetFactory = (NetPacketFactory<H>) packetClasses.get(ID);
+            final NetPacketFactory<H> packetFactory = (NetPacketFactory<H>) factoryByPacketID.get(ID);
             if(packetFactory == null)
                 return false;
 

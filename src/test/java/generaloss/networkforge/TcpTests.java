@@ -1,6 +1,7 @@
 package generaloss.networkforge;
 
 import generaloss.chronokit.TimeUtils;
+import generaloss.networkforge.packet.PacketID;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.TCPConnectionType;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
@@ -381,7 +382,7 @@ public class TcpTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final NetPacketDispatcher dispatcher = new NetPacketDispatcher()
-            .register(MsgPacket.class, MsgPacket::new);
+            .register(MsgPacket.class);
 
         final AtomicInteger counter = new AtomicInteger();
         final MsgHandler handler = (received) -> {
@@ -410,6 +411,7 @@ public class TcpTests {
         void handleMsg(String message);
     }
 
+    @PacketID(54)
     static class MsgPacket extends NetPacket<MsgHandler> {
         private String message;
         public MsgPacket(String message) {
