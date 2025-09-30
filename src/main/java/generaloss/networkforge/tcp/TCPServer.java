@@ -68,7 +68,8 @@ public class TCPServer {
 
     public TCPServer setInitialOptions(TCPConnectionOptionsHolder initialOptions) {
         if(initialOptions == null)
-            throw new IllegalArgumentException("initialOptions is null");
+            throw new IllegalArgumentException("Argument 'initialOptions' is null");
+
         this.initialOptions = initialOptions;
         return this;
     }
@@ -160,19 +161,19 @@ public class TCPServer {
         for(int i = 0; i < ports.length; i++) {
             final int port = ports[i];
 
-            final ServerSocketChannel channel = ServerSocketChannel.open();
-            initialOptions.applyServerPreBind(channel);
+            final ServerSocketChannel serverChannel = ServerSocketChannel.open();
+            initialOptions.applyServerPreBind(serverChannel);
 
             try {
-                channel.bind(new InetSocketAddress(address, port));
+                serverChannel.bind(new InetSocketAddress(address, port));
             }catch(BindException e) {
                 throw new BindException("Failed to bind TCP server to port " + port + ": " + e.getMessage());
             }
 
-            channel.configureBlocking(false);
-            channel.register(selector, SelectionKey.OP_ACCEPT);
+            serverChannel.configureBlocking(false);
+            serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-            serverChannels[i] = channel;
+            serverChannels[i] = serverChannel;
         }
 
         this.startSelectorThread();
@@ -192,7 +193,8 @@ public class TCPServer {
         selectorThread = new Thread(() -> {
             while(!Thread.interrupted() && !this.isClosed())
                 this.selectKeys();
-        }, "TCP-server-selector-thread-#" + this.hashCode());
+        }, "TCPServer-selector-thread-#" + this.hashCode());
+
         selectorThread.setDaemon(true);
         selectorThread.start();
     }
@@ -235,7 +237,7 @@ public class TCPServer {
             final SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
 
             final TCPConnection connection = connectionFactory.create(channel, key, this::onConnectionClosed);
-            connection.setName("TCPServer-connection-#" + (connectionCounter++));
+            connection.setName("TCPServer-connection-#" + this.hashCode() + "N" + (connectionCounter++));
             initialOptions.copyTo(connection.options());
             key.attach(connection);
 
@@ -349,10 +351,16 @@ public class TCPServer {
     }
 
     public int broadcast(BinaryStreamWriter streamWriter) {
+        if(streamWriter == null)
+            throw new IllegalArgumentException("Agrument 'streamWriter' is null");
+
         return this.broadcast(BinaryStreamWriter.writeBytes(streamWriter));
     }
 
     public int broadcast(TCPConnection except, BinaryStreamWriter streamWriter) {
+        if(streamWriter == null)
+            throw new IllegalArgumentException("Agrument 'streamWriter' is null");
+
         return this.broadcast(except, BinaryStreamWriter.writeBytes(streamWriter));
     }
 

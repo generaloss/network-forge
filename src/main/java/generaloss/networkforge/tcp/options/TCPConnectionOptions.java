@@ -19,7 +19,8 @@ public class TCPConnectionOptions extends SocketOptions {
 
     public TCPConnectionOptions setMaxPacketSizeRead(int maxPacketSizeRead) {
         if(maxPacketSizeRead < 1)
-            throw new IllegalArgumentException("maxPacketSizeRead must be > 0");
+            throw new IllegalArgumentException("Argument 'maxPacketSizeRead' must be > 0");
+
         this.maxPacketSizeRead = maxPacketSizeRead;
         return this;
     }
@@ -33,7 +34,8 @@ public class TCPConnectionOptions extends SocketOptions {
 
     public TCPConnectionOptions setMaxPacketSizeWrite(int maxPacketSizeWrite) {
         if(maxPacketSizeWrite < 1)
-            throw new IllegalArgumentException("maxPacketSizeWrite must be > 0");
+            throw new IllegalArgumentException("Argument 'maxPacketSizeWrite' must be > 0");
+
         this.maxPacketSizeWrite = maxPacketSizeWrite;
         return this;
     }
@@ -41,7 +43,8 @@ public class TCPConnectionOptions extends SocketOptions {
 
     public TCPConnectionOptions setMaxPacketSize(int maxPacketSize) {
         if(maxPacketSize < 1)
-            throw new IllegalArgumentException("maxPacketSize must be > 0");
+            throw new IllegalArgumentException("Argument 'maxPacketSize' must be > 0");
+
         this.maxPacketSizeRead = maxPacketSize;
         this.maxPacketSizeWrite = maxPacketSize;
         return this;

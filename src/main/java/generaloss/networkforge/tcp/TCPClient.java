@@ -85,7 +85,7 @@ public class TCPClient {
 
     public TCPClient setInitialOptions(TCPConnectionOptionsHolder initialOptions) {
         if(initialOptions == null)
-            throw new NullPointerException("Argument 'initialOptions' is null");
+            throw new IllegalArgumentException("Argument 'initialOptions' is null");
 
         this.initialOptions = initialOptions;
         return this;
@@ -235,7 +235,7 @@ public class TCPClient {
         selectorThread = new Thread(() -> {
             while(!Thread.interrupted() && !this.isClosed())
                 this.selectKeys();
-        }, "TCP-client-selector-thread-#" + this.hashCode());
+        }, "TCPClient-selector-thread-#" + this.hashCode());
 
         selectorThread.setDaemon(true);
         selectorThread.start();
