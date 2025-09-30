@@ -1,6 +1,6 @@
 package generaloss.networkforge.tcp.listener;
 
-public enum TCPCloseCause {
+public enum TCPCloseReason {
 
     CLOSE_CONNECTION           ("Connection closed"                  , false),
     CLOSE_CLIENT               ("Client closed"                      , false),
@@ -13,7 +13,7 @@ public enum TCPCloseCause {
     private final String message;
     private final boolean hasException;
 
-    TCPCloseCause(String message, boolean hasException) {
+    TCPCloseReason(String message, boolean hasException) {
         this.message = message;
         this.hasException = hasException;
     }
@@ -24,6 +24,11 @@ public enum TCPCloseCause {
 
     public boolean hasException() {
         return hasException;
+    }
+
+    @Override
+    public String toString() {
+        return message;
     }
 
 }

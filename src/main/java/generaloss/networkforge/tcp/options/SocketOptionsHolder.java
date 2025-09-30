@@ -24,7 +24,7 @@ int      SO_RCVBUF         pre-connect
 int      SO_SNDBUF         pre-connect
 int      SO_LINGER         pre-connect
 */
-public class TCPSocketOptionsHolder {
+public class SocketOptionsHolder {
 
     // boolean TCP_NODELAY
     private Boolean tcpNoDelay;
@@ -33,7 +33,7 @@ public class TCPSocketOptionsHolder {
         return tcpNoDelay;
     }
 
-    public TCPSocketOptionsHolder setTcpNoDelay(Boolean tcpNoDelay) {
+    public SocketOptionsHolder setTcpNoDelay(Boolean tcpNoDelay) {
         this.tcpNoDelay = tcpNoDelay;
         return this;
     }
@@ -46,7 +46,7 @@ public class TCPSocketOptionsHolder {
         return tcpQuickAck;
     }
 
-    public TCPSocketOptionsHolder setTcpQuickAck(Boolean tcpQuickAck) {
+    public SocketOptionsHolder setTcpQuickAck(Boolean tcpQuickAck) {
         this.tcpQuickAck = tcpQuickAck;
         return this;
     }
@@ -59,7 +59,7 @@ public class TCPSocketOptionsHolder {
         return tcpKeepIdle;
     }
 
-    public TCPSocketOptionsHolder setTcpKeepIdle(Integer tcpKeepIdle) {
+    public SocketOptionsHolder setTcpKeepIdle(Integer tcpKeepIdle) {
         this.tcpKeepIdle = tcpKeepIdle;
         return this;
     }
@@ -72,7 +72,7 @@ public class TCPSocketOptionsHolder {
         return tcpKeepInterval;
     }
 
-    public TCPSocketOptionsHolder setTcpKeepInterval(Integer tcpKeepInterval) {
+    public SocketOptionsHolder setTcpKeepInterval(Integer tcpKeepInterval) {
         this.tcpKeepInterval = tcpKeepInterval;
         return this;
     }
@@ -85,7 +85,7 @@ public class TCPSocketOptionsHolder {
         return tcpKeepCount;
     }
 
-    public TCPSocketOptionsHolder setTcpKeepCount(Integer tcpKeepCount) {
+    public SocketOptionsHolder setTcpKeepCount(Integer tcpKeepCount) {
         this.tcpKeepCount = tcpKeepCount;
         return this;
     }
@@ -98,7 +98,7 @@ public class TCPSocketOptionsHolder {
         return trafficClass;
     }
 
-    public TCPSocketOptionsHolder setTrafficClass(Integer trafficClass) {
+    public SocketOptionsHolder setTrafficClass(Integer trafficClass) {
         this.trafficClass = trafficClass;
         return this;
     }
@@ -107,11 +107,11 @@ public class TCPSocketOptionsHolder {
     // boolean SO_OOBINLINE
     private Boolean oobInline;
 
-    public Boolean isOobInline() {
+    public Boolean isOOBInline() {
         return oobInline;
     }
 
-    public TCPSocketOptionsHolder setOobInline(Boolean oobInline) {
+    public SocketOptionsHolder setOOBInline(Boolean oobInline) {
         this.oobInline = oobInline;
         return this;
     }
@@ -124,7 +124,7 @@ public class TCPSocketOptionsHolder {
         return keepAlive;
     }
 
-    public TCPSocketOptionsHolder setKeepAlive(Boolean keepAlive) {
+    public SocketOptionsHolder setKeepAlive(Boolean keepAlive) {
         this.keepAlive = keepAlive;
         return this;
     }
@@ -137,7 +137,7 @@ public class TCPSocketOptionsHolder {
         return reuseAddress;
     }
 
-    public TCPSocketOptionsHolder setReuseAddress(Boolean reuseAddress) {
+    public SocketOptionsHolder setReuseAddress(Boolean reuseAddress) {
         this.reuseAddress = reuseAddress;
         return this;
     }
@@ -150,7 +150,7 @@ public class TCPSocketOptionsHolder {
         return reusePort;
     }
 
-    public TCPSocketOptionsHolder setReusePort(Boolean reusePort) {
+    public SocketOptionsHolder setReusePort(Boolean reusePort) {
         this.reusePort = reusePort;
         return this;
     }
@@ -163,7 +163,7 @@ public class TCPSocketOptionsHolder {
         return receiveBufferSize;
     }
 
-    public TCPSocketOptionsHolder setReceiveBufferSize(Integer receiveBufferSize) {
+    public SocketOptionsHolder setReceiveBufferSize(Integer receiveBufferSize) {
         this.receiveBufferSize = receiveBufferSize;
         return this;
     }
@@ -176,7 +176,7 @@ public class TCPSocketOptionsHolder {
         return sendBufferSize;
     }
 
-    public TCPSocketOptionsHolder setSendBufferSize(Integer sendBufferSize) {
+    public SocketOptionsHolder setSendBufferSize(Integer sendBufferSize) {
         this.sendBufferSize = sendBufferSize;
         return this;
     }
@@ -189,7 +189,7 @@ public class TCPSocketOptionsHolder {
         return linger;
     }
 
-    public TCPSocketOptionsHolder setLinger(Integer linger) {
+    public SocketOptionsHolder setLinger(Integer linger) {
         this.linger = linger;
         return this;
     }
@@ -230,7 +230,7 @@ public class TCPSocketOptionsHolder {
 
     @Override
     public String toString() {
-        return TCPSocketOptionsHolder.class.getSimpleName() + "{" + this.optionsToString() + "}";
+        return SocketOptionsHolder.class.getSimpleName() + "{" + this.optionsToString() + "}";
     }
 
     protected String optionsToString() {

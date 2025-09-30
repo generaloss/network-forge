@@ -1,6 +1,6 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.tcp.listener.TCPCloseCause;
+import generaloss.networkforge.tcp.listener.TCPCloseReason;
 import generaloss.networkforge.tcp.listener.TCPCloseable;
 
 import java.io.IOException;
@@ -23,6 +23,9 @@ public class PacketTCPConnection extends TCPConnection {
 
     @Override
     public boolean send(byte[] byteArray) {
+        if(byteArray == null)
+            throw new IllegalArgumentException("Argument 'byteArray' is null");
+
         if(super.isClosed())
             return false;
 
@@ -65,7 +68,7 @@ public class PacketTCPConnection extends TCPConnection {
                 final int size = sizeBuffer.getInt();
 
                 if(size < 1) {
-                    super.close(TCPCloseCause.INVALID_PACKET_SIZE, null);
+                    super.close(TCPCloseReason.INVALID_PACKET_SIZE, null);
                     return null;
                 }
 
@@ -73,7 +76,7 @@ public class PacketTCPConnection extends TCPConnection {
                 if(size > super.options.getMaxPacketSizeRead()) {
                     // close connection
                     if(super.options.isCloseOnPacketLimit()) {
-                        super.close(TCPCloseCause.PACKET_SIZE_LIMIT_EXCEEDED, null);
+                        super.close(TCPCloseReason.PACKET_SIZE_LIMIT_EXCEEDED, null);
                         return null;
                     }
 
@@ -108,7 +111,7 @@ public class PacketTCPConnection extends TCPConnection {
             return this.getDecryptedData();
 
         }catch(IOException e) {
-            super.close(TCPCloseCause.INTERNAL_ERROR, e);
+            super.close(TCPCloseReason.INTERNAL_ERROR, e);
             return null;
         }
     }
@@ -122,7 +125,7 @@ public class PacketTCPConnection extends TCPConnection {
         final int bytesRead = super.channel.read(buffer);
         // check remote close
         if(bytesRead == -1){
-            super.close(TCPCloseCause.CLOSE_BY_OTHER_SIDE, null);
+            super.close(TCPCloseReason.CLOSE_BY_OTHER_SIDE, null);
             return false; // continue to read
         }
 

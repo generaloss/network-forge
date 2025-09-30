@@ -6,6 +6,6 @@ import generaloss.resourceflow.stream.BinaryInputStream;
 @FunctionalInterface
 public interface TCPReceiverStream {
 
-    void receive(TCPConnection sender, BinaryInputStream stream);
+    void receive(TCPConnection connection, BinaryInputStream inStream);
 
 }

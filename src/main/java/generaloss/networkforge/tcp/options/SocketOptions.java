@@ -207,8 +207,8 @@ public class SocketOptions {
         return this.tryGetSocketApi(Socket::getSoLinger);
     }
 
-    public SocketOptions setLinger(int linger) {
-        this.trySetSocketApi(s -> s.setSoLinger(linger >= 0, linger));
+    public SocketOptions setLinger(boolean on, int linger) {
+        this.trySetSocketApi(s -> s.setSoLinger(on, linger));
         return this;
     }
 

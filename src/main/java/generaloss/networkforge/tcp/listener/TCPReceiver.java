@@ -5,6 +5,6 @@ import generaloss.networkforge.tcp.TCPConnection;
 @FunctionalInterface
 public interface TCPReceiver {
     
-    void receive(TCPConnection sender, byte[] bytes);
+    void receive(TCPConnection connection, byte[] byteArray);
 
 }

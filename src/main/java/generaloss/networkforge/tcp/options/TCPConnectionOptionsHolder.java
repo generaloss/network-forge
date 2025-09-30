@@ -2,7 +2,7 @@ package generaloss.networkforge.tcp.options;
 
 import generaloss.networkforge.tcp.PacketTCPConnection;
 
-public class TCPConnectionOptionsHolder extends TCPSocketOptionsHolder {
+public class TCPConnectionOptionsHolder extends SocketOptionsHolder {
 
     private int maxPacketSizeRead = PacketTCPConnection.DEFAULT_MAX_PACKET_SIZE;
 

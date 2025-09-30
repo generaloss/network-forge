@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -61,7 +62,13 @@ public class TCPServer {
     }
 
 
+    public TCPConnectionOptionsHolder getInitialOptions() {
+        return initialOptions;
+    }
+
     public TCPServer setInitialOptions(TCPConnectionOptionsHolder initialOptions) {
+        if(initialOptions == null)
+            throw new IllegalArgumentException("initialOptions is null");
         this.initialOptions = initialOptions;
         return this;
     }
@@ -108,12 +115,12 @@ public class TCPServer {
         }
     }
 
-    private void invokeOnDisconnect(TCPConnection connection, TCPCloseCause TCPCloseCause, Exception e) {
+    private void invokeOnDisconnect(TCPConnection connection, TCPCloseReason reason, Exception e) {
         if(onClose == null)
             return;
 
         try {
-            onClose.close(connection, TCPCloseCause, e);
+            onClose.close(connection, reason, e);
         }catch(Throwable onCloseThrowable) {
             this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, onCloseThrowable);
         }
@@ -238,9 +245,9 @@ public class TCPServer {
         }catch(IOException ignored){ }
     }
 
-    private void onConnectionClosed(TCPConnection connection, TCPCloseCause TCPCloseCause, Exception e) {
+    private void onConnectionClosed(TCPConnection connection, TCPCloseReason reason, Exception e) {
         connections.remove(connection);
-        this.invokeOnDisconnect(connection, TCPCloseCause, e);
+        this.invokeOnDisconnect(connection, reason, e);
     }
 
 
@@ -266,7 +273,7 @@ public class TCPServer {
         }
 
         for(TCPConnection connection: connections)
-            connection.close(TCPCloseCause.CLOSE_SERVER, null);
+            connection.close(TCPCloseReason.CLOSE_SERVER, null);
         connections.clear();
 
         for(ServerSocketChannel serverChannel: serverChannels)
@@ -278,41 +285,89 @@ public class TCPServer {
     }
 
 
-    public boolean broadcast(byte[] bytes) {
-        boolean result = false;
+    public int broadcast(byte[] byteArray) {
+        if(byteArray == null)
+            throw new IllegalArgumentException("Argument 'byteArray' is null");
+
+        int failedSends = 0;
+
         for(TCPConnection connection: connections)
-            result |= connection.send(bytes);
-        return result;
+            if(!connection.send(byteArray))
+                failedSends++;
+
+        return failedSends;
     }
 
-    public boolean broadcast(TCPConnection except, byte[] bytes) {
-        boolean result = false;
+    public int broadcast(TCPConnection except, byte[] byteArray) {
+        if(except == null)
+            throw new IllegalArgumentException("Argument 'except' is null");
+        if(byteArray == null)
+            throw new IllegalArgumentException("Argument 'byteArray' is null");
+
+        int failedSends = 0;
+
         for(TCPConnection connection: connections)
             if(connection != except)
-                result |= connection.send(bytes);
-        return result;
+                if(!connection.send(byteArray))
+                    failedSends++;
+
+        return failedSends;
     }
 
-    public boolean broadcast(NetPacket<?> packet) {
-        return this.broadcast(stream -> {
-            stream.writeShort(packet.getPacketID());
-            packet.write(stream);
-        });
+    public int broadcast(ByteBuffer buffer) {
+        if(buffer == null)
+            throw new IllegalArgumentException("Argument 'buffer' is null");
+
+        final byte[] byteArray = new byte[buffer.remaining()];
+        buffer.get(byteArray);
+
+        return this.broadcast(byteArray);
     }
 
-    public boolean broadcast(TCPConnection except, NetPacket<?> packet) {
-        return this.broadcast(except, stream -> {
-            stream.writeShort(packet.getPacketID());
-            packet.write(stream);
-        });
+    public int broadcast(TCPConnection except, ByteBuffer buffer) {
+        if(buffer == null)
+            throw new IllegalArgumentException("Argument 'buffer' is null");
+
+        final byte[] byteArray = new byte[buffer.remaining()];
+        buffer.get(byteArray);
+
+        return this.broadcast(except, byteArray);
     }
 
-    public boolean broadcast(BinaryStreamWriter streamWriter) {
+    public int broadcast(String string) {
+        if(string == null)
+            throw new IllegalArgumentException("Agrument 'string' is null");
+
+        return this.broadcast(string.getBytes());
+    }
+
+    public int broadcast(TCPConnection except, String string) {
+        if(string == null)
+            throw new IllegalArgumentException("Agrument 'string' is null");
+
+        return this.broadcast(except, string.getBytes());
+    }
+
+    public int broadcast(BinaryStreamWriter streamWriter) {
         return this.broadcast(BinaryStreamWriter.writeBytes(streamWriter));
     }
 
-    public boolean broadcast(TCPConnection except, BinaryStreamWriter streamWriter) {
+    public int broadcast(TCPConnection except, BinaryStreamWriter streamWriter) {
         return this.broadcast(except, BinaryStreamWriter.writeBytes(streamWriter));
+    }
+
+    public int broadcast(NetPacket<?> packet) {
+        if(packet == null)
+            throw new IllegalArgumentException("Argument 'packet' is null");
+
+        return this.broadcast(packet.toByteArray());
+    }
+
+    public int broadcast(TCPConnection except, NetPacket<?> packet) {
+        if(packet == null)
+            throw new IllegalArgumentException("Argument 'packet' is null");
+
+        return this.broadcast(except, packet.toByteArray());
     }
 
 }

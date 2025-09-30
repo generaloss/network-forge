@@ -1,6 +1,6 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.tcp.listener.TCPCloseCause;
+import generaloss.networkforge.tcp.listener.TCPCloseReason;
 import generaloss.networkforge.tcp.listener.TCPCloseable;
 
 import java.io.ByteArrayOutputStream;
@@ -22,6 +22,9 @@ public class StreamTCPConnection extends TCPConnection {
 
     @Override
     public boolean send(byte[] byteArray) {
+        if(byteArray == null)
+            throw new IllegalArgumentException("Argument 'byteArray' is null");
+
         if(super.isClosed())
             return false;
 
@@ -69,7 +72,7 @@ public class StreamTCPConnection extends TCPConnection {
                 if(bytesStream.size() > super.options.getMaxPacketSizeRead()) {
                     // close connection
                     if(super.options.isCloseOnPacketLimit())
-                        super.close(TCPCloseCause.PACKET_SIZE_LIMIT_EXCEEDED, null);
+                        super.close(TCPCloseReason.PACKET_SIZE_LIMIT_EXCEEDED, null);
 
                     this.discardAvailableBytes();
                     return null;
@@ -78,7 +81,7 @@ public class StreamTCPConnection extends TCPConnection {
 
             // check remote close
             if(length == -1) {
-                super.close(TCPCloseCause.CLOSE_BY_OTHER_SIDE, null);
+                super.close(TCPCloseReason.CLOSE_BY_OTHER_SIDE, null);
                 return null;
             }
 
@@ -89,7 +92,7 @@ public class StreamTCPConnection extends TCPConnection {
             return super.ciphers.decrypt(allReadBytes);
 
         }catch(IOException e) {
-            super.close(TCPCloseCause.INTERNAL_ERROR, e);
+            super.close(TCPCloseReason.INTERNAL_ERROR, e);
             return null;
         }
     }
@@ -105,7 +108,7 @@ public class StreamTCPConnection extends TCPConnection {
                 return;
             // check remote close
             if(read == -1) {
-                this.close(TCPCloseCause.CLOSE_BY_OTHER_SIDE, null);
+                this.close(TCPCloseReason.CLOSE_BY_OTHER_SIDE, null);
                 return;
             }
         }

@@ -1,7 +1,7 @@
 package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
-import generaloss.networkforge.tcp.listener.TCPCloseCause;
+import generaloss.networkforge.tcp.listener.TCPCloseReason;
 import generaloss.networkforge.tcp.listener.TCPCloseable;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.resourceflow.ResUtils;
@@ -84,7 +84,7 @@ public abstract class TCPConnection implements Closeable {
 
     public void setName(String name) {
         if(name == null)
-            throw new NullPointerException("Name is null");
+            throw new NullPointerException("Argument 'name' is null");
         this.name = name;
     }
 
@@ -119,13 +119,13 @@ public abstract class TCPConnection implements Closeable {
         return closed;
     }
 
-    protected void close(TCPCloseCause TCPCloseCause, Exception e) {
+    protected void close(TCPCloseReason reason, Exception e) {
         if(closed)
             return;
         closed = true;
 
         if(onClose != null)
-            onClose.close(this, TCPCloseCause, e);
+            onClose.close(this, reason, e);
 
         selectionKey.cancel();
         ResUtils.close(channel);
@@ -133,7 +133,7 @@ public abstract class TCPConnection implements Closeable {
 
     @Override
     public void close() {
-        this.close(TCPCloseCause.CLOSE_CONNECTION, null);
+        this.close(TCPCloseReason.CLOSE_CONNECTION, null);
     }
 
 
@@ -155,7 +155,7 @@ public abstract class TCPConnection implements Closeable {
             }
             return true;
         }catch(IOException | CancelledKeyException e) {
-            this.close(TCPCloseCause.INTERNAL_ERROR, e);
+            this.close(TCPCloseReason.INTERNAL_ERROR, e);
             return false;
         }
     }
@@ -171,7 +171,7 @@ public abstract class TCPConnection implements Closeable {
                 key.interestOps(SelectionKey.OP_READ);
             }
         }catch(Exception e) {
-            this.close(TCPCloseCause.INTERNAL_ERROR, e);
+            this.close(TCPCloseReason.INTERNAL_ERROR, e);
         }
     }
 
@@ -194,20 +194,26 @@ public abstract class TCPConnection implements Closeable {
 
     protected abstract byte[] read();
 
-    public abstract boolean send(byte[] bytes);
+    public abstract boolean send(byte[] byteArray);
 
 
     public boolean send(ByteBuffer buffer) {
+        if(buffer == null)
+            throw new IllegalArgumentException("Agrument 'buffer' is null");
+        
         if(this.isClosed())
             return false;
 
-        final byte[] bytes = new byte[buffer.remaining()];
-        buffer.get(bytes);
-        return this.send(bytes);
+        final byte[] byteArray = new byte[buffer.remaining()];
+        buffer.get(byteArray);
+        return this.send(byteArray);
     }
 
-    public boolean send(String str) {
-        return this.send(str.getBytes());
+    public boolean send(String string) {
+        if(string == null)
+            throw new IllegalArgumentException("Agrument 'string' is null");
+        
+        return this.send(string.getBytes());
     }
 
     public boolean send(BinaryStreamWriter streamWriter) {
@@ -218,6 +224,9 @@ public abstract class TCPConnection implements Closeable {
     }
 
     public boolean send(NetPacket<?> packet) {
+        if(packet == null)
+            throw new IllegalArgumentException("Agrument 'packet' is null");
+
         if(this.isClosed())
             return false;
 
@@ -231,6 +240,11 @@ public abstract class TCPConnection implements Closeable {
     private static final Map<Class<?>, TCPConnectionFactory> FACTORY_BY_CLASS = new HashMap<>();
 
     public static void registerFactory(Class<?> connectionClass, TCPConnectionFactory factory) {
+        if(connectionClass == null)
+            throw new IllegalArgumentException("Agrument 'connectionClass' is null");
+        if(factory == null)
+            throw new IllegalArgumentException("Agrument 'factory' is null");
+        
         FACTORY_BY_CLASS.put(connectionClass, factory);
     }
 
@@ -240,12 +254,18 @@ public abstract class TCPConnection implements Closeable {
     }
 
     public static TCPConnectionFactory getFactory(Class<?> connectionClass) {
+        if(connectionClass == null)
+            throw new IllegalArgumentException("Agrument 'connectionClass' is null");
+        
         if(!FACTORY_BY_CLASS.containsKey(connectionClass))
             throw new IllegalArgumentException("No factory registered for class: " + connectionClass);
         return FACTORY_BY_CLASS.get(connectionClass);
     }
 
     public static TCPConnectionFactory getFactory(TCPConnectionType connectionType) {
+        if(connectionType == null)
+            throw new IllegalArgumentException("Agrument 'connectionType' is null");
+        
         return getFactory(connectionType.getConnectionClass());
     }
 

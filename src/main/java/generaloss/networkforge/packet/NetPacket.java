@@ -2,6 +2,7 @@ package generaloss.networkforge.packet;
 
 import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.resourceflow.stream.BinaryOutputStream;
+import generaloss.resourceflow.stream.BinaryStreamWriter;
 
 import java.io.IOException;
 
@@ -17,11 +18,25 @@ public abstract class NetPacket<H> {
         return ID;
     }
 
+
     abstract public void write(BinaryOutputStream stream) throws IOException;
 
     abstract public void read(BinaryInputStream stream) throws IOException;
 
     abstract public void handle(H handler);
+
+
+    public BinaryStreamWriter createStreamWriter() {
+        return (stream) -> {
+            stream.writeShort(ID);
+            this.write(stream);
+        };
+    }
+
+    public byte[] toByteArray() {
+        final BinaryStreamWriter streamWriter = this.createStreamWriter();
+        return BinaryStreamWriter.writeBytes(streamWriter);
+    }
 
 
     public static short calculatePacketID(Class<?> packetClass) {

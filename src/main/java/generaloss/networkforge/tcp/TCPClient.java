@@ -43,7 +43,7 @@ public class TCPClient {
         this.setOnError((connection, source, throwable) ->
             TCPErrorHandler.printErrorCatch(TCPClient.class, connection, source, throwable)
         );
-        this.setInitialOptions(initialOptions);
+        this.initialOptions = initialOptions;
     }
 
     public TCPClient() {
@@ -79,7 +79,14 @@ public class TCPClient {
     }
 
 
+    public TCPConnectionOptionsHolder getInitialOptions() {
+        return initialOptions;
+    }
+
     public TCPClient setInitialOptions(TCPConnectionOptionsHolder initialOptions) {
+        if(initialOptions == null)
+            throw new NullPointerException("Argument 'initialOptions' is null");
+
         this.initialOptions = initialOptions;
         return this;
     }
@@ -126,12 +133,12 @@ public class TCPClient {
         }
     }
 
-    private void invokeOnDisconnect(TCPConnection connection, TCPCloseCause TCPCloseCause, Exception e) {
+    private void invokeOnDisconnect(TCPConnection connection, TCPCloseReason reason, Exception e) {
         if(onClose == null)
             return;
 
         try {
-            onClose.close(connection, TCPCloseCause, e);
+            onClose.close(connection, reason, e);
         }catch(Throwable onCloseThrowable) {
             this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, onCloseThrowable);
         }
@@ -273,7 +280,7 @@ public class TCPClient {
             selector.wakeup();
         }
 
-        connection.close(TCPCloseCause.CLOSE_CLIENT, null);
+        connection.close(TCPCloseReason.CLOSE_CLIENT, null);
         ResUtils.close(selector);
         return this;
     }
@@ -304,10 +311,10 @@ public class TCPClient {
     }
 
 
-    public boolean send(byte[] bytes) {
+    public boolean send(byte[] byteArray) {
         if(connection == null)
             return false;
-        return connection.send(bytes);
+        return connection.send(byteArray);
     }
 
     public boolean send(ByteBuffer buffer) {
@@ -316,10 +323,10 @@ public class TCPClient {
         return connection.send(buffer);
     }
 
-    public boolean send(String str) {
+    public boolean send(String string) {
         if(connection == null)
             return false;
-        return connection.send(str);
+        return connection.send(string);
     }
 
     public boolean send(BinaryStreamWriter streamWriter) {
