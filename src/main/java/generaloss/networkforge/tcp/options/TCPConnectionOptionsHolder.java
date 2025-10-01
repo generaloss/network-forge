@@ -12,7 +12,8 @@ public class TCPConnectionOptionsHolder extends SocketOptionsHolder {
 
     public TCPConnectionOptionsHolder setMaxPacketSizeRead(int maxPacketSizeRead) {
         if(maxPacketSizeRead < 1)
-            throw new IllegalArgumentException("maxPacketSizeRead must be > 0");
+            throw new IllegalArgumentException("Argument 'maxPacketSizeRead' must be > 0");
+
         this.maxPacketSizeRead = maxPacketSizeRead;
         return this;
     }
@@ -26,7 +27,8 @@ public class TCPConnectionOptionsHolder extends SocketOptionsHolder {
 
     public TCPConnectionOptionsHolder setMaxPacketSizeWrite(int maxPacketSizeWrite) {
         if(maxPacketSizeWrite < 1)
-            throw new IllegalArgumentException("maxPacketSizeWrite must be > 0");
+            throw new IllegalArgumentException("Argument 'maxPacketSizeWrite' must be > 0");
+
         this.maxPacketSizeWrite = maxPacketSizeWrite;
         return this;
     }
@@ -34,7 +36,8 @@ public class TCPConnectionOptionsHolder extends SocketOptionsHolder {
 
     public TCPConnectionOptionsHolder setMaxPacketSize(int maxPacketSize) {
         if(maxPacketSize < 1)
-            throw new IllegalArgumentException("maxPacketSize must be > 0");
+            throw new IllegalArgumentException("Argument 'maxPacketSize' must be > 0");
+
         this.maxPacketSizeRead = maxPacketSize;
         this.maxPacketSizeWrite = maxPacketSize;
         return this;

@@ -84,7 +84,8 @@ public abstract class TCPConnection implements Closeable {
 
     public void setName(String name) {
         if(name == null)
-            throw new NullPointerException("Argument 'name' is null");
+            throw new IllegalArgumentException("Argument 'name' is null");
+
         this.name = name;
     }
 
@@ -217,6 +218,9 @@ public abstract class TCPConnection implements Closeable {
     }
 
     public boolean send(BinaryStreamWriter streamWriter) {
+        if(streamWriter == null)
+            throw new IllegalArgumentException("Agrument 'streamWriter' is null");
+
         if(this.isClosed())
             return false;
 
@@ -230,10 +234,7 @@ public abstract class TCPConnection implements Closeable {
         if(this.isClosed())
             return false;
 
-        return this.send(stream -> {
-            stream.writeShort(packet.getPacketID());
-            packet.write(stream);
-        });
+        return this.send(packet.toByteArray());
     }
 
 
