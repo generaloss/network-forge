@@ -50,13 +50,13 @@ public class NetPacketDispatcher {
 
 
     @SuppressWarnings("unchecked")
-    public <H> boolean readPacket(byte[] bytes, H handler) {
+    public <H> boolean readPacket(byte[] byteArray, H handler) {
         try{
-            if(bytes.length < 2) // 'short' (ID) size = 2
+            if(byteArray.length < 2) // 'short' (ID) size = 2
                 return false;
 
-            // create stream from bytes
-            final BinaryInputStream dataStream = new BinaryInputStream(new ByteArrayInputStream(bytes));
+            // create stream from byteArray
+            final BinaryInputStream dataStream = new BinaryInputStream(new ByteArrayInputStream(byteArray));
 
             // read ID and get packet factory
             final short ID = dataStream.readShort();
