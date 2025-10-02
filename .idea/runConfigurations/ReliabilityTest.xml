@@ -1,10 +1,10 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="TcpTests " type="Application" factoryName="Application">
-    <option name="MAIN_CLASS_NAME" value="generaloss.networkforge.TcpTests" />
+  <configuration default="false" name="ReliabilityTest" type="Application" factoryName="Application" nameIsGenerated="true">
+    <option name="MAIN_CLASS_NAME" value="generaloss.networkforge.ReliabilityTest" />
     <module name="network-forge" />
     <extension name="coverage">
       <pattern>
-        <option name="PATTERN" value="generaloss.networkforge.tcp.options.*" />
+        <option name="PATTERN" value="generaloss.networkforge.*" />
         <option name="ENABLED" value="true" />
       </pattern>
     </extension>

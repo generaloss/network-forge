@@ -27,17 +27,21 @@ public class NetPacketDispatcher {
         return this;
     }
 
+    public final <H, P extends NetPacket<H>> NetPacketDispatcher register(Class<P> packetClass) {
+        final NetPacketFactory<H> factory = () -> createPacketInstance(packetClass);
+        this.register(packetClass, factory);
+        return this;
+    }
+
     @SafeVarargs
     public final <H, P extends NetPacket<H>> NetPacketDispatcher register(Class<P>... packetClasses) {
-        for(Class<P> packetClass : packetClasses) {
-            final NetPacketFactory<H> factory = () -> instancePacket(packetClass);
-            this.register(packetClass, factory);
-        }
+        for(Class<P> packetClass : packetClasses)
+            this.register(packetClass);
         return this;
     }
 
     @SuppressWarnings("unchecked")
-    private static <P extends NetPacket<?>> P instancePacket(Class<P> packetClass) {
+    private static <P extends NetPacket<?>> P createPacketInstance(Class<P> packetClass) {
         try{
             final Constructor<?> constructor = packetClass.getDeclaredConstructor();
             constructor.setAccessible(true);
@@ -73,7 +77,7 @@ public class NetPacketDispatcher {
             toHandleQueue.add(() -> packetInstance.handle(handler));
             return true;
 
-        }catch(IOException e){
+        }catch(IOException e) {
             throw new UncheckedIOException("Unable to read packet", e);
         }
     }

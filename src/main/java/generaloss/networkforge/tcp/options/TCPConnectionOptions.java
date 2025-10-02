@@ -1,7 +1,5 @@
 package generaloss.networkforge.tcp.options;
 
-import generaloss.networkforge.tcp.PacketTCPConnection;
-
 import java.net.Socket;
 
 public class TCPConnectionOptions extends SocketOptions {
@@ -11,7 +9,7 @@ public class TCPConnectionOptions extends SocketOptions {
     }
 
 
-    private int maxPacketSizeRead = PacketTCPConnection.DEFAULT_MAX_PACKET_SIZE;
+    private int maxPacketSizeRead;
 
     public int getMaxPacketSizeRead() {
         return maxPacketSizeRead;
@@ -26,7 +24,7 @@ public class TCPConnectionOptions extends SocketOptions {
     }
 
 
-    private int maxPacketSizeWrite = PacketTCPConnection.DEFAULT_MAX_PACKET_SIZE;
+    private int maxPacketSizeWrite;
 
     public int getMaxPacketSizeWrite() {
         return maxPacketSizeWrite;
@@ -51,7 +49,7 @@ public class TCPConnectionOptions extends SocketOptions {
     }
 
 
-    private boolean closeOnPacketLimit = true;
+    private boolean closeOnPacketLimit;
 
     public boolean isCloseOnPacketLimit() {
         return closeOnPacketLimit;

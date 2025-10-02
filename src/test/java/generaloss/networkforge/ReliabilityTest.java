@@ -10,12 +10,10 @@ import org.junit.Test;
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class StressTest {
+public class ReliabilityTest {
 
     public static void main(String[] args) {
         reliabilityTest();
-        // closeOnOtherSideTest();
-        // webpageConnect();
     }
 
     private static void reliabilityTest() {

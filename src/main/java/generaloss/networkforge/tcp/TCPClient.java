@@ -108,8 +108,8 @@ public class TCPClient {
     }
 
     public TCPClient setOnReceiveStream(TCPReceiverStream onReceive) {
-        this.onReceive = (sender, bytes) -> {
-            final BinaryInputStream stream = new BinaryInputStream(bytes);
+        this.onReceive = (sender, byteArray) -> {
+            final BinaryInputStream stream = new BinaryInputStream(byteArray);
             onReceive.receive(sender, stream);
             ResUtils.close(stream);
         };
@@ -144,12 +144,12 @@ public class TCPClient {
         }
     }
 
-    private void invokeOnReceive(TCPConnection connection, byte[] bytes) {
-        if(onReceive == null || bytes == null)
+    private void invokeOnReceive(TCPConnection connection, byte[] byteArray) {
+        if(onReceive == null || byteArray == null)
             return;
 
         try {
-            onReceive.receive(connection, bytes);
+            onReceive.receive(connection, byteArray);
         }catch(Throwable onReceiveThrowable) {
             this.invokeOnError(connection, TCPErrorSource.RECEIVE_CALLBACK, onReceiveThrowable);
         }
@@ -255,8 +255,8 @@ public class TCPClient {
 
     private void processKey(SelectionKey key) {
         if(key.isValid() && key.isReadable()){
-            final byte[] bytes = connection.read();
-            this.invokeOnReceive(connection, bytes);
+            final byte[] byteArray = connection.read();
+            this.invokeOnReceive(connection, byteArray);
         }
         if(key.isValid() && key.isWritable())
             connection.processWriteKey(key);

@@ -10,8 +10,6 @@ import java.nio.channels.SocketChannel;
 
 public class PacketTCPConnection extends TCPConnection {
 
-    public static final int DEFAULT_MAX_PACKET_SIZE = (8 * 1024 * 1024); // 8 Mb.  (Integer.MAX_VALUE ≈ 2 Gb)
-
     private final ByteBuffer sizeBuffer;
     private ByteBuffer dataBuffer;
     private boolean discardReading;

@@ -1,10 +1,11 @@
 package generaloss.networkforge.tcp.options;
 
-import generaloss.networkforge.tcp.PacketTCPConnection;
-
 public class TCPConnectionOptionsHolder extends SocketOptionsHolder {
 
-    private int maxPacketSizeRead = PacketTCPConnection.DEFAULT_MAX_PACKET_SIZE;
+    public static final int DEFAULT_MAX_PACKET_SIZE = (8 * 1024 * 1024); // 8 Mb.  (Integer.MAX_VALUE ≈ 2 Gb)
+
+
+    private int maxPacketSizeRead = DEFAULT_MAX_PACKET_SIZE;
 
     public int getMaxPacketSizeRead() {
         return maxPacketSizeRead;
@@ -19,7 +20,7 @@ public class TCPConnectionOptionsHolder extends SocketOptionsHolder {
     }
 
 
-    private int maxPacketSizeWrite = PacketTCPConnection.DEFAULT_MAX_PACKET_SIZE;
+    private int maxPacketSizeWrite = DEFAULT_MAX_PACKET_SIZE;
 
     public int getMaxPacketSizeWrite() {
         return maxPacketSizeWrite;
