@@ -22,7 +22,7 @@ public class PacketTCPConnection extends TCPConnection {
     @Override
     public boolean send(byte[] byteArray) {
         if(byteArray == null)
-            throw new IllegalArgumentException("Argument 'byteArray' is null");
+            throw new IllegalArgumentException("Argument 'byteArray' cannot be null");
 
         if(super.isClosed())
             return false;

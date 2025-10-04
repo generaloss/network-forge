@@ -3,7 +3,7 @@ package generaloss.networkforge;
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
-import generaloss.networkforge.packet.NetPacketDispatcher;
+import generaloss.networkforge.packet.PacketDispatcher;
 import generaloss.networkforge.tcp.TCPClient;
 import generaloss.networkforge.tcp.TCPServer;
 import org.junit.Assert;
@@ -12,6 +12,8 @@ import org.junit.Test;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -275,7 +277,10 @@ public class TcpTests {
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
 
-        final NetPacketDispatcher dispatcher = new NetPacketDispatcher()
+        final Executor executor = Executors.newFixedThreadPool(1);
+
+        final PacketDispatcher dispatcher = new PacketDispatcher()
+            .setHandleExecutor(executor)
             .register(TestMessagePacket.class);
 
         final AtomicInteger counter = new AtomicInteger();
@@ -285,10 +290,7 @@ public class TcpTests {
         };
 
         final TCPServer server = new TCPServer()
-            .setOnReceive((sender, bytes) -> {
-                dispatcher.readPacket(bytes, handler);
-                dispatcher.handlePackets();
-            })
+            .setOnReceive((sender, bytes) -> dispatcher.readPacket(bytes, handler))
             .run(5403);
 
         final TCPClient client = new TCPClient();

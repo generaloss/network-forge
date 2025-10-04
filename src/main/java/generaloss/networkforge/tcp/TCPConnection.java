@@ -84,7 +84,7 @@ public abstract class TCPConnection implements Closeable {
 
     public void setName(String name) {
         if(name == null)
-            throw new IllegalArgumentException("Argument 'name' is null");
+            throw new IllegalArgumentException("Argument 'name' cannot be null");
 
         this.name = name;
     }
@@ -200,7 +200,7 @@ public abstract class TCPConnection implements Closeable {
 
     public boolean send(ByteBuffer buffer) {
         if(buffer == null)
-            throw new IllegalArgumentException("Agrument 'buffer' is null");
+            throw new IllegalArgumentException("Agrument 'buffer' cannot be null");
         
         if(this.isClosed())
             return false;
@@ -212,14 +212,14 @@ public abstract class TCPConnection implements Closeable {
 
     public boolean send(String string) {
         if(string == null)
-            throw new IllegalArgumentException("Agrument 'string' is null");
+            throw new IllegalArgumentException("Agrument 'string' cannot be null");
         
         return this.send(string.getBytes());
     }
 
     public boolean send(BinaryStreamWriter streamWriter) {
         if(streamWriter == null)
-            throw new IllegalArgumentException("Agrument 'streamWriter' is null");
+            throw new IllegalArgumentException("Agrument 'streamWriter' cannot be null");
 
         if(this.isClosed())
             return false;
@@ -229,7 +229,7 @@ public abstract class TCPConnection implements Closeable {
 
     public boolean send(NetPacket<?> packet) {
         if(packet == null)
-            throw new IllegalArgumentException("Agrument 'packet' is null");
+            throw new IllegalArgumentException("Agrument 'packet' cannot be null");
 
         if(this.isClosed())
             return false;
@@ -242,9 +242,9 @@ public abstract class TCPConnection implements Closeable {
 
     public static void registerFactory(Class<?> connectionClass, TCPConnectionFactory factory) {
         if(connectionClass == null)
-            throw new IllegalArgumentException("Agrument 'connectionClass' is null");
+            throw new IllegalArgumentException("Agrument 'connectionClass' cannot be null");
         if(factory == null)
-            throw new IllegalArgumentException("Agrument 'factory' is null");
+            throw new IllegalArgumentException("Agrument 'factory' cannot be null");
         
         FACTORY_BY_CLASS.put(connectionClass, factory);
     }
@@ -256,7 +256,7 @@ public abstract class TCPConnection implements Closeable {
 
     public static TCPConnectionFactory getFactory(Class<?> connectionClass) {
         if(connectionClass == null)
-            throw new IllegalArgumentException("Agrument 'connectionClass' is null");
+            throw new IllegalArgumentException("Agrument 'connectionClass' cannot be null");
         
         if(!FACTORY_BY_CLASS.containsKey(connectionClass))
             throw new IllegalArgumentException("No factory registered for class: " + connectionClass);
@@ -265,7 +265,7 @@ public abstract class TCPConnection implements Closeable {
 
     public static TCPConnectionFactory getFactory(TCPConnectionType connectionType) {
         if(connectionType == null)
-            throw new IllegalArgumentException("Agrument 'connectionType' is null");
+            throw new IllegalArgumentException("Agrument 'connectionType' cannot be null");
         
         return getFactory(connectionType.getConnectionClass());
     }

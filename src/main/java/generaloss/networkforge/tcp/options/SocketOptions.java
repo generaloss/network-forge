@@ -30,7 +30,7 @@ public class SocketOptions {
 
     public SocketOptions(Socket socket) {
         if(socket == null)
-            throw new IllegalArgumentException("Argument 'socket' is null");
+            throw new IllegalArgumentException("Argument 'socket' cannot be null");
         this.socket = socket;
     }
 

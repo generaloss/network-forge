@@ -85,7 +85,7 @@ public class TCPClient {
 
     public TCPClient setInitialOptions(TCPConnectionOptionsHolder initialOptions) {
         if(initialOptions == null)
-            throw new IllegalArgumentException("Argument 'initialOptions' is null");
+            throw new IllegalArgumentException("Argument 'initialOptions' cannot be null");
 
         this.initialOptions = initialOptions;
         return this;

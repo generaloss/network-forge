@@ -68,7 +68,7 @@ public class TCPServer {
 
     public TCPServer setInitialOptions(TCPConnectionOptionsHolder initialOptions) {
         if(initialOptions == null)
-            throw new IllegalArgumentException("Argument 'initialOptions' is null");
+            throw new IllegalArgumentException("Argument 'initialOptions' cannot be null");
 
         this.initialOptions = initialOptions;
         return this;
@@ -289,7 +289,7 @@ public class TCPServer {
 
     public int broadcast(byte[] byteArray) {
         if(byteArray == null)
-            throw new IllegalArgumentException("Argument 'byteArray' is null");
+            throw new IllegalArgumentException("Argument 'byteArray' cannot be null");
 
         int failedSends = 0;
 
@@ -302,9 +302,9 @@ public class TCPServer {
 
     public int broadcast(TCPConnection except, byte[] byteArray) {
         if(except == null)
-            throw new IllegalArgumentException("Argument 'except' is null");
+            throw new IllegalArgumentException("Argument 'except' cannot be null");
         if(byteArray == null)
-            throw new IllegalArgumentException("Argument 'byteArray' is null");
+            throw new IllegalArgumentException("Argument 'byteArray' cannot be null");
 
         int failedSends = 0;
 
@@ -318,7 +318,7 @@ public class TCPServer {
 
     public int broadcast(ByteBuffer buffer) {
         if(buffer == null)
-            throw new IllegalArgumentException("Argument 'buffer' is null");
+            throw new IllegalArgumentException("Argument 'buffer' cannot be null");
 
         final byte[] byteArray = new byte[buffer.remaining()];
         buffer.get(byteArray);
@@ -328,7 +328,7 @@ public class TCPServer {
 
     public int broadcast(TCPConnection except, ByteBuffer buffer) {
         if(buffer == null)
-            throw new IllegalArgumentException("Argument 'buffer' is null");
+            throw new IllegalArgumentException("Argument 'buffer' cannot be null");
 
         final byte[] byteArray = new byte[buffer.remaining()];
         buffer.get(byteArray);
@@ -338,42 +338,42 @@ public class TCPServer {
 
     public int broadcast(String string) {
         if(string == null)
-            throw new IllegalArgumentException("Agrument 'string' is null");
+            throw new IllegalArgumentException("Agrument 'string' cannot be null");
 
         return this.broadcast(string.getBytes());
     }
 
     public int broadcast(TCPConnection except, String string) {
         if(string == null)
-            throw new IllegalArgumentException("Agrument 'string' is null");
+            throw new IllegalArgumentException("Agrument 'string' cannot be null");
 
         return this.broadcast(except, string.getBytes());
     }
 
     public int broadcast(BinaryStreamWriter streamWriter) {
         if(streamWriter == null)
-            throw new IllegalArgumentException("Agrument 'streamWriter' is null");
+            throw new IllegalArgumentException("Agrument 'streamWriter' cannot be null");
 
         return this.broadcast(BinaryStreamWriter.writeBytes(streamWriter));
     }
 
     public int broadcast(TCPConnection except, BinaryStreamWriter streamWriter) {
         if(streamWriter == null)
-            throw new IllegalArgumentException("Agrument 'streamWriter' is null");
+            throw new IllegalArgumentException("Agrument 'streamWriter' cannot be null");
 
         return this.broadcast(except, BinaryStreamWriter.writeBytes(streamWriter));
     }
 
     public int broadcast(NetPacket<?> packet) {
         if(packet == null)
-            throw new IllegalArgumentException("Argument 'packet' is null");
+            throw new IllegalArgumentException("Argument 'packet' cannot be null");
 
         return this.broadcast(packet.toByteArray());
     }
 
     public int broadcast(TCPConnection except, NetPacket<?> packet) {
         if(packet == null)
-            throw new IllegalArgumentException("Argument 'packet' is null");
+            throw new IllegalArgumentException("Argument 'packet' cannot be null");
 
         return this.broadcast(except, packet.toByteArray());
     }
