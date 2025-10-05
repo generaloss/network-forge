@@ -1,7 +1,5 @@
-package generaloss.networkforge;
+package generaloss.networkforge.packet;
 
-import generaloss.networkforge.packet.NetPacket;
-import generaloss.networkforge.packet.PacketID;
 import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.resourceflow.stream.BinaryOutputStream;
 

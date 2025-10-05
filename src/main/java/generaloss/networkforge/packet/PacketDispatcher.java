@@ -84,9 +84,10 @@ public class PacketDispatcher {
     }
 
     @SafeVarargs
-    public final <H, P extends NetPacket<H>> PacketDispatcher register(Class<P>... packetClasses) {
-        for(Class<P> packetClass : packetClasses)
-            this.register(packetClass);
+    @SuppressWarnings("unchecked")
+    public final PacketDispatcher registerAll(Class<? extends NetPacket<?>>... packetClasses) {
+        for(Class<? extends NetPacket<?>> packetClass : packetClasses)
+            this.register((Class<NetPacket<Object>>) packetClass);
 
         return this;
     }

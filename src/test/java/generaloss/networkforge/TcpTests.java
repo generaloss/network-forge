@@ -1,6 +1,9 @@
 package generaloss.networkforge;
 
 import generaloss.chronokit.TimeUtils;
+import generaloss.networkforge.packet.TestDisconnectPacket;
+import generaloss.networkforge.packet.TestMessagePacket;
+import generaloss.networkforge.packet.TestPacketHandler;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.packet.PacketDispatcher;
@@ -276,12 +279,16 @@ public class TcpTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final PacketDispatcher dispatcher = new PacketDispatcher()
-            .register(TestMessagePacket.class);
+            .register(TestMessagePacket.class, TestMessagePacket::new);
 
         final AtomicInteger counter = new AtomicInteger();
-        final TestPacketHandler handler = (received) -> {
-            result.set(received);
-            counter.incrementAndGet();
+
+        final TestPacketHandler handler = new TestPacketHandler() {
+            public void handleMessage(String message) {
+                result.set(message);
+                counter.incrementAndGet();
+            }
+            public void handleDisconnect(String reason) { }
         };
 
         final TCPServer server = new TCPServer()
@@ -297,6 +304,36 @@ public class TcpTests {
         TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
         server.close();
         Assert.assertEquals(message, result.get());
+    }
+
+    @Test
+    public void send_multiple_packets() throws Exception {
+        final PacketDispatcher dispatcher = new PacketDispatcher()
+            .registerAll(TestMessagePacket.class, TestDisconnectPacket.class);
+
+        final AtomicInteger counter = new AtomicInteger();
+
+        final TestPacketHandler handler = new TestPacketHandler() {
+            public void handleMessage(String message) {
+                counter.incrementAndGet();
+            }
+            public void handleDisconnect(String reason) {
+                counter.incrementAndGet();
+            }
+        };
+
+        final TCPServer server = new TCPServer()
+            .setOnReceive((sender, bytes) -> dispatcher.dispatch(bytes, handler))
+            .run(5410);
+
+        final TCPClient client = new TCPClient();
+        client.connect("localhost", 5410);
+
+        client.send(new TestMessagePacket("Hello, World!"));
+        client.send(new TestDisconnectPacket("Disconnection"));
+
+        TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
+        server.close();
     }
 
 }
