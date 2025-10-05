@@ -21,7 +21,7 @@ public class ReliabilityTest {
         final TcpTests tests = new TcpTests();
         for(int i = 0; i < 1000; i++){
             System.out.println(i + 1);
-            for(Method method: TcpTests.class.getMethods()){
+            for(Method method : TcpTests.class.getMethods()){
                 if(method.isAnnotationPresent(Test.class)){
                     method.setAccessible(true);
                     try {

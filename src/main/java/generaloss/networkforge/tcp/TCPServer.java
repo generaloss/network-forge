@@ -274,11 +274,11 @@ public class TCPServer {
             selector.wakeup();
         }
 
-        for(TCPConnection connection: connections)
+        for(TCPConnection connection : connections)
             connection.close(TCPCloseReason.CLOSE_SERVER, null);
         connections.clear();
 
-        for(ServerSocketChannel serverChannel: serverChannels)
+        for(ServerSocketChannel serverChannel : serverChannels)
             ResUtils.close(serverChannel);
         serverChannels = null;
 
@@ -293,7 +293,7 @@ public class TCPServer {
 
         int failedSends = 0;
 
-        for(TCPConnection connection: connections)
+        for(TCPConnection connection : connections)
             if(!connection.send(byteArray))
                 failedSends++;
 
@@ -308,7 +308,7 @@ public class TCPServer {
 
         int failedSends = 0;
 
-        for(TCPConnection connection: connections)
+        for(TCPConnection connection : connections)
             if(connection != except)
                 if(!connection.send(byteArray))
                     failedSends++;

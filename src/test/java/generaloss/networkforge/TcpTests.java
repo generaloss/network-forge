@@ -254,7 +254,7 @@ public class TcpTests {
             clients.add(client);
         }
 
-        for(TCPClient client: clients)
+        for(TCPClient client : clients)
             new Thread(() -> {
                 client.send(message.getBytes());
                 client.close();
@@ -290,14 +290,14 @@ public class TcpTests {
         };
 
         final TCPServer server = new TCPServer()
-            .setOnReceive((sender, bytes) -> dispatcher.readPacket(bytes, handler))
+            .setOnReceive((sender, bytes) -> dispatcher.dispatch(bytes, handler))
             .run(5403);
 
         final TCPClient client = new TCPClient();
         client.connect("localhost", 5403);
 
-        client.send(new TestMessagePacket(message) {});
-        client.send(new TestMessagePacket(message) {});
+        client.send(new TestMessagePacket(message));
+        client.send(new TestMessagePacket(message));
 
         TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
         server.close();

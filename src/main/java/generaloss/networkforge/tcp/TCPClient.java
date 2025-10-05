@@ -247,7 +247,7 @@ public class TCPClient {
                 return;
 
             final Set<SelectionKey> selectedKeys = selector.selectedKeys();
-            for(SelectionKey key: selectedKeys)
+            for(SelectionKey key : selectedKeys)
                 this.processKey(key);
             selectedKeys.clear();
         }catch (Exception ignored) { }

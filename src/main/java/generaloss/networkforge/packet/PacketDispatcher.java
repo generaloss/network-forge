@@ -4,6 +4,7 @@ import generaloss.resourceflow.stream.BinaryInputStream;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Modifier;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,12 +49,35 @@ public class PacketDispatcher {
 
 
     public final <H, P extends NetPacket<H>> PacketDispatcher register(Class<P> packetClass, NetPacketFactory<H> factory) {
+        if(packetClass == null)
+            throw new IllegalArgumentException("Argument 'packetClass' cannot be null");
+        if(factory == null)
+            throw new IllegalArgumentException("Argument 'factory' cannot be null");
+
+        // validate class
+        if(Modifier.isAbstract(packetClass.getModifiers()))
+            throw new IllegalArgumentException("Cannot register abstract NetPacket class '" + packetClass.getSimpleName() + "'");
+
         final short packetID = NetPacket.calculatePacketID(packetClass);
+        // validate ID
+        if(factoryByPacketID.containsKey(packetID))
+            throw new IllegalStateException("Duplicate packet ID: " + packetID + " for '" + packetClass.getSimpleName() + "'");
+
         this.factoryByPacketID.put(packetID, factory);
         return this;
     }
 
     public final <H, P extends NetPacket<H>> PacketDispatcher register(Class<P> packetClass) {
+        if(packetClass == null)
+            throw new IllegalArgumentException("Argument 'packetClass' cannot be null");
+
+        // check default constructor
+        try {
+            packetClass.getDeclaredConstructor();
+        }catch (NoSuchMethodException e) {
+            throw new IllegalArgumentException("Cannot register NetPacket class '" + packetClass.getSimpleName() + "': default (no-args) constructor not found");
+        }
+
         final NetPacketFactory<H> factory = (() -> NetPacket.createInstanceReflect(packetClass));
         this.register(packetClass, factory);
         return this;
@@ -69,7 +93,7 @@ public class PacketDispatcher {
 
 
     @SuppressWarnings("unchecked")
-    public <H> NetPacketFactory<H> getPacketFactory(short packetID) throws IllegalArgumentException {
+    public <H> NetPacketFactory<H> getPacketFactory(short packetID) {
         final NetPacketFactory<H> packetFactory = (NetPacketFactory<H>) factoryByPacketID.get(packetID);
         if(packetFactory == null)
             throw new IllegalArgumentException("NetPacket with ID '" + packetID + "' not found");
@@ -77,13 +101,18 @@ public class PacketDispatcher {
         return packetFactory;
     }
 
-    public <H> void readPacket(byte[] byteArray, H handler) throws IllegalArgumentException, IllegalStateException, UncheckedIOException {
-        try {
-            // check if data at least contains packetID
-            if(byteArray.length < Short.BYTES)
-                throw new IllegalArgumentException("The 'byteArray' data is too small for NetPacket to read");
+    public <H> void dispatch(byte[] byteArray, H handler) throws IllegalStateException, UncheckedIOException {
+        if(byteArray == null)
+            throw new IllegalArgumentException("Argument 'byteArray' cannot be null");
+        if(handler == null)
+            throw new IllegalArgumentException("Argument 'handler' cannot be null");
 
-            final BinaryInputStream stream = new BinaryInputStream(byteArray);
+        // check if data at least contains packetID
+        if(byteArray.length < Short.BYTES)
+            throw new IllegalArgumentException("The 'byteArray' data is too small for NetPacket to read");
+
+        final BinaryInputStream stream = new BinaryInputStream(byteArray);
+        try {
             // create packet with read packetID
             final short packetID = stream.readShort();
             final NetPacketFactory<H> factory = this.getPacketFactory(packetID);
@@ -105,7 +134,7 @@ public class PacketDispatcher {
         }
     }
 
-    public int handlePackets() {
+    public synchronized int handlePackets() {
         int handledNum = 0;
 
         while(!toHandleQueue.isEmpty()){

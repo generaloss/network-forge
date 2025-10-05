@@ -8,7 +8,7 @@ import generaloss.resourceflow.stream.BinaryOutputStream;
 import java.io.IOException;
 
 @PacketID(0)
-public abstract class TestMessagePacket extends NetPacket<TestPacketHandler> {
+public class TestMessagePacket extends NetPacket<TestPacketHandler> {
 
     private String message;
 
@@ -18,14 +18,17 @@ public abstract class TestMessagePacket extends NetPacket<TestPacketHandler> {
 
     public TestMessagePacket() { }
 
-    public void write(BinaryOutputStream stream) throws IOException {
+    @Override
+    protected void write(BinaryOutputStream stream) throws IOException {
         stream.writeByteString(message);
     }
 
-    public void read(BinaryInputStream stream) throws IOException {
+    @Override
+    protected void read(BinaryInputStream stream) throws IOException {
         message = stream.readByteString();
     }
 
+    @Override
     public void handle(TestPacketHandler handler) {
         handler.handleMessage(message);
     }

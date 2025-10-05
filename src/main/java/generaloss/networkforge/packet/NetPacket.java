@@ -6,7 +6,6 @@ import generaloss.resourceflow.stream.BinaryStreamWriter;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Modifier;
 
 public abstract class NetPacket<H> {
 
@@ -21,9 +20,9 @@ public abstract class NetPacket<H> {
     }
 
 
-    abstract public void write(BinaryOutputStream stream) throws IOException;
+    abstract protected void write(BinaryOutputStream stream) throws IOException;
 
-    abstract public void read(BinaryInputStream stream) throws IOException;
+    abstract protected void read(BinaryInputStream stream) throws IOException;
 
     abstract public void handle(H handler);
 
@@ -42,6 +41,9 @@ public abstract class NetPacket<H> {
 
 
     public static short calculatePacketID(Class<?> packetClass) {
+        if(packetClass == null)
+            throw new IllegalArgumentException("Argument 'packetClass' cannot be null");
+
         // check ID annotation
         final PacketID idAnnotation = packetClass.getAnnotation(PacketID.class);
         if(idAnnotation != null)
@@ -60,10 +62,6 @@ public abstract class NetPacket<H> {
             final Constructor<?> defaultConstructor = NetPacket.getDefaultConstructor(packetClass);
             return (P) defaultConstructor.newInstance();
 
-        }catch (InstantiationException e) {
-            final String kindOfClass = NetPacket.getTypeOfNonInstantiableClass(packetClass);
-            throw new IllegalStateException("Unable to instantiate NetPacket '" + packetClass.getSimpleName() + "': cannot instantiate " + kindOfClass + ".", e);
-
         }catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Unable to instantiate NetPacket: '" + packetClass.getSimpleName() + "'.", e);
         }
@@ -78,14 +76,6 @@ public abstract class NetPacket<H> {
         }catch (NoSuchMethodException e) {
             throw new IllegalStateException("Unable to instantiate NetPacket '" + packetClass.getSimpleName() + "': default (no-args) constructor not found.");
         }
-    }
-
-    private static String getTypeOfNonInstantiableClass(Class<?> c) {
-        if(c.isEnum())
-            return "enum";
-        if(Modifier.isAbstract(c.getModifiers()))
-            return "abstract class";
-        return "non-instantiable type";
     }
 
 }
