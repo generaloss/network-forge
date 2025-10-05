@@ -12,8 +12,6 @@ import org.junit.Test;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -277,10 +275,7 @@ public class TcpTests {
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
 
-        final Executor executor = Executors.newFixedThreadPool(1);
-
         final PacketDispatcher dispatcher = new PacketDispatcher()
-            .setHandleExecutor(executor)
             .register(TestMessagePacket.class);
 
         final AtomicInteger counter = new AtomicInteger();
