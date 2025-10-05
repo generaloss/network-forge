@@ -91,7 +91,7 @@ public class StreamTCPConnection extends TCPConnection {
             final byte[] allReadBytes = bytesStream.toByteArray();
             return super.ciphers.decrypt(allReadBytes);
 
-        }catch(IOException e) {
+        }catch (IOException e) {
             super.close(TCPCloseReason.INTERNAL_ERROR, e);
             return null;
         }

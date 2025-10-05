@@ -7,8 +7,8 @@ import generaloss.resourceflow.stream.BinaryOutputStream;
 
 import java.io.IOException;
 
-@PacketID(1)
-public class TestMessagePacket extends NetPacket<TestPacketHandler> {
+@PacketID(0)
+public abstract class TestMessagePacket extends NetPacket<TestPacketHandler> {
 
     private String message;
 

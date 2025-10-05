@@ -26,7 +26,7 @@ public class ReliabilityTest {
                     method.setAccessible(true);
                     try {
                         method.invoke(tests);
-                    }catch(Exception e) {
+                    }catch (Exception e) {
                         throw new RuntimeException("Exception in test '" + method.getName() + "': ", e);
                     }
                 }

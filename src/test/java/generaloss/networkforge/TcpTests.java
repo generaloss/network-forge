@@ -296,8 +296,8 @@ public class TcpTests {
         final TCPClient client = new TCPClient();
         client.connect("localhost", 5403);
 
-        client.send(new TestMessagePacket(message));
-        client.send(new TestMessagePacket(message));
+        client.send(new TestMessagePacket(message) {});
+        client.send(new TestMessagePacket(message) {});
 
         TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
         server.close();

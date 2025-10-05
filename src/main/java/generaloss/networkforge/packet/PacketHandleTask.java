@@ -18,13 +18,14 @@ class PacketHandleTask<H> {
     public static <H> boolean executePacketHandle(NetPacket<H> packet, H handler) {
         try {
             packet.handle(handler);
-        }catch(Throwable t) {
+            return true;
+
+        }catch (Throwable t) {
             System.err.println("[" + PacketDispatcher.class.getSimpleName() + "] Error handling NetPacket '" + packet.getClass().getSimpleName() + "':");
             t.printStackTrace();
             System.err.println();
             return false;
         }
-        return true;
     }
 
 }

@@ -2,10 +2,8 @@ package generaloss.networkforge.packet;
 
 import generaloss.resourceflow.stream.BinaryInputStream;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.lang.reflect.Constructor;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,7 +54,7 @@ public class PacketDispatcher {
     }
 
     public final <H, P extends NetPacket<H>> PacketDispatcher register(Class<P> packetClass) {
-        final NetPacketFactory<H> factory = () -> createPacketInstance(packetClass);
+        final NetPacketFactory<H> factory = (() -> NetPacket.createInstanceReflect(packetClass));
         this.register(packetClass, factory);
         return this;
     }
@@ -65,53 +63,45 @@ public class PacketDispatcher {
     public final <H, P extends NetPacket<H>> PacketDispatcher register(Class<P>... packetClasses) {
         for(Class<P> packetClass : packetClasses)
             this.register(packetClass);
+
         return this;
     }
 
-    @SuppressWarnings("unchecked")
-    private static <P extends NetPacket<?>> P createPacketInstance(Class<P> packetClass) {
-        try{
-            final Constructor<?> constructor = packetClass.getDeclaredConstructor();
-            constructor.setAccessible(true);
-            return (P) constructor.newInstance();
 
-        }catch(Exception e){
-            throw new IllegalStateException("Unable to instance packet: " + packetClass.getName(), e);
-        }
+    @SuppressWarnings("unchecked")
+    public <H> NetPacketFactory<H> getPacketFactory(short packetID) throws IllegalArgumentException {
+        final NetPacketFactory<H> packetFactory = (NetPacketFactory<H>) factoryByPacketID.get(packetID);
+        if(packetFactory == null)
+            throw new IllegalArgumentException("NetPacket with ID '" + packetID + "' not found");
+
+        return packetFactory;
     }
 
+    public <H> void readPacket(byte[] byteArray, H handler) throws IllegalArgumentException, IllegalStateException, UncheckedIOException {
+        try {
+            // check if data at least contains packetID
+            if(byteArray.length < Short.BYTES)
+                throw new IllegalArgumentException("The 'byteArray' data is too small for NetPacket to read");
 
-    @SuppressWarnings("unchecked")
-    public <H> boolean readPacket(byte[] byteArray, H handler) {
-        try{
-            if(byteArray.length < 2) // 'short' (ID) size = 2
-                return false;
-
-            // create stream from byteArray
-            final BinaryInputStream dataStream = new BinaryInputStream(new ByteArrayInputStream(byteArray));
-
-            // read ID and get packet factory
-            final short ID = dataStream.readShort();
-
-            final NetPacketFactory<H> packetFactory = (NetPacketFactory<H>) factoryByPacketID.get(ID);
-            if(packetFactory == null)
-                return false;
-
-            // create packet class instance and read remaining data
-            final NetPacket<H> packetInstance = packetFactory.create();
-            packetInstance.read(dataStream);
+            final BinaryInputStream stream = new BinaryInputStream(byteArray);
+            // create packet with read packetID
+            final short packetID = stream.readShort();
+            final NetPacketFactory<H> factory = this.getPacketFactory(packetID);
+            final NetPacket<H> packet = factory.create();
+            // read data
+            packet.read(stream);
 
             // handle / to handle queue
             if(directHandling) {
-                handleExecutor.execute(() -> PacketHandleTask.executePacketHandle(packetInstance, handler));
+                handleExecutor.execute(() -> PacketHandleTask.executePacketHandle(packet, handler));
             }else{
-                final PacketHandleTask<?> task = new PacketHandleTask<>(packetInstance, handler);
+                final PacketHandleTask<?> task = new PacketHandleTask<>(packet, handler);
                 toHandleQueue.add(task);
             }
-            return true;
-
-        }catch(IOException e) {
-            throw new UncheckedIOException("Unable to read packet", e);
+        }catch (IOException e) {
+            throw new UncheckedIOException("Failed to read NetPacket.", e);
+        }catch (Exception e) {
+            throw new IllegalStateException("Cannot create NetPacket with factory.", e);
         }
     }
 

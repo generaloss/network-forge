@@ -14,7 +14,7 @@ public class CryptoUtils {
             final KeyGenerator generator = KeyGenerator.getInstance("AES");
             generator.init(size);
             return generator.generateKey();
-        }catch(NoSuchAlgorithmException ignored){
+        }catch (NoSuchAlgorithmException ignored){
             return null;
         }
     }
@@ -25,7 +25,7 @@ public class CryptoUtils {
             cipher.init(Cipher.ENCRYPT_MODE, key);
             return cipher;
 
-        }catch(NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
+        }catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
             throw new RuntimeException(e);
         }
     }
@@ -36,7 +36,7 @@ public class CryptoUtils {
             cipher.init(Cipher.DECRYPT_MODE, key);
             return cipher;
 
-        }catch(NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
+        }catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
             throw new RuntimeException(e);
         }
     }

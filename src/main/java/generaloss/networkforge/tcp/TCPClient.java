@@ -128,7 +128,7 @@ public class TCPClient {
 
         try {
             onConnect.accept(connection);
-        }catch(Throwable onConnectThrowable) {
+        }catch (Throwable onConnectThrowable) {
             this.invokeOnError(connection, TCPErrorSource.CONNECT_CALLBACK, onConnectThrowable);
         }
     }
@@ -139,7 +139,7 @@ public class TCPClient {
 
         try {
             onClose.close(connection, reason, e);
-        }catch(Throwable onCloseThrowable) {
+        }catch (Throwable onCloseThrowable) {
             this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, onCloseThrowable);
         }
     }
@@ -150,7 +150,7 @@ public class TCPClient {
 
         try {
             onReceive.receive(connection, byteArray);
-        }catch(Throwable onReceiveThrowable) {
+        }catch (Throwable onReceiveThrowable) {
             this.invokeOnError(connection, TCPErrorSource.RECEIVE_CALLBACK, onReceiveThrowable);
         }
     }
@@ -158,7 +158,7 @@ public class TCPClient {
     private void invokeOnError(TCPConnection connection, TCPErrorSource source, Throwable throwable) {
         try {
             onError.error(connection, source, throwable);
-        }catch(Throwable onErrorThrowable) {
+        }catch (Throwable onErrorThrowable) {
             TCPErrorHandler.printErrorCatch(TCPClient.class, connection, TCPErrorSource.ERROR_CALLBACK, onErrorThrowable);
         }
     }
@@ -250,7 +250,7 @@ public class TCPClient {
             for(SelectionKey key: selectedKeys)
                 this.processKey(key);
             selectedKeys.clear();
-        }catch(Exception ignored) { }
+        }catch (Exception ignored) { }
     }
 
     private void processKey(SelectionKey key) {

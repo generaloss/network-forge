@@ -155,7 +155,7 @@ public abstract class TCPConnection implements Closeable {
                 }
             }
             return true;
-        }catch(IOException | CancelledKeyException e) {
+        }catch (IOException | CancelledKeyException e) {
             this.close(TCPCloseReason.INTERNAL_ERROR, e);
             return false;
         }
@@ -171,7 +171,7 @@ public abstract class TCPConnection implements Closeable {
                 // all queue written => disable write operation
                 key.interestOps(SelectionKey.OP_READ);
             }
-        }catch(Exception e) {
+        }catch (Exception e) {
             this.close(TCPCloseReason.INTERNAL_ERROR, e);
         }
     }

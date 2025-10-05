@@ -253,23 +253,25 @@ public class SocketOptionsHolder {
     private static <T> void trySetOption(SocketChannel channel, SocketOption<T> option, T value) {
         if(value == null)
             return;
+
         try {
             channel.setOption(option, value);
-        }catch(UnsupportedOperationException | IllegalArgumentException | IOException ignored) { }
+        }catch (UnsupportedOperationException | IllegalArgumentException | IOException ignored) { }
     }
 
     private static <T> void trySetOption(ServerSocketChannel channel, SocketOption<T> option, T value) {
         if(value == null)
             return;
+
         try {
             channel.setOption(option, value);
-        }catch(UnsupportedOperationException | IllegalArgumentException | IOException ignored) { }
+        }catch (UnsupportedOperationException | IllegalArgumentException | IOException ignored) { }
     }
 
     private static void trySetSocketApi(SocketChannel channel, SocketConsumer setter) {
         try {
             setter.accept(channel.socket());
-        }catch(Exception ignored) { }
+        }catch (Exception ignored) { }
     }
 
 }

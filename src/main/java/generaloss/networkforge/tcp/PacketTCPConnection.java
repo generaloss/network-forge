@@ -108,7 +108,7 @@ public class PacketTCPConnection extends TCPConnection {
             // get data
             return this.getDecryptedData();
 
-        }catch(IOException e) {
+        }catch (IOException e) {
             super.close(TCPCloseReason.INTERNAL_ERROR, e);
             return null;
         }
