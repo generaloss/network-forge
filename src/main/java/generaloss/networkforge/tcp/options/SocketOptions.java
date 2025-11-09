@@ -42,13 +42,13 @@ public class SocketOptions {
     private void trySetSocketApi(SocketConsumer setter) {
         try {
             setter.accept(socket);
-        }catch (IOException ignored) { }
+        } catch (IOException ignored) { }
     }
 
     private <T> T tryGetSocketApi(SocketFunction<T> setter) {
         try {
             return setter.apply(socket);
-        }catch (IOException ignored) {
+        } catch (IOException ignored) {
             return null;
         }
     }
@@ -58,13 +58,13 @@ public class SocketOptions {
             return;
         try {
             socket.setOption(option, value);
-        }catch (UnsupportedOperationException | IllegalArgumentException | IOException ignored) { }
+        } catch (UnsupportedOperationException | IllegalArgumentException | IOException ignored) { }
     }
 
     private <T> T tryGetOption(SocketOption<T> option) {
         try {
             return socket.getOption(option);
-        }catch (UnsupportedOperationException | IllegalArgumentException | IOException ignored) {
+        } catch (UnsupportedOperationException | IllegalArgumentException | IOException ignored) {
             return null;
         }
     }

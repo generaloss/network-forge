@@ -10,33 +10,33 @@ import java.security.NoSuchAlgorithmException;
 public class CryptoUtils {
 
     public static SecretKey generateSecretKey(int size) {
-        try{
+        try {
             final KeyGenerator generator = KeyGenerator.getInstance("AES");
             generator.init(size);
             return generator.generateKey();
-        }catch (NoSuchAlgorithmException ignored){
+        } catch (NoSuchAlgorithmException ignored){
             return null;
         }
     }
 
     public static Cipher getEncryptCipher(SecretKey key) {
-        try{
+        try {
             final Cipher cipher = Cipher.getInstance("AES");
             cipher.init(Cipher.ENCRYPT_MODE, key);
             return cipher;
 
-        }catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
             throw new RuntimeException(e);
         }
     }
 
     public static Cipher getDecryptCipher(SecretKey key) {
-        try{
+        try {
             final Cipher cipher = Cipher.getInstance("AES");
             cipher.init(Cipher.DECRYPT_MODE, key);
             return cipher;
 
-        }catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
             throw new RuntimeException(e);
         }
     }

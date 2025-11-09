@@ -111,7 +111,7 @@ public class TCPServer {
 
         try {
             onConnect.accept(connection);
-        }catch (Throwable onConnectThrowable) {
+        } catch (Throwable onConnectThrowable) {
             this.invokeOnError(connection, TCPErrorSource.CONNECT_CALLBACK, onConnectThrowable);
         }
     }
@@ -122,7 +122,7 @@ public class TCPServer {
 
         try {
             onClose.close(connection, reason, e);
-        }catch (Throwable onCloseThrowable) {
+        } catch (Throwable onCloseThrowable) {
             this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, onCloseThrowable);
         }
     }
@@ -133,7 +133,7 @@ public class TCPServer {
 
         try {
             onReceive.receive(connection, byteArray);
-        }catch (Throwable onReceiveThrowable) {
+        } catch (Throwable onReceiveThrowable) {
             this.invokeOnError(connection, TCPErrorSource.RECEIVE_CALLBACK, onReceiveThrowable);
         }
     }
@@ -141,7 +141,7 @@ public class TCPServer {
     private void invokeOnError(TCPConnection connection, TCPErrorSource source, Throwable throwable) {
         try {
             onError.error(connection, source, throwable);
-        }catch (Throwable onErrorThrowable) {
+        } catch (Throwable onErrorThrowable) {
             TCPErrorHandler.printErrorCatch(TCPServer.class, connection, TCPErrorSource.ERROR_CALLBACK, onErrorThrowable);
         }
     }
@@ -166,7 +166,7 @@ public class TCPServer {
 
             try {
                 serverChannel.bind(new InetSocketAddress(address, port));
-            }catch (BindException e) {
+            } catch (BindException e) {
                 throw new BindException("Failed to bind TCP server to port " + port + ": " + e.getMessage());
             }
 
@@ -200,14 +200,14 @@ public class TCPServer {
     }
 
     private void selectKeys() {
-        try{
+        try {
             selector.select();
             final Set<SelectionKey> selectedKeys = selector.selectedKeys();
             for(SelectionKey key : selectedKeys)
                 this.processKey(key);
             selectedKeys.clear();
 
-        }catch (Exception ignored) { }
+        } catch (Exception ignored) { }
     }
 
     private void processKey(SelectionKey key) {
@@ -226,7 +226,7 @@ public class TCPServer {
     }
 
     private void acceptNewConnection(ServerSocketChannel serverChannel) {
-        try{
+        try {
             final SocketChannel channel = serverChannel.accept();
             if(channel == null)
                 return;
@@ -244,7 +244,7 @@ public class TCPServer {
             connections.add(connection);
 
             this.invokeOnConnect(connection);
-        }catch (IOException ignored){ }
+        } catch (IOException ignored){ }
     }
 
     private void onConnectionClosed(TCPConnection connection, TCPCloseReason reason, Exception e) {
@@ -354,28 +354,48 @@ public class TCPServer {
         if(streamWriter == null)
             throw new IllegalArgumentException("Agrument 'streamWriter' cannot be null");
 
-        return this.broadcast(BinaryStreamWriter.writeBytes(streamWriter));
+        try {
+            final byte[] byteArray = BinaryStreamWriter.toByteArray(streamWriter);
+            return this.broadcast(byteArray);
+        } catch (IOException ignored) {
+            return connections.size();
+        }
     }
 
     public int broadcast(TCPConnection except, BinaryStreamWriter streamWriter) {
         if(streamWriter == null)
             throw new IllegalArgumentException("Agrument 'streamWriter' cannot be null");
 
-        return this.broadcast(except, BinaryStreamWriter.writeBytes(streamWriter));
+        try {
+            final byte[] byteArray = BinaryStreamWriter.toByteArray(streamWriter);
+            return this.broadcast(except, byteArray);
+        } catch (IOException ignored) {
+            return connections.size();
+        }
     }
 
     public int broadcast(NetPacket<?> packet) {
         if(packet == null)
             throw new IllegalArgumentException("Argument 'packet' cannot be null");
 
-        return this.broadcast(packet.toByteArray());
+        try {
+            final byte[] byteArray = packet.toByteArray();
+            return this.broadcast(byteArray);
+        } catch (IOException ignored) {
+            return connections.size();
+        }
     }
 
     public int broadcast(TCPConnection except, NetPacket<?> packet) {
         if(packet == null)
             throw new IllegalArgumentException("Argument 'packet' cannot be null");
 
-        return this.broadcast(except, packet.toByteArray());
+        try {
+            final byte[] byteArray = packet.toByteArray();
+            return this.broadcast(except, byteArray);
+        } catch (IOException ignored) {
+            return connections.size();
+        }
     }
 
 }

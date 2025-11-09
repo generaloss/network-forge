@@ -155,7 +155,7 @@ public abstract class TCPConnection implements Closeable {
                 }
             }
             return true;
-        }catch (IOException | CancelledKeyException e) {
+        } catch (IOException | CancelledKeyException e) {
             this.close(TCPCloseReason.INTERNAL_ERROR, e);
             return false;
         }
@@ -171,7 +171,7 @@ public abstract class TCPConnection implements Closeable {
                 // all queue written => disable write operation
                 key.interestOps(SelectionKey.OP_READ);
             }
-        }catch (Exception e) {
+        } catch (Exception e) {
             this.close(TCPCloseReason.INTERNAL_ERROR, e);
         }
     }
@@ -224,7 +224,12 @@ public abstract class TCPConnection implements Closeable {
         if(this.isClosed())
             return false;
 
-        return this.send(BinaryStreamWriter.writeBytes(streamWriter));
+        try {
+            final byte[] byteArray = BinaryStreamWriter.toByteArray(streamWriter);
+            return this.send(byteArray);
+        } catch (IOException ignored) {
+            return false;
+        }
     }
 
     public boolean send(NetPacket<?> packet) {
@@ -234,7 +239,12 @@ public abstract class TCPConnection implements Closeable {
         if(this.isClosed())
             return false;
 
-        return this.send(packet.toByteArray());
+        try {
+            final byte[] byteArray = packet.toByteArray();
+            return this.send(byteArray);
+        } catch (IOException ignored) {
+            return false;
+        }
     }
 
 

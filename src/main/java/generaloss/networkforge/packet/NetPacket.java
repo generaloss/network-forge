@@ -34,9 +34,9 @@ public abstract class NetPacket<H> {
         };
     }
 
-    public byte[] toByteArray() {
+    public byte[] toByteArray() throws IOException {
         final BinaryStreamWriter streamWriter = this.createStreamWriter();
-        return BinaryStreamWriter.writeBytes(streamWriter);
+        return BinaryStreamWriter.toByteArray(streamWriter);
     }
 
 
@@ -62,7 +62,7 @@ public abstract class NetPacket<H> {
             final Constructor<?> defaultConstructor = NetPacket.getDefaultConstructor(packetClass);
             return (P) defaultConstructor.newInstance();
 
-        }catch (ReflectiveOperationException e) {
+        } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Unable to instantiate NetPacket: '" + packetClass.getSimpleName() + "'.", e);
         }
     }
@@ -73,7 +73,7 @@ public abstract class NetPacket<H> {
             constructor.setAccessible(true);
             return constructor;
 
-        }catch (NoSuchMethodException e) {
+        } catch (NoSuchMethodException e) {
             throw new IllegalStateException("Unable to instantiate NetPacket '" + packetClass.getSimpleName() + "': default (no-args) constructor not found.");
         }
     }

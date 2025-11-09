@@ -20,7 +20,7 @@ class PacketHandleTask<H> {
             packet.handle(handler);
             return true;
 
-        }catch (Throwable t) {
+        } catch (Throwable t) {
             System.err.println("[" + PacketDispatcher.class.getSimpleName() + "] Error handling NetPacket '" + packet.getClass().getSimpleName() + "':");
             t.printStackTrace();
             System.err.println();

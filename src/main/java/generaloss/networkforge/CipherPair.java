@@ -39,7 +39,7 @@ public class CipherPair {
 
         try {
             return encryptCipher.doFinal(byteArray);
-        }catch (Exception e) {
+        } catch (Exception e) {
             throw new IllegalStateException("Encryption error: " + e.getMessage());
         }
     }
@@ -52,7 +52,7 @@ public class CipherPair {
 
         try {
             return decryptCipher.doFinal(byteArray);
-        }catch (Exception e) {
+        } catch (Exception e) {
             throw new IllegalStateException("Decryption error: " + e.getMessage());
         }
     }

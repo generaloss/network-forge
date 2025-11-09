@@ -74,7 +74,7 @@ public class PacketDispatcher {
         // check default constructor
         try {
             packetClass.getDeclaredConstructor();
-        }catch (NoSuchMethodException e) {
+        } catch (NoSuchMethodException e) {
             throw new IllegalArgumentException("Cannot register NetPacket class '" + packetClass.getSimpleName() + "': default (no-args) constructor not found");
         }
 
@@ -128,9 +128,9 @@ public class PacketDispatcher {
                 final PacketHandleTask<?> task = new PacketHandleTask<>(packet, handler);
                 toHandleQueue.add(task);
             }
-        }catch (IOException e) {
+        } catch (IOException e) {
             throw new UncheckedIOException("Failed to read NetPacket.", e);
-        }catch (Exception e) {
+        } catch (Exception e) {
             throw new IllegalStateException("Cannot create NetPacket with factory.", e);
         }
     }

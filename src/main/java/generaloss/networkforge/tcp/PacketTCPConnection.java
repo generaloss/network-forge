@@ -53,7 +53,7 @@ public class PacketTCPConnection extends TCPConnection {
 
     @Override
     protected byte[] read() {
-        try{
+        try {
             // is needed to read size
             if(sizeBuffer.hasRemaining() && !discardReading) {
                 // read size
@@ -108,7 +108,7 @@ public class PacketTCPConnection extends TCPConnection {
             // get data
             return this.getDecryptedData();
 
-        }catch (IOException e) {
+        } catch (IOException e) {
             super.close(TCPCloseReason.INTERNAL_ERROR, e);
             return null;
         }
