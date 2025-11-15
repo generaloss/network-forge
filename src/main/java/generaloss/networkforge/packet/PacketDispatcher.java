@@ -102,11 +102,11 @@ public class PacketDispatcher {
         return packetFactory;
     }
 
-    public <H> void dispatch(byte[] byteArray, H handler) throws IllegalStateException, UncheckedIOException {
+    public <H> void dispatch(byte[] byteArray, NetPacketFunction<H> handlerFunction) throws IllegalStateException, UncheckedIOException {
         if(byteArray == null)
             throw new IllegalArgumentException("Argument 'byteArray' cannot be null");
-        if(handler == null)
-            throw new IllegalArgumentException("Argument 'handler' cannot be null");
+        if(handlerFunction == null)
+            throw new IllegalArgumentException("Argument 'handlerFunction' cannot be null");
 
         // check if data at least contains packetID
         if(byteArray.length < Short.BYTES)
@@ -121,6 +121,11 @@ public class PacketDispatcher {
             // read data
             packet.read(stream);
 
+            // get handler
+            final H handler = handlerFunction.apply(packet);
+            if(handler == null)
+                throw new IllegalStateException("The handler function returned null.");
+
             // handle / to handle queue
             if(directHandling) {
                 handleExecutor.execute(() -> PacketHandleTask.executePacketHandle(packet, handler));
@@ -134,6 +139,12 @@ public class PacketDispatcher {
             throw new IllegalStateException("Cannot create NetPacket with factory.", e);
         }
     }
+
+    public <H> void dispatch(byte[] byteArray, H handler) throws IllegalStateException, UncheckedIOException {
+        final NetPacketFunction<H> handlerFunction = (packet -> handler);
+        this.dispatch(byteArray, handlerFunction);
+    }
+
 
     public synchronized int handlePackets() {
         int handledNum = 0;
