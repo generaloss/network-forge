@@ -4,7 +4,6 @@ import generaloss.networkforge.tcp.listener.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
-import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.networkforge.packet.NetPacket;
 
 import java.io.IOException;
@@ -25,11 +24,7 @@ public class TCPServer {
 
     private TCPConnectionFactory connectionFactory;
     private TCPConnectionOptionsHolder initialOptions;
-
-    private Consumer<TCPConnection> onConnect;
-    private TCPCloseable onClose;
-    private TCPReceiver onReceive;
-    private TCPErrorHandler onError;
+    private final TCPListenerHolder listenerHolder;
 
     private final ConcurrentLinkedQueue<TCPConnection> connections;
     private int connectionCounter; // just for naming
@@ -39,11 +34,13 @@ public class TCPServer {
 
     public TCPServer(TCPConnectionOptionsHolder initialOptions) {
         this.setConnectionType(TCPConnectionType.DEFAULT);
+        this.setInitialOptions(initialOptions);
+        this.listenerHolder = new TCPListenerHolder();
+
         this.setOnError((connection, source, throwable) ->
             TCPErrorHandler.printErrorCatch(TCPServer.class, connection, source, throwable)
         );
         this.connections = new ConcurrentLinkedQueue<>();
-        this.setInitialOptions(initialOptions);
     }
 
     public TCPServer() {
@@ -76,74 +73,28 @@ public class TCPServer {
 
 
     public TCPServer setOnConnect(Consumer<TCPConnection> onConnect) {
-        this.onConnect = onConnect;
+        listenerHolder.setOnConnect(onConnect);
         return this;
     }
 
     public TCPServer setOnDisconnect(TCPCloseable onClose) {
-        this.onClose = onClose;
+        listenerHolder.setOnDisconnect(onClose);
         return this;
     }
 
     public TCPServer setOnReceive(TCPReceiver onReceive) {
-        this.onReceive = onReceive;
+        listenerHolder.setOnReceive(onReceive);
         return this;
     }
 
     public TCPServer setOnReceiveStream(TCPReceiverStream onReceive) {
-        this.onReceive = (sender, byteArray) -> {
-            final BinaryInputStream stream = new BinaryInputStream(byteArray);
-            onReceive.receive(sender, stream);
-            ResUtils.close(stream);
-        };
+        listenerHolder.setOnReceiveStream(onReceive);
         return this;
     }
 
     public TCPServer setOnError(TCPErrorHandler onError) {
-        this.onError = onError;
+        listenerHolder.setOnError(onError);
         return this;
-    }
-
-
-    private void invokeOnConnect(TCPConnection connection) {
-        if(onConnect == null)
-            return;
-
-        try {
-            onConnect.accept(connection);
-        } catch (Throwable onConnectThrowable) {
-            this.invokeOnError(connection, TCPErrorSource.CONNECT_CALLBACK, onConnectThrowable);
-        }
-    }
-
-    private void invokeOnDisconnect(TCPConnection connection, TCPCloseReason reason, Exception e) {
-        if(onClose == null)
-            return;
-
-        try {
-            onClose.close(connection, reason, e);
-        } catch (Throwable onCloseThrowable) {
-            this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, onCloseThrowable);
-        }
-    }
-
-    private void invokeOnReceive(TCPConnection connection, byte[] byteArray) {
-        if(onReceive == null || byteArray == null)
-            return;
-
-        try {
-            onReceive.receive(connection, byteArray);
-        } catch (Throwable onReceiveThrowable) {
-            this.invokeOnError(connection, TCPErrorSource.RECEIVE_CALLBACK, onReceiveThrowable);
-        }
-    }
-
-    private void invokeOnError(TCPConnection connection, TCPErrorSource source, Throwable throwable) {
-        try {
-            onError.error(connection, source, throwable);
-        } catch (Throwable onErrorThrowable) {
-            TCPErrorHandler.printErrorCatch(TCPServer.class, connection, TCPErrorSource.ERROR_CALLBACK, onErrorThrowable);
-        }
     }
 
 
@@ -214,7 +165,7 @@ public class TCPServer {
         if(key.isValid() && key.isReadable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
             final byte[] byteArray = connection.read();
-            this.invokeOnReceive(connection, byteArray);
+            listenerHolder.invokeOnReceive(connection, byteArray);
         }
         if(key.isValid() && key.isWritable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
@@ -243,13 +194,13 @@ public class TCPServer {
 
             connections.add(connection);
 
-            this.invokeOnConnect(connection);
+            listenerHolder.invokeOnConnect(connection);
         } catch (IOException ignored){ }
     }
 
     private void onConnectionClosed(TCPConnection connection, TCPCloseReason reason, Exception e) {
         connections.remove(connection);
-        this.invokeOnDisconnect(connection, reason, e);
+        listenerHolder.invokeOnDisconnect(connection, reason, e);
     }
 
 

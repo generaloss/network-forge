@@ -125,11 +125,11 @@ public abstract class TCPConnection implements Closeable {
             return;
         closed = true;
 
-        if(onClose != null)
-            onClose.close(this, reason, e);
-
         selectionKey.cancel();
         ResUtils.close(channel);
+
+        if(onClose != null)
+            onClose.close(this, reason, e);
     }
 
     @Override

@@ -5,7 +5,6 @@ import generaloss.networkforge.tcp.listener.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.resourceflow.ResUtils;
-import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.networkforge.packet.NetPacket;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
@@ -28,11 +27,7 @@ public class TCPClient {
 
     private TCPConnectionFactory connectionFactory;
     private TCPConnectionOptionsHolder initialOptions;
-
-    private Consumer<TCPConnection> onConnect;
-    private TCPCloseable onClose;
-    private TCPReceiver onReceive;
-    private TCPErrorHandler onError;
+    private final TCPListenerHolder listenerHolder;
 
     private TCPConnection connection;
     private Thread selectorThread;
@@ -40,10 +35,12 @@ public class TCPClient {
 
     public TCPClient(TCPConnectionOptionsHolder initialOptions) {
         this.setConnectionType(TCPConnectionType.DEFAULT);
+        this.setInitialOptions(initialOptions);
+        this.listenerHolder = new TCPListenerHolder();
+
         this.setOnError((connection, source, throwable) ->
             TCPErrorHandler.printErrorCatch(TCPClient.class, connection, source, throwable)
         );
-        this.initialOptions = initialOptions;
     }
 
     public TCPClient() {
@@ -93,74 +90,28 @@ public class TCPClient {
 
 
     public TCPClient setOnConnect(Consumer<TCPConnection> onConnect) {
-        this.onConnect = onConnect;
+        listenerHolder.setOnConnect(onConnect);
         return this;
     }
 
     public TCPClient setOnDisconnect(TCPCloseable onClose) {
-        this.onClose = onClose;
+        listenerHolder.setOnDisconnect(onClose);
         return this;
     }
 
     public TCPClient setOnReceive(TCPReceiver onReceive) {
-        this.onReceive = onReceive;
+        listenerHolder.setOnReceive(onReceive);
         return this;
     }
 
     public TCPClient setOnReceiveStream(TCPReceiverStream onReceive) {
-        this.onReceive = (sender, byteArray) -> {
-            final BinaryInputStream stream = new BinaryInputStream(byteArray);
-            onReceive.receive(sender, stream);
-            ResUtils.close(stream);
-        };
+        listenerHolder.setOnReceiveStream(onReceive);
         return this;
     }
 
     public TCPClient setOnError(TCPErrorHandler onError) {
-        this.onError = onError;
+        listenerHolder.setOnError(onError);
         return this;
-    }
-
-
-    private void invokeOnConnect(TCPConnection connection) {
-        if(onConnect == null)
-            return;
-
-        try {
-            onConnect.accept(connection);
-        } catch (Throwable onConnectThrowable) {
-            this.invokeOnError(connection, TCPErrorSource.CONNECT_CALLBACK, onConnectThrowable);
-        }
-    }
-
-    private void invokeOnDisconnect(TCPConnection connection, TCPCloseReason reason, Exception e) {
-        if(onClose == null)
-            return;
-
-        try {
-            onClose.close(connection, reason, e);
-        } catch (Throwable onCloseThrowable) {
-            this.invokeOnError(connection, TCPErrorSource.DISCONNECT_CALLBACK, onCloseThrowable);
-        }
-    }
-
-    private void invokeOnReceive(TCPConnection connection, byte[] byteArray) {
-        if(onReceive == null || byteArray == null)
-            return;
-
-        try {
-            onReceive.receive(connection, byteArray);
-        } catch (Throwable onReceiveThrowable) {
-            this.invokeOnError(connection, TCPErrorSource.RECEIVE_CALLBACK, onReceiveThrowable);
-        }
-    }
-
-    private void invokeOnError(TCPConnection connection, TCPErrorSource source, Throwable throwable) {
-        try {
-            onError.error(connection, source, throwable);
-        } catch (Throwable onErrorThrowable) {
-            TCPErrorHandler.printErrorCatch(TCPClient.class, connection, TCPErrorSource.ERROR_CALLBACK, onErrorThrowable);
-        }
     }
 
 
@@ -223,11 +174,11 @@ public class TCPClient {
 
         final SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
 
-        connection = connectionFactory.create(channel, key, this::invokeOnDisconnect);
+        connection = connectionFactory.create(channel, key, listenerHolder::invokeOnDisconnect);
         connection.setName("TCPClient-connection-#" + this.hashCode());
         initialOptions.copyTo(connection.options());
 
-        this.invokeOnConnect(connection);
+        listenerHolder.invokeOnConnect(connection);
         this.startSelectorThread();
     }
 
@@ -256,7 +207,7 @@ public class TCPClient {
     private void processKey(SelectionKey key) {
         if(key.isValid() && key.isReadable()){
             final byte[] byteArray = connection.read();
-            this.invokeOnReceive(connection, byteArray);
+            listenerHolder.invokeOnReceive(connection, byteArray);
         }
         if(key.isValid() && key.isWritable())
             connection.processWriteKey(key);
