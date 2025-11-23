@@ -12,11 +12,9 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Collection;
-import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 
@@ -27,10 +25,10 @@ public class TCPServer {
     private final TCPListenerHolder listenerHolder;
 
     private final ConcurrentLinkedQueue<TCPConnection> connections;
-    private int connectionCounter; // just for naming
+    private int connectionCounter;
+
     private ServerSocketChannel[] serverChannels;
-    private Thread selectorThread;
-    private Selector selector;
+    private final SelectorController selectorController;
 
     public TCPServer(TCPConnectionOptionsHolder initialOptions) {
         this.setConnectionType(TCPConnectionType.DEFAULT);
@@ -41,6 +39,7 @@ public class TCPServer {
             TCPErrorHandler.printErrorCatch(TCPServer.class, connection, source, throwable)
         );
         this.connections = new ConcurrentLinkedQueue<>();
+        this.selectorController = new SelectorController();
     }
 
     public TCPServer() {
@@ -106,7 +105,7 @@ public class TCPServer {
             throw new IllegalStateException("TCP server is already running");
 
         connections.clear();
-        selector = Selector.open();
+        selectorController.open();
 
         serverChannels = new ServerSocketChannel[ports.length];
         for(int i = 0; i < ports.length; i++) {
@@ -122,12 +121,13 @@ public class TCPServer {
             }
 
             serverChannel.configureBlocking(false);
-            serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+            selectorController.registerAcceptKey(serverChannel);
 
             serverChannels[i] = serverChannel;
         }
 
-        this.startSelectorThread();
+        final String threadName = (this.getClass().getSimpleName() + "-selector-thread-#" + this.hashCode());
+        selectorController.startSelectionLoopThread(threadName, this::onKeySelected);
 
         return this;
     }
@@ -140,40 +140,19 @@ public class TCPServer {
         return this.run("0.0.0.0", ports);
     }
 
-    private void startSelectorThread() {
-        selectorThread = new Thread(() -> {
-            while(!Thread.interrupted() && !this.isClosed())
-                this.selectKeys();
-        }, "TCPServer-selector-thread-#" + this.hashCode());
 
-        selectorThread.setDaemon(true);
-        selectorThread.start();
-    }
-
-    private void selectKeys() {
-        try {
-            selector.select();
-            final Set<SelectionKey> selectedKeys = selector.selectedKeys();
-            for(SelectionKey key : selectedKeys)
-                this.processKey(key);
-            selectedKeys.clear();
-
-        } catch (Exception ignored) { }
-    }
-
-    private void processKey(SelectionKey key) {
-        if(key.isValid() && key.isReadable()){
+    private void onKeySelected(SelectionKey key) {
+        if(key.isReadable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
             final byte[] byteArray = connection.read();
             listenerHolder.invokeOnReceive(connection, byteArray);
         }
-        if(key.isValid() && key.isWritable()){
+        if(key.isWritable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
             connection.processWriteKey(key);
         }
-        if(key.isValid() && key.isAcceptable()){
+        if(key.isAcceptable())
             this.acceptNewConnection((ServerSocketChannel) key.channel());
-        }
     }
 
     private void acceptNewConnection(ServerSocketChannel serverChannel) {
@@ -185,7 +164,7 @@ public class TCPServer {
             channel.configureBlocking(false);
             initialOptions.applyPostConnect(channel);
 
-            final SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
+            final SelectionKey key = selectorController.registerReadKey(channel);
 
             final TCPConnection connection = connectionFactory.create(channel, key, this::onConnectionClosed);
             connection.setName("TCPServer-connection-#" + this.hashCode() + "N" + (connectionCounter++));
@@ -220,10 +199,7 @@ public class TCPServer {
         if(this.isClosed())
             return this;
 
-        if(selectorThread != null) {
-            selectorThread.interrupt();
-            selector.wakeup();
-        }
+        selectorController.close();
 
         for(TCPConnection connection : connections)
             connection.close(TCPCloseReason.CLOSE_SERVER, null);
@@ -233,7 +209,6 @@ public class TCPServer {
             ResUtils.close(serverChannel);
         serverChannels = null;
 
-        ResUtils.close(selector);
         return this;
     }
 

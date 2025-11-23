@@ -4,7 +4,6 @@ import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.tcp.listener.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
-import generaloss.resourceflow.ResUtils;
 import generaloss.networkforge.packet.NetPacket;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
@@ -16,10 +15,7 @@ import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
-import java.util.Iterator;
-import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
@@ -30,8 +26,7 @@ public class TCPClient {
     private final TCPListenerHolder listenerHolder;
 
     private TCPConnection connection;
-    private Thread selectorThread;
-    private Selector selector;
+    private final SelectorController selectorController;
 
     public TCPClient(TCPConnectionOptionsHolder initialOptions) {
         this.setConnectionType(TCPConnectionType.DEFAULT);
@@ -41,6 +36,8 @@ public class TCPClient {
         this.setOnError((connection, source, throwable) ->
             TCPErrorHandler.printErrorCatch(TCPClient.class, connection, source, throwable)
         );
+
+        this.selectorController = new SelectorController();
     }
 
     public TCPClient() {
@@ -119,7 +116,7 @@ public class TCPClient {
         if(this.isConnected())
             throw new AlreadyConnectedException();
 
-        ResUtils.close(selector);
+        selectorController.close();
 
         // channel
         final SocketChannel channel = SocketChannel.open();
@@ -127,7 +124,7 @@ public class TCPClient {
         initialOptions.applyPreConnect(channel);
 
         final boolean connectedInstantly = channel.connect(socketAddress);
-        selector = Selector.open();
+        selectorController.open();
 
         if(connectedInstantly) {
             this.createConnection(channel);
@@ -135,22 +132,18 @@ public class TCPClient {
         }
 
         // wait for connection
-        channel.register(selector, SelectionKey.OP_CONNECT);
-        if(selector.select(timeoutMillis) == 0) {
+        selectorController.registerConnectKey(channel);
+        final boolean selectResult = selectorController.selectKeys(selectedKey -> {
+            if(selectedKey.isConnectable() && channel.finishConnect()) {
+                this.createConnection(channel);
+            }else{
+                channel.close();
+                throw new ConnectException("Connection failed");
+            }
+        });
+        if(!selectResult) {
             channel.close();
             throw new TimeoutException("Connection timed out after " + timeoutMillis + " ms");
-        }
-
-        // get key and connect
-        final Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
-        final SelectionKey connectKey = keyIterator.next();
-        keyIterator.remove();
-
-        if(connectKey.isConnectable() && channel.finishConnect()) {
-            this.createConnection(channel);
-        }else{
-            channel.close();
-            throw new ConnectException("Connection failed");
         }
 
         return this;
@@ -172,44 +165,24 @@ public class TCPClient {
     private void createConnection(SocketChannel channel) throws IOException {
         initialOptions.applyPostConnect(channel);
 
-        final SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
+        final SelectionKey key = selectorController.registerReadKey(channel);
 
         connection = connectionFactory.create(channel, key, listenerHolder::invokeOnDisconnect);
         connection.setName("TCPClient-connection-#" + this.hashCode());
         initialOptions.copyTo(connection.options());
 
         listenerHolder.invokeOnConnect(connection);
-        this.startSelectorThread();
+
+        final String threadName = (this.getClass().getSimpleName() + "-selector-thread-#" + this.hashCode());
+        selectorController.startSelectionLoopThread(threadName, this::onKeySelected);
     }
 
-    private void startSelectorThread() {
-        selectorThread = new Thread(() -> {
-            while(!Thread.interrupted() && !this.isClosed())
-                this.selectKeys();
-        }, "TCPClient-selector-thread-#" + this.hashCode());
-
-        selectorThread.setDaemon(true);
-        selectorThread.start();
-    }
-
-    private void selectKeys() {
-        try {
-            if(selector.select() == 0)
-                return;
-
-            final Set<SelectionKey> selectedKeys = selector.selectedKeys();
-            for(SelectionKey key : selectedKeys)
-                this.processKey(key);
-            selectedKeys.clear();
-        } catch (Exception ignored) { }
-    }
-
-    private void processKey(SelectionKey key) {
-        if(key.isValid() && key.isReadable()){
+    private void onKeySelected(SelectionKey key) {
+        if(key.isReadable()){
             final byte[] byteArray = connection.read();
             listenerHolder.invokeOnReceive(connection, byteArray);
         }
-        if(key.isValid() && key.isWritable())
+        if(key.isWritable())
             connection.processWriteKey(key);
     }
 
@@ -226,13 +199,8 @@ public class TCPClient {
         if(this.isClosed())
             return this;
 
-        if(selectorThread != null) {
-            selectorThread.interrupt();
-            selector.wakeup();
-        }
-
+        selectorController.close();
         connection.close(TCPCloseReason.CLOSE_CLIENT, null);
-        ResUtils.close(selector);
         return this;
     }
 
