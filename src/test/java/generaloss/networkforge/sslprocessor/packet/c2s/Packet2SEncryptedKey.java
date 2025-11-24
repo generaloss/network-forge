@@ -1,13 +1,13 @@
-package generaloss.networkforge.processor.packet;
+package generaloss.networkforge.sslprocessor.packet.c2s;
 
 import generaloss.networkforge.packet.NetPacket;
-import generaloss.networkforge.processor.ServerSSLProcessor;
+import generaloss.networkforge.sslprocessor.SSLTCPConnection;
 import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.resourceflow.stream.BinaryOutputStream;
 
 import java.io.IOException;
 
-public class Packet2SEncryptedKey extends NetPacket<ServerSSLProcessor> {
+public class Packet2SEncryptedKey extends NetPacket<SSLTCPConnection> {
 
     private byte[] encryptedKey;
 
@@ -28,7 +28,7 @@ public class Packet2SEncryptedKey extends NetPacket<ServerSSLProcessor> {
     }
 
     @Override
-    public void handle(ServerSSLProcessor handler) {
+    public void handle(SSLTCPConnection handler) {
         handler.onHandleEncryptedKey(encryptedKey);
     }
 

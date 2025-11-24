@@ -20,6 +20,9 @@ Add the dependency from Maven Central:
 </dependency>
 ```
 
+Requirements:
+* Java 11 or higher
+
 ---
 
 ## Quick Start

@@ -124,7 +124,7 @@ public class PacketDispatcher {
             // get handler
             final H handler = handlerFunction.apply(packet);
             if(handler == null)
-                throw new IllegalStateException("The handler function returned null.");
+                return;
 
             // handle / to handle queue
             if(directHandling) {

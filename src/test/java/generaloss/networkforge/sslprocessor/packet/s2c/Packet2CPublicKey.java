@@ -1,6 +1,7 @@
-package generaloss.networkforge.processor.packet;
+package generaloss.networkforge.sslprocessor.packet.s2c;
 
 import generaloss.networkforge.packet.NetPacket;
+import generaloss.networkforge.sslprocessor.ClientSSLProcessor;
 import generaloss.resourceflow.stream.BinaryInputStream;
 import generaloss.resourceflow.stream.BinaryOutputStream;
 
@@ -10,9 +11,8 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.function.Consumer;
 
-public class Packet2CPublicKey extends NetPacket<Consumer<PublicKey>> {
+public class Packet2CPublicKey extends NetPacket<ClientSSLProcessor> {
 
     private PublicKey publicKey;
 
@@ -42,8 +42,8 @@ public class Packet2CPublicKey extends NetPacket<Consumer<PublicKey>> {
     }
 
     @Override
-    public void handle(Consumer<PublicKey> handler) {
-        handler.accept(publicKey);
+    public void handle(ClientSSLProcessor handler) {
+        handler.onReceivePublicKey(publicKey);
     }
 
 }

@@ -2,6 +2,7 @@
   <configuration default="false" name="ReliabilityTest" type="Application" factoryName="Application" nameIsGenerated="true">
     <option name="MAIN_CLASS_NAME" value="generaloss.networkforge.ReliabilityTest" />
     <module name="network-forge" />
+    <option name="PROGRAM_PARAMETERS" value="-Xmx=512Mb" />
     <extension name="coverage">
       <pattern>
         <option name="PATTERN" value="generaloss.networkforge.packet.*" />
