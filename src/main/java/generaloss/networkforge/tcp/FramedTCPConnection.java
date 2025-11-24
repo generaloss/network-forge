@@ -8,13 +8,13 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
-public class PacketTCPConnection extends TCPConnection {
+public class FramedTCPConnection extends TCPConnection {
 
     private final ByteBuffer sizeBuffer;
     private ByteBuffer dataBuffer;
     private boolean discardReading;
 
-    protected PacketTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
+    protected FramedTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
         super(channel, selectionKey, onClose);
         this.sizeBuffer = ByteBuffer.allocate(Integer.BYTES);
     }
@@ -34,7 +34,7 @@ public class PacketTCPConnection extends TCPConnection {
         final int size = data.length;
         if(size > super.options.getMaxPacketSizeWrite()) {
             System.err.printf("[%1$s] Packet to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
-                PacketTCPConnection.class.getSimpleName(), size, super.options.getMaxPacketSizeWrite()
+                FramedTCPConnection.class.getSimpleName(), size, super.options.getMaxPacketSizeWrite()
             );
             return false;
         }

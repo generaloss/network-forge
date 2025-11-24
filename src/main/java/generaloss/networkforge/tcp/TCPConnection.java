@@ -260,7 +260,7 @@ public abstract class TCPConnection implements Closeable {
     }
 
     static {
-        registerFactory(PacketTCPConnection.class, PacketTCPConnection::new);
+        registerFactory(FramedTCPConnection.class, FramedTCPConnection::new);
         registerFactory(StreamTCPConnection.class, StreamTCPConnection::new);
     }
 

@@ -2,6 +2,7 @@ package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.tcp.listener.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
+import generaloss.networkforge.tcp.processor.TCPProcessorPipeline;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 import generaloss.networkforge.packet.NetPacket;
@@ -22,7 +23,8 @@ public class TCPServer {
 
     private TCPConnectionFactory connectionFactory;
     private TCPConnectionOptionsHolder initialOptions;
-    private final TCPListenerHolder listenerHolder;
+
+    private final TCPEventDispatcher eventDispatcher;
 
     private final ConcurrentLinkedQueue<TCPConnection> connections;
     private int connectionCounter;
@@ -33,7 +35,8 @@ public class TCPServer {
     public TCPServer(TCPConnectionOptionsHolder initialOptions) {
         this.setConnectionType(TCPConnectionType.DEFAULT);
         this.setInitialOptions(initialOptions);
-        this.listenerHolder = new TCPListenerHolder();
+
+        this.eventDispatcher = new TCPEventDispatcher();
 
         this.setOnError((connection, source, throwable) ->
             TCPErrorHandler.printErrorCatch(TCPServer.class, connection, source, throwable)
@@ -72,28 +75,33 @@ public class TCPServer {
 
 
     public TCPServer setOnConnect(Consumer<TCPConnection> onConnect) {
-        listenerHolder.setOnConnect(onConnect);
+        eventDispatcher.setOnConnect(onConnect);
         return this;
     }
 
     public TCPServer setOnDisconnect(TCPCloseable onClose) {
-        listenerHolder.setOnDisconnect(onClose);
+        eventDispatcher.setOnDisconnect(onClose);
         return this;
     }
 
     public TCPServer setOnReceive(TCPReceiver onReceive) {
-        listenerHolder.setOnReceive(onReceive);
+        eventDispatcher.setOnReceive(onReceive);
         return this;
     }
 
     public TCPServer setOnReceiveStream(TCPReceiverStream onReceive) {
-        listenerHolder.setOnReceiveStream(onReceive);
+        eventDispatcher.setOnReceiveStream(onReceive);
         return this;
     }
 
     public TCPServer setOnError(TCPErrorHandler onError) {
-        listenerHolder.setOnError(onError);
+        eventDispatcher.setOnError(onError);
         return this;
+    }
+
+
+    public TCPProcessorPipeline getProcessorPipeline() {
+        return eventDispatcher.getProcessorPipeline();
     }
 
 
@@ -145,7 +153,7 @@ public class TCPServer {
         if(key.isReadable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
             final byte[] byteArray = connection.read();
-            listenerHolder.invokeOnReceive(connection, byteArray);
+            eventDispatcher.invokeOnReceive(connection, byteArray);
         }
         if(key.isWritable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
@@ -173,13 +181,13 @@ public class TCPServer {
 
             connections.add(connection);
 
-            listenerHolder.invokeOnConnect(connection);
+            eventDispatcher.invokeOnConnect(connection);
         } catch (IOException ignored){ }
     }
 
     private void onConnectionClosed(TCPConnection connection, TCPCloseReason reason, Exception e) {
         connections.remove(connection);
-        listenerHolder.invokeOnDisconnect(connection, reason, e);
+        eventDispatcher.invokeOnDisconnect(connection, reason, e);
     }
 
 

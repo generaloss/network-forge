@@ -2,7 +2,7 @@ package generaloss.networkforge.tcp;
 
 public enum TCPConnectionType {
 
-    PACKET (PacketTCPConnection.class),
+    FRAMED (FramedTCPConnection.class),
     STREAM (StreamTCPConnection.class);
 
     private final Class<?> conectionClass;
@@ -15,6 +15,6 @@ public enum TCPConnectionType {
         return conectionClass;
     }
 
-    public static final TCPConnectionType DEFAULT = PACKET;
+    public static final TCPConnectionType DEFAULT = FRAMED;
 
 }
