@@ -6,22 +6,23 @@ import generaloss.networkforge.sslprocessor.packet.c2s.Packet2SEncryptedKey;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.TCPCloseReason;
 import generaloss.networkforge.tcp.listener.TCPErrorSource;
-import generaloss.networkforge.tcp.processor.TCPConnectionProcessor;
+import generaloss.networkforge.tcp.listener.TCPEventDispatcher;
+import generaloss.networkforge.tcp.processor.TCPProcessor;
 import generaloss.resourceflow.resource.Resource;
 
-import javax.crypto.*;
 import java.security.*;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class ServerSSLProcessor implements TCPConnectionProcessor {
+public class ServerSSLProcessor implements TCPProcessor {
 
     public static final int RSA_KEY_SIZE = 2048;
 
     private final Map<TCPConnection, SSLTCPConnection> sslConnectionMap;
     private final PacketDispatcher packetDispatcher;
     private final KeyPair keyPair;
+    private TCPEventDispatcher eventDispatcher;
 
     public ServerSSLProcessor(PacketDispatcher sharedPacketDispatcher) {
         this.sslConnectionMap = new ConcurrentHashMap<>();
@@ -45,6 +46,11 @@ public class ServerSSLProcessor implements TCPConnectionProcessor {
     }
 
     @Override
+    public void onAdded(TCPEventDispatcher eventDispatcher) {
+        this.eventDispatcher = eventDispatcher;
+    }
+
+    @Override
     public boolean onConnect(TCPConnection connection) {
         final Packet2CPublicKey packet = new Packet2CPublicKey(keyPair.getPublic());
         final boolean sent = connection.send(packet);
@@ -52,7 +58,7 @@ public class ServerSSLProcessor implements TCPConnectionProcessor {
         if(!sent)
             throw new RuntimeException("Failed to send public key]");
 
-        final SSLTCPConnection sslConnection = new SSLTCPConnection(connection, keyPair.getPrivate());
+        final SSLTCPConnection sslConnection = new SSLTCPConnection(eventDispatcher, connection, keyPair.getPrivate());
         sslConnectionMap.put(connection, sslConnection);
         return false;
     }

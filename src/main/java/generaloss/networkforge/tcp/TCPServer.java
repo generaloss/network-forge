@@ -17,32 +17,30 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Collection;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
 
 public class TCPServer {
 
     private TCPConnectionFactory connectionFactory;
     private TCPConnectionOptionsHolder initialOptions;
-
     private final TCPEventDispatcher eventDispatcher;
+    private final SelectorController selectorController;
 
     private final ConcurrentLinkedQueue<TCPConnection> connections;
     private int connectionCounter;
 
     private ServerSocketChannel[] serverChannels;
-    private final SelectorController selectorController;
 
     public TCPServer(TCPConnectionOptionsHolder initialOptions) {
         this.setConnectionType(TCPConnectionType.DEFAULT);
         this.setInitialOptions(initialOptions);
 
         this.eventDispatcher = new TCPEventDispatcher();
+        this.selectorController = new SelectorController();
 
         this.setOnError((connection, source, throwable) ->
-            TCPErrorHandler.printErrorCatch(TCPServer.class, connection, source, throwable)
+            TCPErrorHandler.printErrorCatch(TCPServer.class.getSimpleName(), connection, source, throwable)
         );
         this.connections = new ConcurrentLinkedQueue<>();
-        this.selectorController = new SelectorController();
     }
 
     public TCPServer() {
@@ -74,7 +72,7 @@ public class TCPServer {
     }
 
 
-    public TCPServer setOnConnect(Consumer<TCPConnection> onConnect) {
+    public TCPServer setOnConnect(TCPConnectable onConnect) {
         eventDispatcher.setOnConnect(onConnect);
         return this;
     }

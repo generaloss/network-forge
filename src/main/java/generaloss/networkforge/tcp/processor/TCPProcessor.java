@@ -3,7 +3,9 @@ package generaloss.networkforge.tcp.processor;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.*;
 
-public interface TCPConnectionProcessor {
+public interface TCPProcessor {
+
+    void onAdded(TCPEventDispatcher eventDispatcher);
 
     boolean onConnect(TCPConnection connection);
 

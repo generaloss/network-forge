@@ -6,9 +6,9 @@ public interface TCPErrorHandler {
 
     void error(TCPConnection connection, TCPErrorSource source, Throwable throwable);
 
-    static void printErrorCatch(Class<?> clazz, TCPConnection connection, TCPErrorSource source, Throwable throwable) {
+    static void printErrorCatch(String sourceName, TCPConnection connection, TCPErrorSource source, Throwable throwable) {
         System.err.println(
-            "[" + clazz.getSimpleName() + "-ErrorHandler] Error in " + source + ".\n" +
+            "[" + sourceName + "-ErrorHandler] Error in " + source + ".\n" +
             "TCPConnection name: '" + connection.getName() + "'.\n" +
             "Caught and ignored to prevent server crash:"
         );

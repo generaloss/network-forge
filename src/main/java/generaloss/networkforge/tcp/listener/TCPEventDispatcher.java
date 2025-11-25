@@ -5,11 +5,9 @@ import generaloss.networkforge.tcp.processor.TCPProcessorPipeline;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryInputStream;
 
-import java.util.function.Consumer;
-
 public class TCPEventDispatcher {
 
-    private Consumer<TCPConnection> onConnect;
+    private TCPConnectable onConnect;
     private TCPCloseable onClose;
     private TCPReceiver onReceive;
     private TCPErrorHandler onError;
@@ -17,7 +15,7 @@ public class TCPEventDispatcher {
     private final TCPProcessorPipeline processorPipeline;
     
     public TCPEventDispatcher() {
-        this.processorPipeline = new TCPProcessorPipeline();
+        this.processorPipeline = new TCPProcessorPipeline(this);
     }
     
     public TCPProcessorPipeline getProcessorPipeline() {
@@ -25,7 +23,7 @@ public class TCPEventDispatcher {
     }
     
 
-    public void setOnConnect(Consumer<TCPConnection> onConnect) {
+    public void setOnConnect(TCPConnectable onConnect) {
         this.onConnect = onConnect;
     }
 
@@ -51,34 +49,40 @@ public class TCPEventDispatcher {
 
 
     public void invokeOnConnect(TCPConnection connection) {
-        final boolean cancelled = !processorPipeline.processLayerByLayer(
+        final boolean notCancelled = processorPipeline.processLayerByLayer(
             (processor ->
                 processor.onConnect(connection)),
             (throwable ->
                 this.invokeOnError(connection, TCPErrorSource.PROCESSOR_CONNECT_CALLBACK, throwable))
         );
+        if(notCancelled)
+            this.invokeOnConnectDirectly(connection);
+    }
 
-        if(cancelled || onConnect == null)
+    public void invokeOnConnectDirectly(TCPConnection connection) {
+        if(onConnect == null)
             return;
-
         try {
-            onConnect.accept(connection);
+            onConnect.connect(connection);
         } catch (Throwable onConnectThrowable) {
             this.invokeOnError(connection, TCPErrorSource.CONNECT_CALLBACK, onConnectThrowable);
         }
     }
 
     public void invokeOnDisconnect(TCPConnection connection, TCPCloseReason reason, Exception e) {
-        final boolean cancelled = !processorPipeline.processLayerByLayer(
+        final boolean notCancelled = processorPipeline.processLayerByLayer(
             (processor ->
                 processor.onDisconnect(connection, reason, e)),
             (throwable ->
                 this.invokeOnError(connection, TCPErrorSource.PROCESSOR_DISCONNECT_CALLBACK, throwable))
         );
+        if(notCancelled)
+            this.invokeOnDisconnectDirectly(connection, reason, e);
+    }
 
-        if(cancelled || onClose == null)
+    public void invokeOnDisconnectDirectly(TCPConnection connection, TCPCloseReason reason, Exception e) {
+        if(onClose == null)
             return;
-
         try {
             onClose.close(connection, reason, e);
         } catch (Throwable onDisconnectThrowable) {
@@ -87,19 +91,19 @@ public class TCPEventDispatcher {
     }
 
     public void invokeOnReceive(TCPConnection connection, byte[] byteArray) {
-        if(byteArray == null)
-            return;
-
-        final boolean cancelled = !processorPipeline.processLayerByLayer(
+        final boolean notCancelled = processorPipeline.processLayerByLayer(
             (processor ->
                 processor.onReceive(connection, byteArray)),
             (throwable ->
                 this.invokeOnError(connection, TCPErrorSource.PROCESSOR_RECEIVE_CALLBACK, throwable))
         );
+        if(notCancelled)
+            this.invokeOnReceiveDirectly(connection, byteArray);
+    }
 
-        if(cancelled || onReceive == null)
+    public void invokeOnReceiveDirectly(TCPConnection connection, byte[] byteArray) {
+        if(onReceive == null)
             return;
-
         try {
             onReceive.receive(connection, byteArray);
         } catch (Throwable onReceiveThrowable) {
@@ -108,14 +112,18 @@ public class TCPEventDispatcher {
     }
 
     public void invokeOnError(TCPConnection connection, TCPErrorSource source, Throwable throwable) {
-        final boolean cancelled = !processorPipeline.processLayerByLayer(
+        final boolean notCancelled = processorPipeline.processLayerByLayer(
             (processor ->
                 processor.onError(connection, source, throwable)),
             (processorOnErrorThrowable ->
                 this.printError(connection, TCPErrorSource.PROCESSOR_ERROR_CALLBACK, processorOnErrorThrowable))
         );
+        if(notCancelled)
+            this.invokeOnErrorDirectly(connection, source, throwable);
+    }
 
-        if(cancelled)
+    public void invokeOnErrorDirectly(TCPConnection connection, TCPErrorSource source, Throwable throwable) {
+        if(onError == null)
             return;
 
         try {
@@ -126,9 +134,7 @@ public class TCPEventDispatcher {
     }
 
     private void printError(TCPConnection connection, TCPErrorSource source, Throwable throwable) {
-        final Class<?> clazz = this.getClass(); // TODO
-        System.out.println(clazz); // TODO: remove
-        TCPErrorHandler.printErrorCatch(clazz, connection, source, throwable);
+        TCPErrorHandler.printErrorCatch("Default", connection, source, throwable);
     }
 
 }

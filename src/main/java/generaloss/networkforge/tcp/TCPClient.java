@@ -18,27 +18,26 @@ import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Consumer;
 
 public class TCPClient {
 
     private TCPConnectionFactory connectionFactory;
     private TCPConnectionOptionsHolder initialOptions;
     private final TCPEventDispatcher eventDispatcher;
+    private final SelectorController selectorController;
 
     private TCPConnection connection;
-    private final SelectorController selectorController;
 
     public TCPClient(TCPConnectionOptionsHolder initialOptions) {
         this.setConnectionType(TCPConnectionType.DEFAULT);
         this.setInitialOptions(initialOptions);
+
         this.eventDispatcher = new TCPEventDispatcher();
+        this.selectorController = new SelectorController();
 
         this.setOnError((connection, source, throwable) ->
-            TCPErrorHandler.printErrorCatch(TCPClient.class, connection, source, throwable)
+            TCPErrorHandler.printErrorCatch(TCPClient.class.getSimpleName(), connection, source, throwable)
         );
-
-        this.selectorController = new SelectorController();
     }
 
     public TCPClient() {
@@ -87,7 +86,7 @@ public class TCPClient {
     }
 
 
-    public TCPClient setOnConnect(Consumer<TCPConnection> onConnect) {
+    public TCPClient setOnConnect(TCPConnectable onConnect) {
         eventDispatcher.setOnConnect(onConnect);
         return this;
     }

@@ -301,9 +301,10 @@ public class TcpTests {
         final TCPClient client = new TCPClient();
         client.getProcessorPipeline().addProcessor(new ClientSSLProcessor(dispatcher));
         client.connect("localhost", 5403);
-
-        client.send(new TestMessagePacket(message));
-        client.send(new TestMessagePacket(message));
+        client.setOnConnect(connection -> {
+            client.send(new TestMessagePacket(message));
+            client.send(new TestMessagePacket(message));
+        });
 
         TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
         server.close();

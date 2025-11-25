@@ -1,12 +1,14 @@
 package generaloss.networkforge.sslprocessor;
 
 import generaloss.networkforge.packet.PacketDispatcher;
+import generaloss.networkforge.sslprocessor.packet.c2s.Packet2SEncryptedKey;
 import generaloss.networkforge.sslprocessor.packet.s2c.Packet2CConnectionEncrypted;
 import generaloss.networkforge.sslprocessor.packet.s2c.Packet2CPublicKey;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.TCPCloseReason;
 import generaloss.networkforge.tcp.listener.TCPErrorSource;
-import generaloss.networkforge.tcp.processor.TCPConnectionProcessor;
+import generaloss.networkforge.tcp.listener.TCPEventDispatcher;
+import generaloss.networkforge.tcp.processor.TCPProcessor;
 import generaloss.resourceflow.resource.Resource;
 
 import javax.crypto.Cipher;
@@ -16,11 +18,12 @@ import java.security.GeneralSecurityException;
 import java.security.PublicKey;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class ClientSSLProcessor implements TCPConnectionProcessor {
+public class ClientSSLProcessor implements TCPProcessor {
 
     public static final int AES_KEY_SIZE = 128;
 
     private final PacketDispatcher packetDispatcher;
+    private TCPEventDispatcher eventDispatcher;
     private TCPConnection connection;
     private SecretKey secretKey;
 
@@ -33,6 +36,11 @@ public class ClientSSLProcessor implements TCPConnectionProcessor {
 
     public ClientSSLProcessor() {
         this(new PacketDispatcher());
+    }
+
+    @Override
+    public void onAdded(TCPEventDispatcher eventDispatcher) {
+        this.eventDispatcher = eventDispatcher;
     }
 
     @Override
@@ -72,6 +80,11 @@ public class ClientSSLProcessor implements TCPConnectionProcessor {
             final KeyGenerator generator = KeyGenerator.getInstance("AES");
             generator.init(AES_KEY_SIZE);
             secretKey = generator.generateKey();
+
+            final Cipher encryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            encryptCipher.init(Cipher.ENCRYPT_MODE, publicKey);
+            final byte[] encryptedAesKey = encryptCipher.doFinal(secretKey.getEncoded());
+            connection.send(new Packet2SEncryptedKey(encryptedAesKey));
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
@@ -80,16 +93,15 @@ public class ClientSSLProcessor implements TCPConnectionProcessor {
     public void onReceiveEncryptedSignal() {
         try {
             // ciphers
-            final Cipher encryptCipher = Cipher.getInstance("RSA");
+            final Cipher encryptCipher = Cipher.getInstance("AES");
             encryptCipher.init(Cipher.ENCRYPT_MODE, secretKey);
 
-            final Cipher decryptCipher = Cipher.getInstance("RSA");
+            final Cipher decryptCipher = Cipher.getInstance("AES");
             decryptCipher.init(Cipher.DECRYPT_MODE, secretKey);
 
             connection.ciphers().setCiphers(encryptCipher, decryptCipher);
 
-            // TODO: onConnect
-            System.out.println("client encrypted");
+            eventDispatcher.invokeOnConnectDirectly(connection);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
