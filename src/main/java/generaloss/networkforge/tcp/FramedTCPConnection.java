@@ -10,13 +10,13 @@ import java.nio.channels.SocketChannel;
 
 public class FramedTCPConnection extends TCPConnection {
 
-    private final ByteBuffer sizeBuffer;
-    private ByteBuffer dataBuffer;
-    private boolean discardReading;
+    private final ByteBuffer frameSizeBuffer;
+    private ByteBuffer frameDataBuffer;
+    private boolean discardReadingMode;
 
     protected FramedTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
         super(channel, selectionKey, onClose);
-        this.sizeBuffer = ByteBuffer.allocate(Integer.BYTES);
+        this.frameSizeBuffer = ByteBuffer.allocate(Integer.BYTES);
     }
 
     @Override
@@ -32,9 +32,9 @@ public class FramedTCPConnection extends TCPConnection {
 
         // check size
         final int size = data.length;
-        if(size > super.options.getMaxPacketSizeWrite()) {
-            System.err.printf("[%1$s] Packet to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
-                FramedTCPConnection.class.getSimpleName(), size, super.options.getMaxPacketSizeWrite()
+        if(size > super.options.getMaxFrameSizeWrite()) {
+            System.err.printf("[%1$s] Frame to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
+                FramedTCPConnection.class.getSimpleName(), size, super.options.getMaxFrameSizeWrite()
             );
             return false;
         }
@@ -54,58 +54,58 @@ public class FramedTCPConnection extends TCPConnection {
     @Override
     protected byte[] read() {
         try {
-            // is needed to read size
-            if(sizeBuffer.hasRemaining() && !discardReading) {
-                // read size
-                final boolean sizeFullyRead = this.readPartiallyTo(sizeBuffer);
+            // is needed to read frame size
+            if(frameSizeBuffer.hasRemaining() && !discardReadingMode) {
+                // read frame size
+                final boolean sizeFullyRead = this.readPartiallyTo(frameSizeBuffer);
                 if(!sizeFullyRead)
-                    return null; // continue reading size next time
+                    return null; // continue reading frame size next time
 
-                // get size
-                sizeBuffer.flip();
-                final int size = sizeBuffer.getInt();
+                // get frame size
+                frameSizeBuffer.flip();
+                final int frameSize = frameSizeBuffer.getInt();
 
-                if(size < 1) {
-                    super.close(TCPCloseReason.INVALID_PACKET_SIZE, null);
+                if(frameSize < 1) {
+                    super.close(TCPCloseReason.INVALID_FRAME_SIZE, null);
                     return null;
                 }
 
-                // check size
-                if(size > super.options.getMaxPacketSizeRead()) {
+                // check frame size
+                if(frameSize > super.options.getMaxFrameSizeRead()) {
                     // close connection
-                    if(super.options.isCloseOnPacketLimit()) {
-                        super.close(TCPCloseReason.PACKET_SIZE_LIMIT_EXCEEDED, null);
+                    if(super.options.isCloseOnFrameSizeLimit()) {
+                        super.close(TCPCloseReason.FRAME_SIZE_LIMIT_EXCEEDED, null);
                         return null;
                     }
 
                     // enter discard mode, partially read all to {size}
-                    discardReading = true;
-                    dataBuffer = ByteBuffer.allocate(size);
-                    this.readPartiallyTo(dataBuffer);
+                    discardReadingMode = true;
+                    frameDataBuffer = ByteBuffer.allocate(frameSize);
+                    this.readPartiallyTo(frameDataBuffer);
 
-                    // reset size buffer for next packet
-                    sizeBuffer.clear();
+                    // reset size buffer for next frame
+                    frameSizeBuffer.clear();
                     return null;
                 }
 
-                // allocate data buffer
-                dataBuffer = ByteBuffer.allocate(size);
+                // allocate frame data buffer
+                frameDataBuffer = ByteBuffer.allocate(frameSize);
             }
 
             // read data
-            final boolean dataFullyRead = this.readPartiallyTo(dataBuffer);
+            final boolean dataFullyRead = this.readPartiallyTo(frameDataBuffer);
             if(!dataFullyRead)
                 return null; // continue reading data next time
 
             // all bytes to discard fully read => enter normal mode
-            if(discardReading) {
-                discardReading = false;
+            if(discardReadingMode) {
+                discardReadingMode = false;
                 return null;
             }
 
-            // reset size buffer for next packet
-            sizeBuffer.clear();
-            // get data
+            // reset size buffer for next frame
+            frameSizeBuffer.clear();
+            // get frame data
             return this.getDecryptedData();
 
         } catch (IOException e) {
@@ -132,9 +132,9 @@ public class FramedTCPConnection extends TCPConnection {
     }
 
     private byte[] getDecryptedData() {
-        dataBuffer.flip();
-        final byte[] data = new byte[dataBuffer.remaining()];
-        dataBuffer.get(data);
+        frameDataBuffer.flip();
+        final byte[] data = new byte[frameDataBuffer.remaining()];
+        frameDataBuffer.get(data);
 
         return super.ciphers.decrypt(data);
     }

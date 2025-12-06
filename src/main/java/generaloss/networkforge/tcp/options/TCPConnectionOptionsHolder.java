@@ -58,9 +58,9 @@ public class TCPConnectionOptionsHolder extends SocketOptionsHolder {
 
 
     public void copyTo(TCPConnectionOptions options) {
-        options.setMaxPacketSizeRead(maxPacketSizeRead);
-        options.setMaxPacketSizeWrite(maxPacketSizeWrite);
-        options.setCloseOnPacketLimit(closeOnPacketLimit);
+        options.setMaxFrameSizeRead(maxPacketSizeRead);
+        options.setMaxFrameSizeWrite(maxPacketSizeWrite);
+        options.setCloseOnFrameSizeLimit(closeOnPacketLimit);
     }
 
 

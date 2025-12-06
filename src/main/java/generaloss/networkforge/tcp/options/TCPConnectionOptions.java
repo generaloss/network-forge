@@ -9,54 +9,54 @@ public class TCPConnectionOptions extends SocketOptions {
     }
 
 
-    private int maxPacketSizeRead;
+    private int maxFrameSizeRead;
 
-    public int getMaxPacketSizeRead() {
-        return maxPacketSizeRead;
+    public int getMaxFrameSizeRead() {
+        return maxFrameSizeRead;
     }
 
-    public TCPConnectionOptions setMaxPacketSizeRead(int maxPacketSizeRead) {
-        if(maxPacketSizeRead < 1)
-            throw new IllegalArgumentException("Argument 'maxPacketSizeRead' must be > 0");
+    public TCPConnectionOptions setMaxFrameSizeRead(int maxFrameSizeRead) {
+        if(maxFrameSizeRead < 1)
+            throw new IllegalArgumentException("Argument 'maxFrameSizeRead' must be > 0");
 
-        this.maxPacketSizeRead = maxPacketSizeRead;
+        this.maxFrameSizeRead = maxFrameSizeRead;
         return this;
     }
 
 
-    private int maxPacketSizeWrite;
+    private int maxFrameSizeWrite;
 
-    public int getMaxPacketSizeWrite() {
-        return maxPacketSizeWrite;
+    public int getMaxFrameSizeWrite() {
+        return maxFrameSizeWrite;
     }
 
-    public TCPConnectionOptions setMaxPacketSizeWrite(int maxPacketSizeWrite) {
-        if(maxPacketSizeWrite < 1)
-            throw new IllegalArgumentException("Argument 'maxPacketSizeWrite' must be > 0");
+    public TCPConnectionOptions setMaxFrameSizeWrite(int maxFrameSizeWrite) {
+        if(maxFrameSizeWrite < 1)
+            throw new IllegalArgumentException("Argument 'maxFrameSizeWrite' must be > 0");
 
-        this.maxPacketSizeWrite = maxPacketSizeWrite;
+        this.maxFrameSizeWrite = maxFrameSizeWrite;
         return this;
     }
 
 
-    public TCPConnectionOptions setMaxPacketSize(int maxPacketSize) {
-        if(maxPacketSize < 1)
-            throw new IllegalArgumentException("Argument 'maxPacketSize' must be > 0");
+    public TCPConnectionOptions setMaxFrameSize(int maxFrameSize) {
+        if(maxFrameSize < 1)
+            throw new IllegalArgumentException("Argument 'maxFrameSize' must be > 0");
 
-        this.maxPacketSizeRead = maxPacketSize;
-        this.maxPacketSizeWrite = maxPacketSize;
+        this.maxFrameSizeRead = maxFrameSize;
+        this.maxFrameSizeWrite = maxFrameSize;
         return this;
     }
 
 
-    private boolean closeOnPacketLimit;
+    private boolean closeOnFrameSizeLimit;
 
-    public boolean isCloseOnPacketLimit() {
-        return closeOnPacketLimit;
+    public boolean isCloseOnFrameSizeLimit() {
+        return closeOnFrameSizeLimit;
     }
 
-    public TCPConnectionOptions setCloseOnPacketLimit(boolean closeOnPacketLimit) {
-        this.closeOnPacketLimit = closeOnPacketLimit;
+    public TCPConnectionOptions setCloseOnFrameSizeLimit(boolean closeOnFrameSizeLimit) {
+        this.closeOnFrameSizeLimit = closeOnFrameSizeLimit;
         return this;
     }
 
@@ -64,9 +64,9 @@ public class TCPConnectionOptions extends SocketOptions {
     @Override
     public String toString() {
         return TCPConnectionOptions.class.getSimpleName() + "{" +
-            "MAX_PACKET_SIZE_READ=" + maxPacketSizeRead +
-            ", MAX_PACKET_SIZE_WRITE=" + maxPacketSizeWrite +
-            ", CLOSE_ON_PACKET_LIMIT=" + closeOnPacketLimit +
+            "MAX_FRAME_SIZE_READ=" + maxFrameSizeRead +
+            ", MAX_FRAME_SIZE_WRITE=" + maxFrameSizeWrite +
+            ", CLOSE_ON_FRAME_SIZE_LIMIT=" + closeOnFrameSizeLimit +
             ", " + super.optionsToString() + "}";
     }
 

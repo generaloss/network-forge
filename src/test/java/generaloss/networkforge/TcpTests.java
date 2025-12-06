@@ -218,8 +218,8 @@ public class TcpTests {
             })
             .setOnConnect(connection ->
                 connection.options()
-                    .setCloseOnPacketLimit(false)
-                    .setMaxPacketSize(message.length())
+                    .setCloseOnFrameSizeLimit(false)
+                    .setMaxFrameSize(message.length())
             )
             .run(5402);
 

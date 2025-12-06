@@ -1,6 +1,7 @@
 package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
+import generaloss.networkforge.ISendable;
 import generaloss.networkforge.tcp.listener.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
@@ -19,7 +20,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.TimeoutException;
 
-public class TCPClient {
+public class TCPClient implements ISendable {
 
     private TCPConnectionFactory connectionFactory;
     private TCPConnectionOptionsHolder initialOptions;
@@ -235,30 +236,35 @@ public class TCPClient {
     }
 
 
+    @Override
     public boolean send(byte[] byteArray) {
         if(connection == null)
             return false;
         return connection.send(byteArray);
     }
 
+    @Override
     public boolean send(ByteBuffer buffer) {
         if(connection == null)
             return false;
         return connection.send(buffer);
     }
 
+    @Override
     public boolean send(String string) {
         if(connection == null)
             return false;
         return connection.send(string);
     }
 
+    @Override
     public boolean send(BinaryStreamWriter streamWriter) {
         if(connection == null)
             return false;
         return connection.send(streamWriter);
     }
 
+    @Override
     public boolean send(NetPacket<?> packet) {
         if(connection == null)
             return false;

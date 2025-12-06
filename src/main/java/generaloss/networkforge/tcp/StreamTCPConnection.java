@@ -13,11 +13,11 @@ public class StreamTCPConnection extends TCPConnection {
 
     private static final int BUFFER_SIZE = 8192; // 8 kb
 
-    private final ByteBuffer readBuffer;
+    private final ByteBuffer readDataBuffer;
 
     protected StreamTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
         super(channel, selectionKey, onClose);
-        this.readBuffer = ByteBuffer.allocate(BUFFER_SIZE);
+        this.readDataBuffer = ByteBuffer.allocate(BUFFER_SIZE);
     }
 
     @Override
@@ -33,9 +33,9 @@ public class StreamTCPConnection extends TCPConnection {
 
         // check size
         final int size = data.length;
-        if(size > super.options.getMaxPacketSizeWrite()) {
-            System.err.printf("[%1$s] Packet to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
-                              StreamTCPConnection.class.getSimpleName(), size, super.options.getMaxPacketSizeWrite()
+        if(size > super.options.getMaxFrameSizeWrite()) {
+            System.err.printf("[%1$s] Frame to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
+                StreamTCPConnection.class.getSimpleName(), size, super.options.getMaxFrameSizeWrite()
             );
             return false;
         }
@@ -57,22 +57,22 @@ public class StreamTCPConnection extends TCPConnection {
 
             int length;
             while(true) {
-                length = super.channel.read(readBuffer);
+                length = super.channel.read(readDataBuffer);
                 if(length < 1)
                     break;
 
                 // write buffer to bytesStream
-                readBuffer.flip();
+                readDataBuffer.flip();
                 final byte[] chunk = new byte[length];
-                readBuffer.get(chunk);
+                readDataBuffer.get(chunk);
                 bytesStream.write(chunk);
-                readBuffer.clear();
+                readDataBuffer.clear();
 
                 // check size
-                if(bytesStream.size() > super.options.getMaxPacketSizeRead()) {
+                if(bytesStream.size() > super.options.getMaxFrameSizeRead()) {
                     // close connection
-                    if(super.options.isCloseOnPacketLimit())
-                        super.close(TCPCloseReason.PACKET_SIZE_LIMIT_EXCEEDED, null);
+                    if(super.options.isCloseOnFrameSizeLimit())
+                        super.close(TCPCloseReason.FRAME_SIZE_LIMIT_EXCEEDED, null);
 
                     this.discardAvailableBytes();
                     return null;
@@ -98,11 +98,11 @@ public class StreamTCPConnection extends TCPConnection {
     }
 
     private void discardAvailableBytes() throws IOException {
-        readBuffer.clear();
+        readDataBuffer.clear();
         while(true) {
             // read
-            final int read = this.channel.read(readBuffer);
-            readBuffer.clear();
+            final int read = this.channel.read(readDataBuffer);
+            readDataBuffer.clear();
             // check if no data
             if(read == 0)
                 return;

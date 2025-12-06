@@ -1,6 +1,7 @@
 package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
+import generaloss.networkforge.ISendable;
 import generaloss.networkforge.tcp.listener.TCPCloseReason;
 import generaloss.networkforge.tcp.listener.TCPCloseable;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
@@ -21,7 +22,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public abstract class TCPConnection implements Closeable {
+public abstract class TCPConnection implements Closeable, ISendable {
 
     protected final SocketChannel channel;
     protected final SelectionKey selectionKey;
@@ -195,9 +196,10 @@ public abstract class TCPConnection implements Closeable {
 
     protected abstract byte[] read();
 
+    @Override
     public abstract boolean send(byte[] byteArray);
 
-
+    @Override
     public boolean send(ByteBuffer buffer) {
         if(buffer == null)
             throw new IllegalArgumentException("Agrument 'buffer' cannot be null");
@@ -210,6 +212,7 @@ public abstract class TCPConnection implements Closeable {
         return this.send(byteArray);
     }
 
+    @Override
     public boolean send(String string) {
         if(string == null)
             throw new IllegalArgumentException("Agrument 'string' cannot be null");
@@ -217,6 +220,7 @@ public abstract class TCPConnection implements Closeable {
         return this.send(string.getBytes());
     }
 
+    @Override
     public boolean send(BinaryStreamWriter streamWriter) {
         if(streamWriter == null)
             throw new IllegalArgumentException("Agrument 'streamWriter' cannot be null");
@@ -232,6 +236,7 @@ public abstract class TCPConnection implements Closeable {
         }
     }
 
+    @Override
     public boolean send(NetPacket<?> packet) {
         if(packet == null)
             throw new IllegalArgumentException("Agrument 'packet' cannot be null");
