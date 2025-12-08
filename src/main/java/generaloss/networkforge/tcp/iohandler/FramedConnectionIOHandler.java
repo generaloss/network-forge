@@ -1,7 +1,7 @@
 package generaloss.networkforge.tcp.iohandler;
 
 import generaloss.networkforge.tcp.TCPConnection;
-import generaloss.networkforge.tcp.listener.TCPCloseReason;
+import generaloss.networkforge.tcp.event.CloseReason;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -109,7 +109,7 @@ public class FramedConnectionIOHandler implements ConnectionIOHandler {
             return this.getDecryptedData();
 
         } catch (IOException e) {
-            connection.close(TCPCloseReason.INTERNAL_ERROR, e);
+            connection.close(CloseReason.INTERNAL_ERROR, e);
             return null;
         }
     }
@@ -117,7 +117,7 @@ public class FramedConnectionIOHandler implements ConnectionIOHandler {
     private boolean validateFrameSize(int frameSize) throws IOException {
         // illegal frame size - close connection
         if(frameSize < 1) {
-            connection.close(TCPCloseReason.INVALID_FRAME_SIZE, null);
+            connection.close(CloseReason.INVALID_FRAME_SIZE, null);
             return false;
         }
 
@@ -125,7 +125,7 @@ public class FramedConnectionIOHandler implements ConnectionIOHandler {
         if(frameSize > connection.options().getMaxFrameSizeRead()) {
             // close connection if needed
             if(connection.options().isCloseOnFrameSizeLimit()) {
-                connection.close(TCPCloseReason.FRAME_SIZE_LIMIT_EXCEEDED, null);
+                connection.close(CloseReason.FRAME_SIZE_LIMIT_EXCEEDED, null);
                 return false;
             }
 
@@ -155,7 +155,7 @@ public class FramedConnectionIOHandler implements ConnectionIOHandler {
         final int bytesRead = connection.channel().read(buffer);
         // check remote close
         if(bytesRead == -1){
-            connection.close(TCPCloseReason.CLOSE_BY_OTHER_SIDE, null);
+            connection.close(CloseReason.CLOSE_BY_OTHER_SIDE, null);
             return false; // continue to read
         }
 
@@ -185,7 +185,7 @@ public class FramedConnectionIOHandler implements ConnectionIOHandler {
                 break;
             // check remote close
             if(read == -1) {
-                connection.close(TCPCloseReason.CLOSE_BY_OTHER_SIDE, null);
+                connection.close(CloseReason.CLOSE_BY_OTHER_SIDE, null);
                 break;
             }
             bytesToDiscard -= read;

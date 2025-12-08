@@ -1,6 +1,6 @@
-package generaloss.networkforge.tcp.listener;
+package generaloss.networkforge.tcp.event;
 
-public enum TCPErrorSource {
+public enum ErrorSource {
 
     CONNECT_CALLBACK,
     DISCONNECT_CALLBACK,

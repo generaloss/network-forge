@@ -3,8 +3,8 @@ package generaloss.networkforge.tcp;
 import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.ISendable;
 import generaloss.networkforge.tcp.iohandler.ConnectionIOHandler;
-import generaloss.networkforge.tcp.listener.TCPCloseReason;
-import generaloss.networkforge.tcp.listener.TCPCloseable;
+import generaloss.networkforge.tcp.event.CloseReason;
+import generaloss.networkforge.tcp.event.CloseCallback;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
@@ -25,7 +25,7 @@ public class TCPConnection implements Closeable, ISendable {
 
     protected final SocketChannel channel;
     protected final SelectionKey selectionKey;
-    protected final TCPCloseable onClose;
+    protected final CloseCallback onClose;
     protected final TCPConnectionOptions options;
     protected final CipherPair ciphers;
     private volatile boolean closed;
@@ -36,7 +36,7 @@ public class TCPConnection implements Closeable, ISendable {
     private final Queue<ByteBuffer> writeQueue;
     private final Object writeLock;
 
-    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose, ConnectionIOHandler ioHandler) {
+    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, CloseCallback onClose, ConnectionIOHandler ioHandler) {
         if(channel == null)
             throw new IllegalArgumentException("Argument 'channel' cannot be null");
         if(selectionKey == null)
@@ -138,7 +138,7 @@ public class TCPConnection implements Closeable, ISendable {
         return closed;
     }
 
-    public void close(TCPCloseReason reason, Exception e) {
+    public void close(CloseReason reason, Exception e) {
         if(closed)
             return;
         closed = true;
@@ -146,13 +146,12 @@ public class TCPConnection implements Closeable, ISendable {
         selectionKey.cancel();
         ResUtils.close(channel);
 
-        if(onClose != null)
-            onClose.close(this, reason, e);
+        onClose.onClose(this, reason, e);
     }
 
     @Override
     public void close() {
-        this.close(TCPCloseReason.CLOSE_CONNECTION, null);
+        this.close(CloseReason.CLOSE_CONNECTION, null);
     }
 
 
@@ -174,7 +173,7 @@ public class TCPConnection implements Closeable, ISendable {
             }
             return true;
         } catch (IOException | CancelledKeyException e) {
-            this.close(TCPCloseReason.INTERNAL_ERROR, e);
+            this.close(CloseReason.INTERNAL_ERROR, e);
             return false;
         }
     }
@@ -190,7 +189,7 @@ public class TCPConnection implements Closeable, ISendable {
                 key.interestOps(SelectionKey.OP_READ);
             }
         } catch (Exception e) {
-            this.close(TCPCloseReason.INTERNAL_ERROR, e);
+            this.close(CloseReason.INTERNAL_ERROR, e);
         }
     }
 

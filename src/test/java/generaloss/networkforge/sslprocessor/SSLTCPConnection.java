@@ -2,7 +2,7 @@ package generaloss.networkforge.sslprocessor;
 
 import generaloss.networkforge.sslprocessor.packet.s2c.Packet2CConnectionEncrypted;
 import generaloss.networkforge.tcp.TCPConnection;
-import generaloss.networkforge.tcp.listener.TCPEventDispatcher;
+import generaloss.networkforge.tcp.event.EventDispatcher;
 
 import javax.crypto.Cipher;
 import javax.crypto.NoSuchPaddingException;
@@ -15,11 +15,11 @@ import java.security.PrivateKey;
 
 public class SSLTCPConnection {
 
-    private final TCPEventDispatcher eventDispatcher;
+    private final EventDispatcher eventDispatcher;
     private final PrivateKey privateKey;
     private final TCPConnection connection;
 
-    public SSLTCPConnection(TCPEventDispatcher eventDispatcher, TCPConnection connection, PrivateKey privateKey) {
+    public SSLTCPConnection(EventDispatcher eventDispatcher, TCPConnection connection, PrivateKey privateKey) {
         this.eventDispatcher = eventDispatcher;
         this.connection = connection;
         this.privateKey = privateKey;

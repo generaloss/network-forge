@@ -4,7 +4,7 @@ import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.ISendable;
 import generaloss.networkforge.tcp.iohandler.ConnectionIOHandler;
 import generaloss.networkforge.tcp.iohandler.IOHandlerType;
-import generaloss.networkforge.tcp.listener.*;
+import generaloss.networkforge.tcp.event.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.packet.NetPacket;
@@ -24,9 +24,11 @@ import java.util.concurrent.TimeoutException;
 
 public class TCPClient implements ISendable {
 
+    private static final String CLASS_NAME = TCPClient.class.getSimpleName();
+
     private ConnectionIOHandler ioHandler;
     private TCPConnectionOptionsHolder initialOptions;
-    private final TCPEventDispatcher eventDispatcher;
+    private final EventDispatcher eventDispatcher;
     private final SelectorController selectorController;
 
     private TCPConnection connection;
@@ -35,12 +37,11 @@ public class TCPClient implements ISendable {
         this.setIOHandlerType(IOHandlerType.DEFAULT);
         this.setInitialOptions(initialOptions);
 
-        this.eventDispatcher = new TCPEventDispatcher();
-        this.selectorController = new SelectorController();
+        final ErrorHandler defaultErrorHandler = (connection, source, throwable) ->
+                ErrorHandler.printErrorCatch(CLASS_NAME, connection, source, throwable);
 
-        this.setOnError((connection, source, throwable) ->
-            TCPErrorHandler.printErrorCatch(TCPClient.class.getSimpleName(), connection, source, throwable)
-        );
+        this.eventDispatcher = new EventDispatcher(defaultErrorHandler);
+        this.selectorController = new SelectorController();
     }
 
     public TCPClient() {
@@ -95,27 +96,27 @@ public class TCPClient implements ISendable {
     }
 
 
-    public TCPClient setOnConnect(TCPConnectable onConnect) {
+    public TCPClient setOnConnect(ConnectionListener onConnect) {
         eventDispatcher.setOnConnect(onConnect);
         return this;
     }
 
-    public TCPClient setOnDisconnect(TCPCloseable onClose) {
+    public TCPClient setOnDisconnect(CloseCallback onClose) {
         eventDispatcher.setOnDisconnect(onClose);
         return this;
     }
 
-    public TCPClient setOnReceive(TCPReceiver onReceive) {
+    public TCPClient setOnReceive(DataReceiver onReceive) {
         eventDispatcher.setOnReceive(onReceive);
         return this;
     }
 
-    public TCPClient setOnReceiveStream(TCPReceiverStream onReceive) {
+    public TCPClient setOnReceiveStream(StreamDataReceiver onReceive) {
         eventDispatcher.setOnReceiveStream(onReceive);
         return this;
     }
 
-    public TCPClient setOnError(TCPErrorHandler onError) {
+    public TCPClient setOnError(ErrorHandler onError) {
         eventDispatcher.setOnError(onError);
         return this;
     }
@@ -182,7 +183,7 @@ public class TCPClient implements ISendable {
         final SelectionKey key = selectorController.registerReadKey(channel);
 
         connection = new TCPConnection(channel, key, eventDispatcher::invokeOnDisconnect, ioHandler);
-        connection.setName("TCPClient-connection-#" + this.hashCode());
+        connection.setName(CLASS_NAME + "-connection-#" + this.hashCode());
         initialOptions.copyTo(connection.options());
 
         eventDispatcher.invokeOnConnect(connection);
@@ -215,14 +216,14 @@ public class TCPClient implements ISendable {
             return this;
 
         selectorController.close();
-        connection.close(TCPCloseReason.CLOSE_CLIENT, null);
+        connection.close(CloseReason.CLOSE_CLIENT, null);
         return this;
     }
 
 
     public TCPClient setEncryptCipher(Cipher encryptCipher) {
         if(connection == null)
-            throw new IllegalStateException("TCPClient is not connected");
+            throw new IllegalStateException(CLASS_NAME + " is not connected");
 
         connection.ciphers().setEncryptCipher(encryptCipher);
         return this;
@@ -230,7 +231,7 @@ public class TCPClient implements ISendable {
 
     public TCPClient setDecryptCipher(Cipher decryptCipher) {
         if(connection == null)
-            throw new IllegalStateException("TCPClient is not connected");
+            throw new IllegalStateException(CLASS_NAME + " is not connected");
 
         connection.ciphers().setDecryptCipher(decryptCipher);
         return this;
@@ -238,7 +239,7 @@ public class TCPClient implements ISendable {
 
     public TCPClient setCiphers(Cipher encryptCipher, Cipher decryptCipher) {
         if(connection == null)
-            throw new IllegalStateException("TCPClient is not connected");
+            throw new IllegalStateException(CLASS_NAME + " is not connected");
 
         connection.ciphers().setCiphers(encryptCipher, decryptCipher);
         return this;

@@ -1,7 +1,7 @@
 package generaloss.networkforge.tcp.iohandler;
 
 import generaloss.networkforge.tcp.TCPConnection;
-import generaloss.networkforge.tcp.listener.TCPCloseReason;
+import generaloss.networkforge.tcp.event.CloseReason;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -78,7 +78,7 @@ public class StreamConnectionIOHandler implements ConnectionIOHandler {
                 if(bytesStream.size() > connection.options().getMaxFrameSizeRead()) {
                     // close connection
                     if(connection.options().isCloseOnFrameSizeLimit())
-                        connection.close(TCPCloseReason.FRAME_SIZE_LIMIT_EXCEEDED, null);
+                        connection.close(CloseReason.FRAME_SIZE_LIMIT_EXCEEDED, null);
 
                     this.discardAvailableBytes();
                     return null;
@@ -87,7 +87,7 @@ public class StreamConnectionIOHandler implements ConnectionIOHandler {
 
             // check remote close
             if(length == -1) {
-                connection.close(TCPCloseReason.CLOSE_BY_OTHER_SIDE, null);
+                connection.close(CloseReason.CLOSE_BY_OTHER_SIDE, null);
                 return null;
             }
 
@@ -98,7 +98,7 @@ public class StreamConnectionIOHandler implements ConnectionIOHandler {
             return connection.ciphers().decrypt(allReadBytes);
 
         } catch (IOException e) {
-            connection.close(TCPCloseReason.INTERNAL_ERROR, e);
+            connection.close(CloseReason.INTERNAL_ERROR, e);
             return null;
         }
     }
@@ -114,7 +114,7 @@ public class StreamConnectionIOHandler implements ConnectionIOHandler {
                 return;
             // check remote close
             if(read == -1) {
-                connection.close(TCPCloseReason.CLOSE_BY_OTHER_SIDE, null);
+                connection.close(CloseReason.CLOSE_BY_OTHER_SIDE, null);
                 return;
             }
         }

@@ -1,6 +1,6 @@
 package generaloss.networkforge.tcp.processor;
 
-import generaloss.networkforge.tcp.listener.TCPEventDispatcher;
+import generaloss.networkforge.tcp.event.EventDispatcher;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -10,10 +10,10 @@ import java.util.function.Function;
 
 public class TCPProcessorPipeline {
 
-    private final TCPEventDispatcher eventDispatcherOf;
+    private final EventDispatcher eventDispatcherOf;
     private final List<TCPProcessor> processors;
 
-    public TCPProcessorPipeline(TCPEventDispatcher eventDispatcherOf) {
+    public TCPProcessorPipeline(EventDispatcher eventDispatcherOf) {
         this.processors = new ArrayList<>();
         this.eventDispatcherOf = eventDispatcherOf;
     }

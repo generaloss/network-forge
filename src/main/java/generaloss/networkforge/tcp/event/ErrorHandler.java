@@ -1,12 +1,12 @@
-package generaloss.networkforge.tcp.listener;
+package generaloss.networkforge.tcp.event;
 
 import generaloss.networkforge.tcp.TCPConnection;
 
-public interface TCPErrorHandler {
+public interface ErrorHandler {
 
-    void error(TCPConnection connection, TCPErrorSource source, Throwable throwable);
+    void onError(TCPConnection connection, ErrorSource source, Throwable throwable);
 
-    static void printErrorCatch(String sourceName, TCPConnection connection, TCPErrorSource source, Throwable throwable) {
+    static void printErrorCatch(String sourceName, TCPConnection connection, ErrorSource source, Throwable throwable) {
         System.err.println(
             "[" + sourceName + "-ErrorHandler] Error in " + source + ".\n" +
             "TCPConnection name: '" + connection.getName() + "'.\n" +

@@ -3,7 +3,7 @@ package generaloss.networkforge.tcp;
 import generaloss.networkforge.tcp.iohandler.ConnectionIOHandler;
 import generaloss.networkforge.tcp.iohandler.IOHandlerFactory;
 import generaloss.networkforge.tcp.iohandler.IOHandlerType;
-import generaloss.networkforge.tcp.listener.*;
+import generaloss.networkforge.tcp.event.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.tcp.processor.TCPProcessorPipeline;
 import generaloss.resourceflow.ResUtils;
@@ -23,9 +23,11 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class TCPServer {
 
+    private static final String CLASS_NAME = TCPServer.class.getSimpleName();
+
     private IOHandlerFactory ioHandlerFactory;
     private TCPConnectionOptionsHolder initialOptions;
-    private final TCPEventDispatcher eventDispatcher;
+    private final EventDispatcher eventDispatcher;
     private final SelectorController selectorController;
 
     private final ConcurrentLinkedQueue<TCPConnection> connections;
@@ -37,12 +39,11 @@ public class TCPServer {
         this.setIOHandlerType(IOHandlerType.DEFAULT);
         this.setInitialOptions(initialOptions);
 
-        this.eventDispatcher = new TCPEventDispatcher();
-        this.selectorController = new SelectorController();
+        final ErrorHandler defaultErrorHandler = (connection, source, throwable) ->
+                ErrorHandler.printErrorCatch(CLASS_NAME, connection, source, throwable);
 
-        this.setOnError((connection, source, throwable) ->
-            TCPErrorHandler.printErrorCatch(TCPServer.class.getSimpleName(), connection, source, throwable)
-        );
+        this.eventDispatcher = new EventDispatcher(defaultErrorHandler);
+        this.selectorController = new SelectorController();
         this.connections = new ConcurrentLinkedQueue<>();
     }
 
@@ -81,27 +82,27 @@ public class TCPServer {
     }
 
 
-    public TCPServer setOnConnect(TCPConnectable onConnect) {
+    public TCPServer setOnConnect(ConnectionListener onConnect) {
         eventDispatcher.setOnConnect(onConnect);
         return this;
     }
 
-    public TCPServer setOnDisconnect(TCPCloseable onClose) {
+    public TCPServer setOnDisconnect(CloseCallback onClose) {
         eventDispatcher.setOnDisconnect(onClose);
         return this;
     }
 
-    public TCPServer setOnReceive(TCPReceiver onReceive) {
+    public TCPServer setOnReceive(DataReceiver onReceive) {
         eventDispatcher.setOnReceive(onReceive);
         return this;
     }
 
-    public TCPServer setOnReceiveStream(TCPReceiverStream onReceive) {
+    public TCPServer setOnReceiveStream(StreamDataReceiver onReceive) {
         eventDispatcher.setOnReceiveStream(onReceive);
         return this;
     }
 
-    public TCPServer setOnError(TCPErrorHandler onError) {
+    public TCPServer setOnError(ErrorHandler onError) {
         eventDispatcher.setOnError(onError);
         return this;
     }
@@ -141,7 +142,7 @@ public class TCPServer {
             serverChannels[i] = serverChannel;
         }
 
-        final String threadName = (this.getClass().getSimpleName() + "-selector-thread-#" + this.hashCode());
+        final String threadName = (CLASS_NAME + "-selector-thread-#" + this.hashCode());
         selectorController.startSelectionLoopThread(threadName, this::onKeySelected);
 
         return this;
@@ -186,7 +187,7 @@ public class TCPServer {
                 throw new IllegalStateException("IOHandlerFactory returned null");
 
             final TCPConnection connection = new TCPConnection(channel, key, this::onConnectionClosed, ioHandler);
-            connection.setName("TCPServer-connection-#" + this.hashCode() + "N" + (connectionCounter++));
+            connection.setName(CLASS_NAME + "-connection-#" + this.hashCode() + "N" + (connectionCounter++));
             initialOptions.copyTo(connection.options());
             key.attach(connection);
 
@@ -196,7 +197,7 @@ public class TCPServer {
         } catch (IOException ignored){ }
     }
 
-    private void onConnectionClosed(TCPConnection connection, TCPCloseReason reason, Exception e) {
+    private void onConnectionClosed(TCPConnection connection, CloseReason reason, Exception e) {
         connections.remove(connection);
         eventDispatcher.invokeOnDisconnect(connection, reason, e);
     }
@@ -221,7 +222,7 @@ public class TCPServer {
         selectorController.close();
 
         for(TCPConnection connection : connections)
-            connection.close(TCPCloseReason.CLOSE_SERVER, null);
+            connection.close(CloseReason.CLOSE_SERVER, null);
         connections.clear();
 
         for(ServerSocketChannel serverChannel : serverChannels)

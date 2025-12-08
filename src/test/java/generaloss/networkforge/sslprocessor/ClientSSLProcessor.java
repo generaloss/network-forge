@@ -5,9 +5,9 @@ import generaloss.networkforge.sslprocessor.packet.c2s.Packet2SEncryptedKey;
 import generaloss.networkforge.sslprocessor.packet.s2c.Packet2CConnectionEncrypted;
 import generaloss.networkforge.sslprocessor.packet.s2c.Packet2CPublicKey;
 import generaloss.networkforge.tcp.TCPConnection;
-import generaloss.networkforge.tcp.listener.TCPCloseReason;
-import generaloss.networkforge.tcp.listener.TCPErrorSource;
-import generaloss.networkforge.tcp.listener.TCPEventDispatcher;
+import generaloss.networkforge.tcp.event.CloseReason;
+import generaloss.networkforge.tcp.event.ErrorSource;
+import generaloss.networkforge.tcp.event.EventDispatcher;
 import generaloss.networkforge.tcp.processor.TCPProcessor;
 import generaloss.resourceflow.resource.Resource;
 
@@ -23,7 +23,7 @@ public class ClientSSLProcessor implements TCPProcessor {
     public static final int AES_KEY_SIZE = 128;
 
     private final PacketDispatcher packetDispatcher;
-    private TCPEventDispatcher eventDispatcher;
+    private EventDispatcher eventDispatcher;
     private TCPConnection connection;
     private SecretKey secretKey;
 
@@ -39,7 +39,7 @@ public class ClientSSLProcessor implements TCPProcessor {
     }
 
     @Override
-    public void onAdded(TCPEventDispatcher eventDispatcher) {
+    public void onAdded(EventDispatcher eventDispatcher) {
         this.eventDispatcher = eventDispatcher;
     }
 
@@ -50,7 +50,7 @@ public class ClientSSLProcessor implements TCPProcessor {
     }
 
     @Override
-    public boolean onDisconnect(TCPConnection connection, TCPCloseReason reason, Exception e) {
+    public boolean onDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
         return true;
     }
 
@@ -70,7 +70,7 @@ public class ClientSSLProcessor implements TCPProcessor {
     }
 
     @Override
-    public boolean onError(TCPConnection connection, TCPErrorSource source, Throwable throwable) {
+    public boolean onError(TCPConnection connection, ErrorSource source, Throwable throwable) {
         return true;
     }
 

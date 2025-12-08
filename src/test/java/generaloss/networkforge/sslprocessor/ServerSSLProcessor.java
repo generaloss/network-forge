@@ -4,9 +4,9 @@ import generaloss.networkforge.packet.PacketDispatcher;
 import generaloss.networkforge.sslprocessor.packet.s2c.Packet2CPublicKey;
 import generaloss.networkforge.sslprocessor.packet.c2s.Packet2SEncryptedKey;
 import generaloss.networkforge.tcp.TCPConnection;
-import generaloss.networkforge.tcp.listener.TCPCloseReason;
-import generaloss.networkforge.tcp.listener.TCPErrorSource;
-import generaloss.networkforge.tcp.listener.TCPEventDispatcher;
+import generaloss.networkforge.tcp.event.CloseReason;
+import generaloss.networkforge.tcp.event.ErrorSource;
+import generaloss.networkforge.tcp.event.EventDispatcher;
 import generaloss.networkforge.tcp.processor.TCPProcessor;
 import generaloss.resourceflow.resource.Resource;
 
@@ -22,7 +22,7 @@ public class ServerSSLProcessor implements TCPProcessor {
     private final Map<TCPConnection, SSLTCPConnection> sslConnectionMap;
     private final PacketDispatcher packetDispatcher;
     private final KeyPair keyPair;
-    private TCPEventDispatcher eventDispatcher;
+    private EventDispatcher eventDispatcher;
 
     public ServerSSLProcessor(PacketDispatcher sharedPacketDispatcher) {
         this.sslConnectionMap = new ConcurrentHashMap<>();
@@ -46,7 +46,7 @@ public class ServerSSLProcessor implements TCPProcessor {
     }
 
     @Override
-    public void onAdded(TCPEventDispatcher eventDispatcher) {
+    public void onAdded(EventDispatcher eventDispatcher) {
         this.eventDispatcher = eventDispatcher;
     }
 
@@ -64,7 +64,7 @@ public class ServerSSLProcessor implements TCPProcessor {
     }
 
     @Override
-    public boolean onDisconnect(TCPConnection connection, TCPCloseReason reason, Exception e) {
+    public boolean onDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
         sslConnectionMap.remove(connection);
         return true;
     }
@@ -90,7 +90,7 @@ public class ServerSSLProcessor implements TCPProcessor {
 
 
     @Override
-    public boolean onError(TCPConnection connection, TCPErrorSource source, Throwable throwable) {
+    public boolean onError(TCPConnection connection, ErrorSource source, Throwable throwable) {
         return true;
     }
 
