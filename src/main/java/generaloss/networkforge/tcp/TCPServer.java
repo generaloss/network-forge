@@ -1,5 +1,8 @@
 package generaloss.networkforge.tcp;
 
+import generaloss.networkforge.tcp.iohandler.ConnectionIOHandler;
+import generaloss.networkforge.tcp.iohandler.IOHandlerFactory;
+import generaloss.networkforge.tcp.iohandler.IOHandlerType;
 import generaloss.networkforge.tcp.listener.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.tcp.processor.TCPProcessorPipeline;
@@ -20,7 +23,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class TCPServer {
 
-    private TCPConnectionFactory connectionFactory;
+    private IOHandlerFactory ioHandlerFactory;
     private TCPConnectionOptionsHolder initialOptions;
     private final TCPEventDispatcher eventDispatcher;
     private final SelectorController selectorController;
@@ -31,7 +34,7 @@ public class TCPServer {
     private ServerSocketChannel[] serverChannels;
 
     public TCPServer(TCPConnectionOptionsHolder initialOptions) {
-        this.setConnectionType(TCPConnectionType.DEFAULT);
+        this.setIOHandlerType(IOHandlerType.DEFAULT);
         this.setInitialOptions(initialOptions);
 
         this.eventDispatcher = new TCPEventDispatcher();
@@ -48,13 +51,19 @@ public class TCPServer {
     }
 
 
-    public TCPServer setConnectionType(Class<?> tcpConnectionClass) {
-        this.connectionFactory = TCPConnection.getFactory(tcpConnectionClass);
+    public TCPServer setIOHandlerFactory(IOHandlerFactory ioHandlerFactory) {
+        if(ioHandlerFactory == null)
+            throw new IllegalArgumentException("Argument 'ioHandlerFactory' cannot be null");
+
+        this.ioHandlerFactory = ioHandlerFactory;
         return this;
     }
 
-    public TCPServer setConnectionType(TCPConnectionType connectionType) {
-        this.connectionFactory = TCPConnection.getFactory(connectionType);
+    public TCPServer setIOHandlerType(IOHandlerType connectionType) {
+        if(connectionType == null)
+            throw new IllegalArgumentException("Argument 'connectionType' cannot be null");
+
+        this.ioHandlerFactory = connectionType.getFactory();
         return this;
     }
 
@@ -151,7 +160,8 @@ public class TCPServer {
         if(key.isReadable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
             final byte[] byteArray = connection.read();
-            eventDispatcher.invokeOnReceive(connection, byteArray);
+            if(byteArray != null)
+                eventDispatcher.invokeOnReceive(connection, byteArray);
         }
         if(key.isWritable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
@@ -171,8 +181,11 @@ public class TCPServer {
             initialOptions.applyPostConnect(channel);
 
             final SelectionKey key = selectorController.registerReadKey(channel);
+            final ConnectionIOHandler ioHandler = ioHandlerFactory.create();
+            if(ioHandler == null)
+                throw new IllegalStateException("IOHandlerFactory returned null");
 
-            final TCPConnection connection = connectionFactory.create(channel, key, this::onConnectionClosed);
+            final TCPConnection connection = new TCPConnection(channel, key, this::onConnectionClosed, ioHandler);
             connection.setName("TCPServer-connection-#" + this.hashCode() + "N" + (connectionCounter++));
             initialOptions.copyTo(connection.options());
             key.attach(connection);

@@ -56,7 +56,7 @@ public class ServerSSLProcessor implements TCPProcessor {
         final boolean sent = connection.send(packet);
 
         if(!sent)
-            throw new RuntimeException("Failed to send public key]");
+            throw new RuntimeException("Failed to send public key");
 
         final SSLTCPConnection sslConnection = new SSLTCPConnection(eventDispatcher, connection, keyPair.getPrivate());
         sslConnectionMap.put(connection, sslConnection);

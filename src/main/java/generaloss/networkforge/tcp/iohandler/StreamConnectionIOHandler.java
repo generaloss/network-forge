@@ -1,23 +1,26 @@
-package generaloss.networkforge.tcp;
+package generaloss.networkforge.tcp.iohandler;
 
+import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.TCPCloseReason;
-import generaloss.networkforge.tcp.listener.TCPCloseable;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.SocketChannel;
 
-public class StreamTCPConnection extends TCPConnection {
+public class StreamConnectionIOHandler implements ConnectionIOHandler {
 
     private static final int BUFFER_SIZE = 8192; // 8 kb
 
+    private TCPConnection connection;
     private final ByteBuffer readDataBuffer;
 
-    protected StreamTCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
-        super(channel, selectionKey, onClose);
+    public StreamConnectionIOHandler() {
         this.readDataBuffer = ByteBuffer.allocate(BUFFER_SIZE);
+    }
+
+    @Override
+    public void attach(TCPConnection connection) {
+        this.connection = connection;
     }
 
     @Override
@@ -25,17 +28,17 @@ public class StreamTCPConnection extends TCPConnection {
         if(byteArray == null)
             throw new IllegalArgumentException("Argument 'byteArray' cannot be null");
 
-        if(super.isClosed())
+        if(connection == null || connection.isClosed())
             return false;
 
         // encrypt bytes
-        final byte[] data = super.ciphers.encrypt(byteArray);
+        final byte[] data = connection.ciphers().encrypt(byteArray);
 
         // check size
         final int size = data.length;
-        if(size > super.options.getMaxFrameSizeWrite()) {
+        if(size > connection.options().getMaxFrameSizeWrite()) {
             System.err.printf("[%1$s] Frame to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
-                StreamTCPConnection.class.getSimpleName(), size, super.options.getMaxFrameSizeWrite()
+                              StreamConnectionIOHandler.class.getSimpleName(), size, connection.options().getMaxFrameSizeWrite()
             );
             return false;
         }
@@ -46,18 +49,21 @@ public class StreamTCPConnection extends TCPConnection {
         buffer.flip();
 
         // write buffer
-        return super.write(buffer);
+        return connection.writeRaw(buffer);
     }
 
     @Override
-    protected byte[] read() {
+    public byte[] read() {
+        if(connection == null)
+            return null;
+
         try {
             // read all available data
             final ByteArrayOutputStream bytesStream = new ByteArrayOutputStream();
 
             int length;
             while(true) {
-                length = super.channel.read(readDataBuffer);
+                length = connection.channel().read(readDataBuffer);
                 if(length < 1)
                     break;
 
@@ -69,10 +75,10 @@ public class StreamTCPConnection extends TCPConnection {
                 readDataBuffer.clear();
 
                 // check size
-                if(bytesStream.size() > super.options.getMaxFrameSizeRead()) {
+                if(bytesStream.size() > connection.options().getMaxFrameSizeRead()) {
                     // close connection
-                    if(super.options.isCloseOnFrameSizeLimit())
-                        super.close(TCPCloseReason.FRAME_SIZE_LIMIT_EXCEEDED, null);
+                    if(connection.options().isCloseOnFrameSizeLimit())
+                        connection.close(TCPCloseReason.FRAME_SIZE_LIMIT_EXCEEDED, null);
 
                     this.discardAvailableBytes();
                     return null;
@@ -81,7 +87,7 @@ public class StreamTCPConnection extends TCPConnection {
 
             // check remote close
             if(length == -1) {
-                super.close(TCPCloseReason.CLOSE_BY_OTHER_SIDE, null);
+                connection.close(TCPCloseReason.CLOSE_BY_OTHER_SIDE, null);
                 return null;
             }
 
@@ -89,10 +95,10 @@ public class StreamTCPConnection extends TCPConnection {
                 return null;
 
             final byte[] allReadBytes = bytesStream.toByteArray();
-            return super.ciphers.decrypt(allReadBytes);
+            return connection.ciphers().decrypt(allReadBytes);
 
         } catch (IOException e) {
-            super.close(TCPCloseReason.INTERNAL_ERROR, e);
+            connection.close(TCPCloseReason.INTERNAL_ERROR, e);
             return null;
         }
     }
@@ -101,14 +107,14 @@ public class StreamTCPConnection extends TCPConnection {
         readDataBuffer.clear();
         while(true) {
             // read
-            final int read = this.channel.read(readDataBuffer);
+            final int read = connection.channel().read(readDataBuffer);
             readDataBuffer.clear();
             // check if no data
             if(read == 0)
                 return;
             // check remote close
             if(read == -1) {
-                this.close(TCPCloseReason.CLOSE_BY_OTHER_SIDE, null);
+                connection.close(TCPCloseReason.CLOSE_BY_OTHER_SIDE, null);
                 return;
             }
         }

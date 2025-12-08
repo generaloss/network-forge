@@ -2,7 +2,7 @@ package generaloss.networkforge;
 
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.tcp.TCPClient;
-import generaloss.networkforge.tcp.TCPConnectionType;
+import generaloss.networkforge.tcp.iohandler.IOHandlerType;
 import generaloss.networkforge.tcp.TCPServer;
 import org.junit.Assert;
 import org.junit.Test;
@@ -58,7 +58,7 @@ public class ReliabilityTest {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPClient client = new TCPClient()
-            .setConnectionType(TCPConnectionType.STREAM)
+            .setIOHandlerType(IOHandlerType.STREAM)
             .setOnReceive((connection, bytes) -> {
                 result.set(new String(bytes));
                 connection.close();

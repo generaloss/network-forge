@@ -2,6 +2,8 @@ package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.ISendable;
+import generaloss.networkforge.tcp.iohandler.ConnectionIOHandler;
+import generaloss.networkforge.tcp.iohandler.IOHandlerType;
 import generaloss.networkforge.tcp.listener.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
@@ -22,7 +24,7 @@ import java.util.concurrent.TimeoutException;
 
 public class TCPClient implements ISendable {
 
-    private TCPConnectionFactory connectionFactory;
+    private ConnectionIOHandler ioHandler;
     private TCPConnectionOptionsHolder initialOptions;
     private final TCPEventDispatcher eventDispatcher;
     private final SelectorController selectorController;
@@ -30,7 +32,7 @@ public class TCPClient implements ISendable {
     private TCPConnection connection;
 
     public TCPClient(TCPConnectionOptionsHolder initialOptions) {
-        this.setConnectionType(TCPConnectionType.DEFAULT);
+        this.setIOHandlerType(IOHandlerType.DEFAULT);
         this.setInitialOptions(initialOptions);
 
         this.eventDispatcher = new TCPEventDispatcher();
@@ -63,13 +65,19 @@ public class TCPClient implements ISendable {
     }
 
 
-    public TCPClient setConnectionType(Class<?> tcpConnectionClass) {
-        this.connectionFactory = TCPConnection.getFactory(tcpConnectionClass);
+    public TCPClient setIOHandler(ConnectionIOHandler ioHandler) {
+        if(ioHandler == null)
+            throw new IllegalArgumentException("Argument 'ioHandler' cannot be null");
+
+        this.ioHandler = ioHandler;
         return this;
     }
 
-    public TCPClient setConnectionType(TCPConnectionType connectionType) {
-        this.connectionFactory = TCPConnection.getFactory(connectionType);
+    public TCPClient setIOHandlerType(IOHandlerType connectionType) {
+        if(connectionType == null)
+            throw new IllegalArgumentException("Argument 'connectionType' cannot be null");
+
+        this.ioHandler = connectionType.getFactory().create();
         return this;
     }
 
@@ -173,7 +181,7 @@ public class TCPClient implements ISendable {
 
         final SelectionKey key = selectorController.registerReadKey(channel);
 
-        connection = connectionFactory.create(channel, key, eventDispatcher::invokeOnDisconnect);
+        connection = new TCPConnection(channel, key, eventDispatcher::invokeOnDisconnect, ioHandler);
         connection.setName("TCPClient-connection-#" + this.hashCode());
         initialOptions.copyTo(connection.options());
 
@@ -186,7 +194,8 @@ public class TCPClient implements ISendable {
     private void onKeySelected(SelectionKey key) {
         if(key.isReadable()){
             final byte[] byteArray = connection.read();
-            eventDispatcher.invokeOnReceive(connection, byteArray);
+            if(byteArray != null)
+                eventDispatcher.invokeOnReceive(connection, byteArray);
         }
         if(key.isWritable())
             connection.processWriteKey(key);

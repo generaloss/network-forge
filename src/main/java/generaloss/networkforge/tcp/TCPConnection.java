@@ -2,6 +2,7 @@ package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.ISendable;
+import generaloss.networkforge.tcp.iohandler.ConnectionIOHandler;
 import generaloss.networkforge.tcp.listener.TCPCloseReason;
 import generaloss.networkforge.tcp.listener.TCPCloseable;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
@@ -17,12 +18,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public abstract class TCPConnection implements Closeable, ISendable {
+public class TCPConnection implements Closeable, ISendable {
 
     protected final SocketChannel channel;
     protected final SelectionKey selectionKey;
@@ -33,10 +32,18 @@ public abstract class TCPConnection implements Closeable, ISendable {
     private volatile Object attachment;
     private volatile String name;
 
+    private ConnectionIOHandler ioHandler;
     private final Queue<ByteBuffer> writeQueue;
     private final Object writeLock;
 
-    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose) {
+    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, TCPCloseable onClose, ConnectionIOHandler ioHandler) {
+        if(channel == null)
+            throw new IllegalArgumentException("Argument 'channel' cannot be null");
+        if(selectionKey == null)
+            throw new IllegalArgumentException("Argument 'selectionKey' cannot be null");
+        if(onClose == null)
+            throw new IllegalArgumentException("Argument 'onClose' cannot be null");
+
         this.channel = channel;
         this.selectionKey = selectionKey;
         this.onClose = onClose;
@@ -44,6 +51,7 @@ public abstract class TCPConnection implements Closeable, ISendable {
         this.ciphers = new CipherPair();
         this.name = (this.getClass().getSimpleName() + "#" + this.hashCode());
 
+        this.setIOHandler(ioHandler);
         this.writeQueue = new ConcurrentLinkedQueue<>();
         this.writeLock = new Object();
     }
@@ -96,6 +104,15 @@ public abstract class TCPConnection implements Closeable, ISendable {
     }
 
 
+    public void setIOHandler(ConnectionIOHandler ioHandler) {
+        if(ioHandler == null)
+            throw new IllegalArgumentException("Argument 'ioHandler' cannot be null");
+
+        ioHandler.attach(this);
+        this.ioHandler = ioHandler;
+    }
+
+
     public int getPort() {
         return this.socket().getPort();
     }
@@ -121,7 +138,7 @@ public abstract class TCPConnection implements Closeable, ISendable {
         return closed;
     }
 
-    protected void close(TCPCloseReason reason, Exception e) {
+    public void close(TCPCloseReason reason, Exception e) {
         if(closed)
             return;
         closed = true;
@@ -139,7 +156,7 @@ public abstract class TCPConnection implements Closeable, ISendable {
     }
 
 
-    protected boolean write(ByteBuffer buffer) {
+    public boolean writeRaw(ByteBuffer buffer) {
         try {
             synchronized(writeLock) {
                 // if first in queue
@@ -194,10 +211,14 @@ public abstract class TCPConnection implements Closeable, ISendable {
     }
 
 
-    protected abstract byte[] read();
+    protected byte[] read() {
+        return ioHandler.read();
+    }
 
     @Override
-    public abstract boolean send(byte[] byteArray);
+    public boolean send(byte[] byteArray) {
+        return ioHandler.send(byteArray);
+    }
 
     @Override
     public boolean send(ByteBuffer buffer) {
@@ -250,39 +271,6 @@ public abstract class TCPConnection implements Closeable, ISendable {
         } catch (IOException ignored) {
             return false;
         }
-    }
-
-
-    private static final Map<Class<?>, TCPConnectionFactory> FACTORY_BY_CLASS = new HashMap<>();
-
-    public static void registerFactory(Class<?> connectionClass, TCPConnectionFactory factory) {
-        if(connectionClass == null)
-            throw new IllegalArgumentException("Agrument 'connectionClass' cannot be null");
-        if(factory == null)
-            throw new IllegalArgumentException("Agrument 'factory' cannot be null");
-        
-        FACTORY_BY_CLASS.put(connectionClass, factory);
-    }
-
-    static {
-        registerFactory(FramedTCPConnection.class, FramedTCPConnection::new);
-        registerFactory(StreamTCPConnection.class, StreamTCPConnection::new);
-    }
-
-    public static TCPConnectionFactory getFactory(Class<?> connectionClass) {
-        if(connectionClass == null)
-            throw new IllegalArgumentException("Agrument 'connectionClass' cannot be null");
-        
-        if(!FACTORY_BY_CLASS.containsKey(connectionClass))
-            throw new IllegalArgumentException("No factory registered for class: " + connectionClass);
-        return FACTORY_BY_CLASS.get(connectionClass);
-    }
-
-    public static TCPConnectionFactory getFactory(TCPConnectionType connectionType) {
-        if(connectionType == null)
-            throw new IllegalArgumentException("Agrument 'connectionType' cannot be null");
-        
-        return getFactory(connectionType.getConnectionClass());
     }
 
 }
