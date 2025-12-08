@@ -2,7 +2,7 @@ package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.ISendable;
-import generaloss.networkforge.tcp.iohandler.ConnectionIOHandler;
+import generaloss.networkforge.tcp.io.ConnectionIOHandler;
 import generaloss.networkforge.tcp.event.CloseReason;
 import generaloss.networkforge.tcp.event.CloseCallback;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;

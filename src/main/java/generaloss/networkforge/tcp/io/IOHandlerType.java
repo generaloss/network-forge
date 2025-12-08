@@ -1,4 +1,4 @@
-package generaloss.networkforge.tcp.iohandler;
+package generaloss.networkforge.tcp.io;
 
 public enum IOHandlerType {
 

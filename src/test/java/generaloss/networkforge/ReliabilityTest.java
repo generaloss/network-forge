@@ -2,7 +2,7 @@ package generaloss.networkforge;
 
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.tcp.TCPClient;
-import generaloss.networkforge.tcp.iohandler.IOHandlerType;
+import generaloss.networkforge.tcp.io.IOHandlerType;
 import generaloss.networkforge.tcp.TCPServer;
 import org.junit.Assert;
 import org.junit.Test;

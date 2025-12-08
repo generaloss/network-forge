@@ -2,8 +2,8 @@ package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.ISendable;
-import generaloss.networkforge.tcp.iohandler.ConnectionIOHandler;
-import generaloss.networkforge.tcp.iohandler.IOHandlerType;
+import generaloss.networkforge.tcp.io.ConnectionIOHandler;
+import generaloss.networkforge.tcp.io.IOHandlerType;
 import generaloss.networkforge.tcp.event.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;

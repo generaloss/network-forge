@@ -1,4 +1,4 @@
-package generaloss.networkforge.tcp.iohandler;
+package generaloss.networkforge.tcp.io;
 
 @FunctionalInterface
 public interface IOHandlerFactory {
