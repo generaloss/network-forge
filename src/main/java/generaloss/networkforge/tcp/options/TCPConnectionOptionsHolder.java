@@ -2,74 +2,94 @@ package generaloss.networkforge.tcp.options;
 
 public class TCPConnectionOptionsHolder extends SocketOptionsHolder {
 
-    public static final int DEFAULT_MAX_PACKET_SIZE = (8 * 1024 * 1024); // 8 Mb.  (Integer.MAX_VALUE ≈ 2 Gb)
+    public static final int DEFAULT_MAX_FRAME_SIZE = (8 * 1024 * 1024); // 8 Mb.  (Integer.MAX_VALUE ≈ 2 Gb)
+    public static final int DEFAULT_FRAME_BUFFER_SIZE_UPPER_BOUND = (2 * 1024 * 1024); // 2 Mb.
 
 
-    private int maxPacketSizeRead = DEFAULT_MAX_PACKET_SIZE;
+    private int maxReadFrameSize = DEFAULT_MAX_FRAME_SIZE;
 
-    public int getMaxPacketSizeRead() {
-        return maxPacketSizeRead;
+    public int getMaxReadFrameSize() {
+        return maxReadFrameSize;
     }
 
-    public TCPConnectionOptionsHolder setMaxPacketSizeRead(int maxPacketSizeRead) {
-        if(maxPacketSizeRead < 1)
-            throw new IllegalArgumentException("Argument 'maxPacketSizeRead' must be > 0");
+    public TCPConnectionOptionsHolder setMaxReadFrameSize(int maxReadFrameSize) {
+        if(maxReadFrameSize < 1)
+            throw new IllegalArgumentException("Argument 'maxReadFrameSize' must be > 0");
 
-        this.maxPacketSizeRead = maxPacketSizeRead;
+        this.maxReadFrameSize = maxReadFrameSize;
         return this;
     }
 
 
-    private int maxPacketSizeWrite = DEFAULT_MAX_PACKET_SIZE;
+    private int maxWriteFrameSize = DEFAULT_MAX_FRAME_SIZE;
 
-    public int getMaxPacketSizeWrite() {
-        return maxPacketSizeWrite;
+    public int getMaxWriteFrameSize() {
+        return maxWriteFrameSize;
     }
 
-    public TCPConnectionOptionsHolder setMaxPacketSizeWrite(int maxPacketSizeWrite) {
-        if(maxPacketSizeWrite < 1)
-            throw new IllegalArgumentException("Argument 'maxPacketSizeWrite' must be > 0");
+    public TCPConnectionOptionsHolder setMaxWriteFrameSize(int maxWriteFrameSize) {
+        if(maxWriteFrameSize < 1)
+            throw new IllegalArgumentException("Argument 'maxWriteFrameSize' must be > 0");
 
-        this.maxPacketSizeWrite = maxPacketSizeWrite;
+        this.maxWriteFrameSize = maxWriteFrameSize;
         return this;
     }
 
 
-    public TCPConnectionOptionsHolder setMaxPacketSize(int maxPacketSize) {
-        if(maxPacketSize < 1)
-            throw new IllegalArgumentException("Argument 'maxPacketSize' must be > 0");
+    public TCPConnectionOptionsHolder setMaxFrameSize(int maxFrameSize) {
+        if(maxFrameSize < 1)
+            throw new IllegalArgumentException("Argument 'maxFrameSize' must be > 0");
 
-        this.maxPacketSizeRead = maxPacketSize;
-        this.maxPacketSizeWrite = maxPacketSize;
+        this.maxReadFrameSize = maxFrameSize;
+        this.maxWriteFrameSize = maxFrameSize;
         return this;
     }
 
 
-    private boolean closeOnPacketLimit = true;
+    private boolean closeOnFrameSizeLimit = true;
 
-    public boolean isCloseOnPacketLimit() {
-        return closeOnPacketLimit;
+    public boolean isCloseOnFrameSizeLimit() {
+        return closeOnFrameSizeLimit;
     }
 
-    public TCPConnectionOptionsHolder setCloseOnPacketLimit(boolean closeOnPacketLimit) {
-        this.closeOnPacketLimit = closeOnPacketLimit;
+    public TCPConnectionOptionsHolder setCloseOnFrameSizeLimit(boolean closeOnFrameSizeLimit) {
+        this.closeOnFrameSizeLimit = closeOnFrameSizeLimit;
+        return this;
+    }
+
+
+    private int frameBufferSizeUpperBound = DEFAULT_FRAME_BUFFER_SIZE_UPPER_BOUND;
+
+    public int getFrameBufferSizeUpperBound() {
+        return frameBufferSizeUpperBound;
+    }
+
+    /** Used only by FramedTCPConnectionCodec.
+      * Buffer will not be narrowed while value is set to 0. */
+    public TCPConnectionOptionsHolder setFrameBufferSizeUpperBound(int frameBufferSizeUpperBound) {
+        if(frameBufferSizeUpperBound < 0)
+            throw new IllegalArgumentException("Argument 'frameBufferSizeUpperBound' must be >= 0");
+
+        this.frameBufferSizeUpperBound = frameBufferSizeUpperBound;
         return this;
     }
 
 
     public void copyTo(TCPConnectionOptions options) {
-        options.setMaxFrameSizeRead(maxPacketSizeRead);
-        options.setMaxFrameSizeWrite(maxPacketSizeWrite);
-        options.setCloseOnFrameSizeLimit(closeOnPacketLimit);
+        options.setMaxReadFrameSize(maxReadFrameSize);
+        options.setMaxWriteFrameSize(maxWriteFrameSize);
+        options.setCloseOnFrameSizeLimit(closeOnFrameSizeLimit);
+        options.setFrameBufferSizeUpperBound(frameBufferSizeUpperBound);
     }
 
 
     @Override
     public String toString() {
         return TCPConnectionOptionsHolder.class.getSimpleName() + "{" +
-            "MAX_PACKET_SIZE_READ=" + maxPacketSizeRead +
-            ", MAX_PACKET_SIZE_WRITE=" + maxPacketSizeWrite +
-            ", CLOSE_ON_PACKET_LIMIT=" + closeOnPacketLimit +
+            "MAX_READ_FRAME_SIZE=" + maxReadFrameSize +
+            ", MAX_WRITE_FRAME_SIZE=" + maxWriteFrameSize +
+            ", CLOSE_ON_FRAME_SIZE_LIMIT=" + closeOnFrameSizeLimit +
+            ", FRAME_BUFFER_SIZE_UPEER_BOUND=" + frameBufferSizeUpperBound +
             ", " + super.optionsToString() + "}";
     }
 

@@ -187,7 +187,7 @@ public class TcpTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPConnectionOptionsHolder options = new TCPConnectionOptionsHolder()
-            .setMaxPacketSize(message.length());
+            .setMaxFrameSize(message.length());
 
         final TCPServer server = new TCPServer(options)
             .setOnReceive((sender, bytes) -> {

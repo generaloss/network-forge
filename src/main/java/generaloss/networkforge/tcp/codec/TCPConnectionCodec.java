@@ -1,10 +1,10 @@
-package generaloss.networkforge.tcp.io;
+package generaloss.networkforge.tcp.codec;
 
 import generaloss.networkforge.tcp.TCPConnection;
 
-public interface ConnectionIOHandler {
+public interface TCPConnectionCodec {
 
-    void attach(TCPConnection connection);
+    void setup(TCPConnection connection);
 
     /** @return false when cannot send data */
     boolean send(byte[] byteArray);

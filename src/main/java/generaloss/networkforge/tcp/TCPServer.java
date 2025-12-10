@@ -1,8 +1,8 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.tcp.io.ConnectionIOHandler;
-import generaloss.networkforge.tcp.io.IOHandlerFactory;
-import generaloss.networkforge.tcp.io.IOHandlerType;
+import generaloss.networkforge.tcp.codec.TCPConnectionCodec;
+import generaloss.networkforge.tcp.codec.TCPConnectionCodecFactory;
+import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.event.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.tcp.processor.TCPProcessorPipeline;
@@ -25,7 +25,7 @@ public class TCPServer {
 
     private static final String CLASS_NAME = TCPServer.class.getSimpleName();
 
-    private IOHandlerFactory ioHandlerFactory;
+    private TCPConnectionCodecFactory codecFactory;
     private TCPConnectionOptionsHolder initialOptions;
     private final EventDispatcher eventDispatcher;
     private final SelectorController selectorController;
@@ -36,7 +36,7 @@ public class TCPServer {
     private ServerSocketChannel[] serverChannels;
 
     public TCPServer(TCPConnectionOptionsHolder initialOptions) {
-        this.setIOHandlerType(IOHandlerType.DEFAULT);
+        this.setCodecFactory(CodecType.DEFAULT);
         this.setInitialOptions(initialOptions);
 
         final ErrorHandler defaultErrorHandler = (connection, source, throwable) ->
@@ -52,19 +52,19 @@ public class TCPServer {
     }
 
 
-    public TCPServer setIOHandlerFactory(IOHandlerFactory ioHandlerFactory) {
-        if(ioHandlerFactory == null)
-            throw new IllegalArgumentException("Argument 'ioHandlerFactory' cannot be null");
+    public TCPServer setCodecFactory(TCPConnectionCodecFactory codecFactory) {
+        if(codecFactory == null)
+            throw new IllegalArgumentException("Argument 'codecFactory' cannot be null");
 
-        this.ioHandlerFactory = ioHandlerFactory;
+        this.codecFactory = codecFactory;
         return this;
     }
 
-    public TCPServer setIOHandlerType(IOHandlerType connectionType) {
-        if(connectionType == null)
-            throw new IllegalArgumentException("Argument 'connectionType' cannot be null");
+    public TCPServer setCodecFactory(CodecType codecType) {
+        if(codecType == null)
+            throw new IllegalArgumentException("Argument 'codecType' cannot be null");
 
-        this.ioHandlerFactory = connectionType.getFactory();
+        this.codecFactory = codecType.getFactory();
         return this;
     }
 
@@ -166,7 +166,7 @@ public class TCPServer {
         }
         if(key.isWritable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
-            connection.processWriteKey(key);
+            connection.pushSendQueue();
         }
         if(key.isAcceptable())
             this.acceptNewConnection((ServerSocketChannel) key.channel());
@@ -182,11 +182,12 @@ public class TCPServer {
             initialOptions.applyPostConnect(channel);
 
             final SelectionKey key = selectorController.registerReadKey(channel);
-            final ConnectionIOHandler ioHandler = ioHandlerFactory.create();
-            if(ioHandler == null)
-                throw new IllegalStateException("IOHandlerFactory returned null");
 
-            final TCPConnection connection = new TCPConnection(channel, key, this::onConnectionClosed, ioHandler);
+            final TCPConnectionCodec codec = codecFactory.create();
+            if(codec == null)
+                throw new IllegalStateException("TCP connection codec factory returned null");
+
+            final TCPConnection connection = new TCPConnection(channel, key, this::onConnectionClosed, codec);
             connection.setName(CLASS_NAME + "-connection-#" + this.hashCode() + "N" + (connectionCounter++));
             initialOptions.copyTo(connection.options());
             key.attach(connection);

@@ -1,4 +1,4 @@
-package generaloss.networkforge.tcp.io;
+package generaloss.networkforge.tcp.codec;
 
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.event.CloseReason;
@@ -7,19 +7,20 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public class StreamConnectionIOHandler implements ConnectionIOHandler {
+public class StreamTCPConnectionCodec implements TCPConnectionCodec {
 
+    private static final String CLASS_NAME = StreamTCPConnectionCodec.class.getSimpleName();
     private static final int BUFFER_SIZE = 8192; // 8 kb
 
     private TCPConnection connection;
-    private final ByteBuffer readDataBuffer;
+    private final ByteBuffer dataBuffer;
 
-    public StreamConnectionIOHandler() {
-        this.readDataBuffer = ByteBuffer.allocate(BUFFER_SIZE);
+    public StreamTCPConnectionCodec() {
+        this.dataBuffer = ByteBuffer.allocate(BUFFER_SIZE);
     }
 
     @Override
-    public void attach(TCPConnection connection) {
+    public void setup(TCPConnection connection) {
         this.connection = connection;
     }
 
@@ -31,25 +32,25 @@ public class StreamConnectionIOHandler implements ConnectionIOHandler {
         if(connection == null || connection.isClosed())
             return false;
 
-        // encrypt bytes
+        // encrypt data
         final byte[] data = connection.ciphers().encrypt(byteArray);
 
         // check size
         final int size = data.length;
-        if(size > connection.options().getMaxFrameSizeWrite()) {
+        if(size > connection.options().getMaxWriteFrameSize()) {
             System.err.printf("[%1$s] Frame to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
-                              StreamConnectionIOHandler.class.getSimpleName(), size, connection.options().getMaxFrameSizeWrite()
+                    CLASS_NAME, size, connection.options().getMaxWriteFrameSize()
             );
             return false;
         }
 
-        // create buffer
+        // allocate buffer
         final ByteBuffer buffer = ByteBuffer.allocate(size);
         buffer.put(data);
         buffer.flip();
 
-        // write buffer
-        return connection.writeRaw(buffer);
+        // send
+        return connection.sendRaw(buffer);
     }
 
     @Override
@@ -63,19 +64,19 @@ public class StreamConnectionIOHandler implements ConnectionIOHandler {
 
             int length;
             while(true) {
-                length = connection.channel().read(readDataBuffer);
+                length = connection.readRaw(dataBuffer);
                 if(length < 1)
                     break;
 
                 // write buffer to bytesStream
-                readDataBuffer.flip();
+                dataBuffer.flip();
                 final byte[] chunk = new byte[length];
-                readDataBuffer.get(chunk);
+                dataBuffer.get(chunk);
                 bytesStream.write(chunk);
-                readDataBuffer.clear();
+                dataBuffer.clear();
 
                 // check size
-                if(bytesStream.size() > connection.options().getMaxFrameSizeRead()) {
+                if(bytesStream.size() > connection.options().getMaxReadFrameSize()) {
                     // close connection
                     if(connection.options().isCloseOnFrameSizeLimit())
                         connection.close(CloseReason.FRAME_SIZE_LIMIT_EXCEEDED, null);
@@ -104,11 +105,11 @@ public class StreamConnectionIOHandler implements ConnectionIOHandler {
     }
 
     private void discardAvailableBytes() throws IOException {
-        readDataBuffer.clear();
+        dataBuffer.clear();
         while(true) {
             // read
-            final int read = connection.channel().read(readDataBuffer);
-            readDataBuffer.clear();
+            final int read = connection.readRaw(dataBuffer);
+            dataBuffer.clear();
             // check if no data
             if(read == 0)
                 return;

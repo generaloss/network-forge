@@ -2,7 +2,7 @@ package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.ISendable;
-import generaloss.networkforge.tcp.io.ConnectionIOHandler;
+import generaloss.networkforge.tcp.codec.TCPConnectionCodec;
 import generaloss.networkforge.tcp.event.CloseReason;
 import generaloss.networkforge.tcp.event.CloseCallback;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
@@ -32,11 +32,11 @@ public class TCPConnection implements Closeable, ISendable {
     private volatile Object attachment;
     private volatile String name;
 
-    private ConnectionIOHandler ioHandler;
-    private final Queue<ByteBuffer> writeQueue;
+    private TCPConnectionCodec codec;
+    private final Queue<ByteBuffer> sendQueue;
     private final Object writeLock;
 
-    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, CloseCallback onClose, ConnectionIOHandler ioHandler) {
+    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, CloseCallback onClose, TCPConnectionCodec codec) {
         if(channel == null)
             throw new IllegalArgumentException("Argument 'channel' cannot be null");
         if(selectionKey == null)
@@ -51,21 +51,13 @@ public class TCPConnection implements Closeable, ISendable {
         this.ciphers = new CipherPair();
         this.name = (this.getClass().getSimpleName() + "#" + this.hashCode());
 
-        this.setIOHandler(ioHandler);
-        this.writeQueue = new ConcurrentLinkedQueue<>();
+        this.setCodec(codec);
+        this.sendQueue = new ConcurrentLinkedQueue<>();
         this.writeLock = new Object();
-    }
-
-    public SocketChannel channel() {
-        return channel;
     }
 
     public Socket socket() {
         return channel.socket();
-    }
-
-    public SelectionKey selectionKey() {
-        return selectionKey;
     }
 
     public TCPConnectionOptions options() {
@@ -104,12 +96,12 @@ public class TCPConnection implements Closeable, ISendable {
     }
 
 
-    public void setIOHandler(ConnectionIOHandler ioHandler) {
-        if(ioHandler == null)
-            throw new IllegalArgumentException("Argument 'ioHandler' cannot be null");
+    public void setCodec(TCPConnectionCodec codec) {
+        if(codec == null)
+            throw new IllegalArgumentException("Argument 'codec' cannot be null");
 
-        ioHandler.attach(this);
-        this.ioHandler = ioHandler;
+        codec.setup(this);
+        this.codec = codec;
     }
 
 
@@ -155,18 +147,22 @@ public class TCPConnection implements Closeable, ISendable {
     }
 
 
-    public boolean writeRaw(ByteBuffer buffer) {
+    public int readRaw(ByteBuffer buffer) throws IOException {
+        return channel.read(buffer);
+    }
+
+    public boolean sendRaw(ByteBuffer buffer) {
         try {
             synchronized(writeLock) {
                 // if first in queue
-                if(writeQueue.isEmpty())
+                if(sendQueue.isEmpty())
                     channel.write(buffer); // write now
 
-                // if data not (fully) written
+                // if data not fully written
                 if(buffer.hasRemaining()) {
                     // add to queue
-                    writeQueue.add(buffer);
-                    // enable write operation
+                    sendQueue.add(buffer);
+                    // enable write op & wake up selector
                     selectionKey.interestOpsOr(SelectionKey.OP_WRITE);
                     selectionKey.selector().wakeup();
                 }
@@ -178,24 +174,24 @@ public class TCPConnection implements Closeable, ISendable {
         }
     }
 
-    protected void processWriteKey(SelectionKey key) {
+    protected void pushSendQueue() {
         try {
             synchronized(writeLock) {
-                final boolean queueFullyWritten = this.tryToWriteQueuedData();
+                final boolean queueFullyWritten = this.tryToSendQueuedBuffers();
                 if(!queueFullyWritten)
                     return; // continue writing next time
 
-                // all queue written => disable write operation
-                key.interestOps(SelectionKey.OP_READ);
+                // queue fully written => disable write operation
+                selectionKey.interestOps(SelectionKey.OP_READ);
             }
         } catch (Exception e) {
             this.close(CloseReason.INTERNAL_ERROR, e);
         }
     }
 
-    private boolean tryToWriteQueuedData() throws Exception {
-        while(!writeQueue.isEmpty()) {
-            final ByteBuffer buffer = writeQueue.peek();
+    private boolean tryToSendQueuedBuffers() throws Exception {
+        while(!sendQueue.isEmpty()) {
+            final ByteBuffer buffer = sendQueue.peek();
 
             channel.write(buffer);
 
@@ -203,7 +199,7 @@ public class TCPConnection implements Closeable, ISendable {
             if(buffer.hasRemaining())
                 return false;
 
-            writeQueue.poll();
+            sendQueue.poll();
         }
         // all queue written
         return true;
@@ -211,12 +207,12 @@ public class TCPConnection implements Closeable, ISendable {
 
 
     protected byte[] read() {
-        return ioHandler.read();
+        return codec.read();
     }
 
     @Override
     public boolean send(byte[] byteArray) {
-        return ioHandler.send(byteArray);
+        return codec.send(byteArray);
     }
 
     @Override

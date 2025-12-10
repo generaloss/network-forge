@@ -2,8 +2,8 @@ package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.ISendable;
-import generaloss.networkforge.tcp.io.ConnectionIOHandler;
-import generaloss.networkforge.tcp.io.IOHandlerType;
+import generaloss.networkforge.tcp.codec.TCPConnectionCodec;
+import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.event.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
@@ -26,7 +26,7 @@ public class TCPClient implements ISendable {
 
     private static final String CLASS_NAME = TCPClient.class.getSimpleName();
 
-    private ConnectionIOHandler ioHandler;
+    private TCPConnectionCodec connectionCodec;
     private TCPConnectionOptionsHolder initialOptions;
     private final EventDispatcher eventDispatcher;
     private final SelectorController selectorController;
@@ -34,7 +34,7 @@ public class TCPClient implements ISendable {
     private TCPConnection connection;
 
     public TCPClient(TCPConnectionOptionsHolder initialOptions) {
-        this.setIOHandlerType(IOHandlerType.DEFAULT);
+        this.setCodec(CodecType.DEFAULT);
         this.setInitialOptions(initialOptions);
 
         final ErrorHandler defaultErrorHandler = (connection, source, throwable) ->
@@ -49,36 +49,36 @@ public class TCPClient implements ISendable {
     }
 
 
-    public TCPConnection connection() {
+    public TCPConnection getConnection() {
         return connection;
     }
 
-    public TCPConnectionOptions options() {
+    public TCPConnectionOptions getOptions() {
         if(connection == null)
             return null;
         return connection.options;
     }
 
-    public CipherPair ciphers() {
+    public CipherPair getCiphers() {
         if(connection == null)
             return null;
         return connection.ciphers;
     }
 
 
-    public TCPClient setIOHandler(ConnectionIOHandler ioHandler) {
-        if(ioHandler == null)
-            throw new IllegalArgumentException("Argument 'ioHandler' cannot be null");
+    public TCPClient setCodec(TCPConnectionCodec connectionCodec) {
+        if(connectionCodec == null)
+            throw new IllegalArgumentException("Argument 'connectionCodec' cannot be null");
 
-        this.ioHandler = ioHandler;
+        this.connectionCodec = connectionCodec;
         return this;
     }
 
-    public TCPClient setIOHandlerType(IOHandlerType connectionType) {
-        if(connectionType == null)
-            throw new IllegalArgumentException("Argument 'connectionType' cannot be null");
+    public TCPClient setCodec(CodecType codecType) {
+        if(codecType == null)
+            throw new IllegalArgumentException("Argument 'codecType' cannot be null");
 
-        this.ioHandler = connectionType.getFactory().create();
+        this.connectionCodec = codecType.getFactory().create();
         return this;
     }
 
@@ -182,15 +182,23 @@ public class TCPClient implements ISendable {
 
         final SelectionKey key = selectorController.registerReadKey(channel);
 
-        connection = new TCPConnection(channel, key, eventDispatcher::invokeOnDisconnect, ioHandler);
-        connection.setName(CLASS_NAME + "-connection-#" + this.hashCode());
+        connection = new TCPConnection(channel, key, eventDispatcher::invokeOnDisconnect, connectionCodec);
+        connection.setName(this.makeConnectionName());
+
         initialOptions.copyTo(connection.options());
 
         eventDispatcher.invokeOnConnect(connection);
-
-        final String threadName = (this.getClass().getSimpleName() + "-selector-thread-#" + this.hashCode());
-        selectorController.startSelectionLoopThread(threadName, this::onKeySelected);
+        selectorController.startSelectionLoopThread(this.makeThreadName(), this::onKeySelected);
     }
+
+    private String makeConnectionName() {
+        return (CLASS_NAME + "-connection-#" + this.hashCode());
+    }
+
+    private String makeThreadName() {
+        return (CLASS_NAME + "-selector-thread-#" + this.hashCode());
+    }
+
 
     private void onKeySelected(SelectionKey key) {
         if(key.isReadable()){
@@ -199,7 +207,7 @@ public class TCPClient implements ISendable {
                 eventDispatcher.invokeOnReceive(connection, byteArray);
         }
         if(key.isWritable())
-            connection.processWriteKey(key);
+            connection.pushSendQueue();
     }
 
 
