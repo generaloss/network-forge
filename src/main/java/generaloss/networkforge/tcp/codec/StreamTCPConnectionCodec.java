@@ -10,13 +10,13 @@ import java.nio.ByteBuffer;
 public class StreamTCPConnectionCodec implements TCPConnectionCodec {
 
     private static final String CLASS_NAME = StreamTCPConnectionCodec.class.getSimpleName();
-    private static final int BUFFER_SIZE = 8192; // 8 kb
+    private static final int DATA_BUFFER_SIZE = 8192; // 8 kb
 
     private TCPConnection connection;
     private final ByteBuffer dataBuffer;
 
     public StreamTCPConnectionCodec() {
-        this.dataBuffer = ByteBuffer.allocate(BUFFER_SIZE);
+        this.dataBuffer = ByteBuffer.allocate(DATA_BUFFER_SIZE);
     }
 
     @Override
@@ -35,11 +35,15 @@ public class StreamTCPConnectionCodec implements TCPConnectionCodec {
         // encrypt data
         final byte[] data = connection.ciphers().encrypt(byteArray);
 
-        // check size
+        // check data size
         final int size = data.length;
-        if(size > connection.options().getMaxWriteFrameSize()) {
-            System.err.printf("[%1$s] Frame to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
-                    CLASS_NAME, size, connection.options().getMaxWriteFrameSize()
+
+        final int maxSize = connection.options().getMaxWriteFrameSize();
+        if(size > maxSize) {
+            System.err.printf(
+                "[%1$s] Frame to send is too large: %2$d bytes. " +
+                "Maximum allowed: %3$d bytes (adjustable).%n",
+                CLASS_NAME, size, maxSize
             );
             return false;
         }

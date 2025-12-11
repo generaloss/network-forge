@@ -6,25 +6,28 @@ import generaloss.networkforge.tcp.event.CloseReason;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+/**
+ * Description.
+ * */
 public class FramedTCPConnectionCodec implements TCPConnectionCodec {
 
     private static final String CLASS_NAME = FramedTCPConnectionCodec.class.getSimpleName();
-    private static final int HEADER_SIZE = Integer.BYTES;
+    private static final int HEADER_BUFFER_SIZE = Integer.BYTES; // 4 bytes for data size
     private static final int DISCARD_BUFFER_SIZE = 8192; // 8 kb
 
     private TCPConnection connection;
-    private final ByteBuffer sizeBuffer;
+    private final ByteBuffer headerBuffer;
     private ByteBuffer dataBuffer;
     private int discardRemaining;
 
     public FramedTCPConnectionCodec() {
-        this.sizeBuffer = ByteBuffer.allocate(Integer.BYTES);
+        this.headerBuffer = ByteBuffer.allocate(HEADER_BUFFER_SIZE);
     }
 
     @Override
     public void setup(TCPConnection connection) {
         this.connection = connection;
-        this.sizeBuffer.clear();
+        this.headerBuffer.clear();
         this.discardRemaining = 0;
     }
 
@@ -37,23 +40,27 @@ public class FramedTCPConnectionCodec implements TCPConnectionCodec {
             return false;
 
         // encrypt data
-        final byte[] contentData = connection.ciphers().encrypt(byteArray);
+        final byte[] data = connection.ciphers().encrypt(byteArray);
 
         // check data size
-        final int contentSize = contentData.length;
-        if(contentSize > connection.options().getMaxWriteFrameSize()) {
-            System.err.printf("[%1$s] Frame to send is too large: %2$d bytes. Maximum allowed: %3$d bytes (adjustable).%n",
-                    CLASS_NAME, contentSize, connection.options().getMaxWriteFrameSize()
+        final int size = data.length;
+
+        final int maxSize = connection.options().getMaxWriteFrameSize();
+        if(size > maxSize) {
+            System.err.printf(
+                "[%1$s] Frame to send is too large: %2$d bytes. " +
+                "Maximum allowed: %3$d bytes (adjustable).%n",
+                CLASS_NAME, size, maxSize
             );
             return false;
         }
 
         // allocate buffer
-        final int capacity = (HEADER_SIZE + contentSize);
+        final int capacity = (HEADER_BUFFER_SIZE + size);
         final ByteBuffer buffer = ByteBuffer.allocate(capacity);
 
-        buffer.putInt(contentSize);
-        buffer.put(contentData);
+        buffer.putInt(size);
+        buffer.put(data);
         buffer.flip();
 
         // send
@@ -75,27 +82,29 @@ public class FramedTCPConnectionCodec implements TCPConnectionCodec {
                 }
 
                 // if needed to read header
-                if(sizeBuffer.hasRemaining()) {
+                if(headerBuffer.hasRemaining()) {
                     // read header
-                    final boolean sizeFullyRead = this.readPartiallyTo(sizeBuffer);
-                    if(!sizeFullyRead)
+                    final boolean headerFullyRead = this.readPartiallyTo(headerBuffer);
+                    if(!headerFullyRead)
                         return null; // continue reading header next time
 
                     // get data size
-                    sizeBuffer.flip();
-                    final int dataSize = sizeBuffer.getInt();
+                    headerBuffer.flip();
+                    final int dataSize = headerBuffer.getInt();
 
-                    final int checkResult = this.checkContentSize(dataSize);
+                    // check data size
+                    final int checkResult = this.checkDataSize(dataSize);
                     if(checkResult == -1) {
-                        return null; // connection closed
-                    }else if(checkResult == 1) {
+                        // connection closed
+                        return null;
+                    } else if(checkResult == 1) {
                         // discard
                         if(this.drainDiscardBytes())
-                            continue; // continue reading/discarding next time
-                        return null;
+                            continue;
+                        return null; // continue reading/discarding next time
                     }
 
-                    // frame size is valid
+                    // setup buffer
                     this.setupDataBuffer(dataSize);
                 }
 
@@ -107,14 +116,14 @@ public class FramedTCPConnectionCodec implements TCPConnectionCodec {
                 }
 
                 // read data
-                final boolean contentFullyRead = this.readPartiallyTo(dataBuffer);
-                if(!contentFullyRead)
-                    return null; // continue reading content data next time
+                final boolean dataFullyRead = this.readPartiallyTo(dataBuffer);
+                if(!dataFullyRead)
+                    return null; // continue reading data next time
 
                 // prepare header buffer for next frame
-                sizeBuffer.clear();
-                // get content data
-                return this.getDecryptedContentData();
+                headerBuffer.clear();
+                // get data
+                return this.getDecryptedData();
             }
 
         } catch (IOException e) {
@@ -123,38 +132,43 @@ public class FramedTCPConnectionCodec implements TCPConnectionCodec {
         }
     }
 
-    private void setupDataBuffer(int contentSize) {
-        final int frameBufferSizeUpperBound = connection.options().getFrameBufferSizeUpperBound();
+    private void setupDataBuffer(int size) {
+        final int sizeUpperBound = connection.options().getFrameBufferSizeUpperBound();
+
         final boolean allocateBuffer = (
-            dataBuffer == null || // allocate new
-                contentSize > dataBuffer.capacity() // expand
+                dataBuffer == null || // allocate new
+                size > dataBuffer.capacity() // expand
         );
-        final boolean dumpBuffer = (
-            !allocateBuffer &&
-                frameBufferSizeUpperBound != 0 &&
-                contentSize > frameBufferSizeUpperBound
+        final boolean reduceBufferSize = (
+                !allocateBuffer && // buffer exists & bigger than required
+                sizeUpperBound != 0 && // can be reduced
+                size > sizeUpperBound // exceeds size bound
         );
 
-        if(allocateBuffer || dumpBuffer) {
-            // allocate frame data buffer
-            dataBuffer = ByteBuffer.allocate(contentSize);
+        if(allocateBuffer || reduceBufferSize) {
+            // allocate
+            dataBuffer = ByteBuffer.allocate(size);
         } else {
             // set limit
             dataBuffer.clear();
-            dataBuffer.limit(contentSize);
+            dataBuffer.limit(size);
         }
     }
 
-    /** @return -1 when closes connection; 1 when enables discard mode; 0 when frame size is valid */
-    private int checkContentSize(int contentSize) throws IOException {
-        // illegal content size - close connection
-        if(contentSize < 1) {
+    /** @return
+     * 0 when data size is valid;
+     * -1 when closes the connection;
+     * 1 when discard mode needs to be enabled. */
+    private int checkDataSize(int size) throws IOException {
+        // illegal data size received - close connection
+        if(size < 1) {
             connection.close(CloseReason.INVALID_FRAME_SIZE, null);
             return -1;
         }
 
         // oversized frame handling
-        if(contentSize > connection.options().getMaxReadFrameSize()) {
+        final int maxSize = connection.options().getMaxReadFrameSize();
+        if(size > maxSize) {
             // close connection if needed
             if(connection.options().isCloseOnFrameSizeLimit()) {
                 connection.close(CloseReason.FRAME_SIZE_LIMIT_EXCEEDED, null);
@@ -162,12 +176,12 @@ public class FramedTCPConnectionCodec implements TCPConnectionCodec {
             }
 
             // enter discard mode
-            discardRemaining = contentSize;
+            discardRemaining = size;
 
             // reset header buffer for next frame
-            sizeBuffer.clear();
+            headerBuffer.clear();
 
-            // setup content buffer for discarding
+            // setup data buffer for discarding
             if(dataBuffer == null || dataBuffer.capacity() < DISCARD_BUFFER_SIZE)
                 dataBuffer = ByteBuffer.allocate(DISCARD_BUFFER_SIZE);
 
@@ -193,7 +207,7 @@ public class FramedTCPConnectionCodec implements TCPConnectionCodec {
         return !buffer.hasRemaining();
     }
 
-    private byte[] getDecryptedContentData() {
+    private byte[] getDecryptedData() {
         dataBuffer.flip();
         final byte[] data = new byte[dataBuffer.remaining()];
         dataBuffer.get(data);
