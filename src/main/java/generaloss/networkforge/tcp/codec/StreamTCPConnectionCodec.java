@@ -7,6 +7,37 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+/**
+ * A {@link TCPConnectionCodec} that treats the TCP stream as a continuous
+ * unframed byte sequence. All available bytes are read, accumulated, and
+ * returned as a single decrypted block.
+ *
+ * <h2>Sending</h2>
+ * {@link #send(byte[])} encrypts the payload, checks its size against the
+ * configured limit, and writes it directly to the connection without adding
+ * any framing metadata.
+ *
+ * <h2>Reading</h2>
+ * {@link #read()} pulls all currently available bytes from the stream and
+ * concatenates them. It returns:
+ * <ul>
+ *     <li>{@code null} — when no complete chunk is available</li>
+ *     <li>a decrypted byte array — when at least one byte was read</li>
+ * </ul>
+ *
+ * This codec relies on external protocol logic to define message boundaries.
+ *
+ * <h2>Oversized reads</h2>
+ * If accumulated data exceeds the configured maximum read size, the codec
+ * optionally closes the connection or discards the remaining bytes.
+ *
+ * <h2>Buffering</h2>
+ * A reusable fixed-size buffer (8 KB) is used for chunked reads.
+ *
+ * <h2>Connection handling</h2>
+ * Remote closes, invalid states, or I/O errors result in closing the
+ * connection with the corresponding {@link CloseReason}.
+ */
 public class StreamTCPConnectionCodec implements TCPConnectionCodec {
 
     private static final String CLASS_NAME = StreamTCPConnectionCodec.class.getSimpleName();
