@@ -1,7 +1,6 @@
 package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
-import generaloss.networkforge.ISendable;
 import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.event.CloseReason;
 import generaloss.networkforge.tcp.event.CloseCallback;
@@ -21,7 +20,7 @@ import java.nio.channels.SocketChannel;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class TCPConnection implements Closeable, ISendable {
+public class TCPConnection implements Closeable, Sendable {
 
     protected final SocketChannel channel;
     protected final SelectionKey selectionKey;

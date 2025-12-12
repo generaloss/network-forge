@@ -1,7 +1,6 @@
 package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
-import generaloss.networkforge.ISendable;
 import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.event.*;
@@ -21,7 +20,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.TimeoutException;
 
-public class TCPClient implements ISendable {
+public class TCPClient implements Sendable {
 
     private static final String CLASS_NAME = TCPClient.class.getSimpleName();
 

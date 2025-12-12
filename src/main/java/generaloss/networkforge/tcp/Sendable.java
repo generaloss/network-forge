@@ -1,11 +1,11 @@
-package generaloss.networkforge;
+package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.packet.NetPacket;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
 import java.nio.ByteBuffer;
 
-public interface ISendable {
+public interface Sendable {
 
     boolean send(byte[] byteArray);
 
