@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
- * A {@link TCPConnectionCodec} implementation that provides fixed–length framing
+ * A {@link ConnectionCodec} implementation that provides fixed-length framing
  * over a raw TCP stream. Each outgoing message is encoded as:
  *
  * <pre>
@@ -25,8 +25,8 @@ import java.nio.ByteBuffer;
  * {@link #read()} incrementally reconstructs frames from the TCP stream.
  * It may return:
  * <ul>
- *     <li>{@code null} — when a full frame has not yet been received</li>
- *     <li>a decrypted byte array — when a complete frame is available</li>
+ *     <li>{@code null} - when a full frame has not yet been received</li>
+ *     <li>a decrypted byte array - when a complete frame is available</li>
  * </ul>
  *
  * The method supports partial reads and resumes progress on subsequent calls.
@@ -35,7 +35,7 @@ import java.nio.ByteBuffer;
  * Frames larger than the configured read limit trigger one of two behaviors:
  * <ul>
  *     <li>connection close (if enabled)</li>
- *     <li>discard mode — the oversized payload is read and skipped</li>
+ *     <li>discard mode - the oversized payload is read and skipped</li>
  * </ul>
  *
  * <h2>Buffering</h2>
@@ -49,9 +49,9 @@ import java.nio.ByteBuffer;
  * Invalid frame sizes, I/O errors, or remote close events result in closing the
  * connection with an appropriate {@link CloseReason}.
  */
-public class FramedTCPConnectionCodec implements TCPConnectionCodec {
+public class FramedConnectionCodec implements ConnectionCodec {
 
-    private static final String CLASS_NAME = FramedTCPConnectionCodec.class.getSimpleName();
+    private static final String CLASS_NAME = FramedConnectionCodec.class.getSimpleName();
     private static final int HEADER_BUFFER_SIZE = Integer.BYTES; // 4 bytes for data size
     private static final int DISCARD_BUFFER_SIZE = 8192; // 8 kb
 
@@ -60,7 +60,7 @@ public class FramedTCPConnectionCodec implements TCPConnectionCodec {
     private ByteBuffer dataBuffer;
     private int discardRemaining;
 
-    public FramedTCPConnectionCodec() {
+    public FramedConnectionCodec() {
         this.headerBuffer = ByteBuffer.allocate(HEADER_BUFFER_SIZE);
     }
 

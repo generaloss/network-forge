@@ -2,7 +2,7 @@ package generaloss.networkforge.tcp.codec;
 
 import generaloss.networkforge.tcp.TCPConnection;
 
-public interface TCPConnectionCodec {
+public interface ConnectionCodec {
 
     void setup(TCPConnection connection);
 

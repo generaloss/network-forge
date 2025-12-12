@@ -4,8 +4,6 @@ import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.packet.TestDisconnectPacket;
 import generaloss.networkforge.packet.TestMessagePacket;
 import generaloss.networkforge.packet.TestPacketHandler;
-import generaloss.networkforge.sslprocessor.ClientSSLProcessor;
-import generaloss.networkforge.sslprocessor.ServerSSLProcessor;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.packet.PacketDispatcher;
@@ -272,43 +270,6 @@ public class TcpTests {
         server.close();
 
         Assert.assertFalse(hasNotEqual.get());
-    }
-
-
-    @Test
-    public void send_packet_ssl() throws Exception {
-        final String message = "Hello, World!";
-        final AtomicReference<String> result = new AtomicReference<>();
-
-        final PacketDispatcher dispatcher = new PacketDispatcher()
-            .register(TestMessagePacket.class, TestMessagePacket::new);
-
-        final AtomicInteger counter = new AtomicInteger();
-
-        final TestPacketHandler handler = new TestPacketHandler() {
-            public void handleMessage(String message) {
-                result.set(message);
-                counter.incrementAndGet();
-            }
-            public void handleDisconnect(String reason) { }
-        };
-
-        final TCPServer server = new TCPServer();
-        server.getProcessorPipeline().addProcessor(new ServerSSLProcessor(dispatcher));
-        server.setOnReceive((sender, bytes) -> dispatcher.dispatch(bytes, handler));
-        server.run(5403);
-
-        final TCPClient client = new TCPClient();
-        client.getProcessorPipeline().addProcessor(new ClientSSLProcessor(dispatcher));
-        client.connect("localhost", 5403);
-        client.setOnConnect(connection -> {
-            client.send(new TestMessagePacket(message));
-            client.send(new TestMessagePacket(message));
-        });
-
-        TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
-        server.close();
-        Assert.assertEquals(message, result.get());
     }
 
 

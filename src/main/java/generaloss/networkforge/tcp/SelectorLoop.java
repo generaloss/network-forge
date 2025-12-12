@@ -11,7 +11,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.AbstractSelectableChannel;
 import java.util.Set;
 
-public class SelectorController {
+public class SelectorLoop {
 
     private Selector selector;
     private Thread selectorThread;

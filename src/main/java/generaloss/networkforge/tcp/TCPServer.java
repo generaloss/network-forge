@@ -1,11 +1,10 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.tcp.codec.TCPConnectionCodec;
-import generaloss.networkforge.tcp.codec.TCPConnectionCodecFactory;
+import generaloss.networkforge.tcp.codec.ConnectionCodec;
+import generaloss.networkforge.tcp.codec.ConnectionCodecFactory;
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.event.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
-import generaloss.networkforge.tcp.processor.TCPProcessorPipeline;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 import generaloss.networkforge.packet.NetPacket;
@@ -25,10 +24,10 @@ public class TCPServer {
 
     private static final String CLASS_NAME = TCPServer.class.getSimpleName();
 
-    private TCPConnectionCodecFactory codecFactory;
+    private ConnectionCodecFactory codecFactory;
     private TCPConnectionOptionsHolder initialOptions;
     private final EventDispatcher eventDispatcher;
-    private final SelectorController selectorController;
+    private final SelectorLoop selectorLoop;
 
     private final ConcurrentLinkedQueue<TCPConnection> connections;
     private int connectionCounter;
@@ -43,7 +42,7 @@ public class TCPServer {
                 ErrorHandler.printErrorCatch(CLASS_NAME, connection, source, throwable);
 
         this.eventDispatcher = new EventDispatcher(defaultErrorHandler);
-        this.selectorController = new SelectorController();
+        this.selectorLoop = new SelectorLoop();
         this.connections = new ConcurrentLinkedQueue<>();
     }
 
@@ -52,7 +51,7 @@ public class TCPServer {
     }
 
 
-    public TCPServer setCodecFactory(TCPConnectionCodecFactory codecFactory) {
+    public TCPServer setCodecFactory(ConnectionCodecFactory codecFactory) {
         if(codecFactory == null)
             throw new IllegalArgumentException("Argument 'codecFactory' cannot be null");
 
@@ -108,11 +107,6 @@ public class TCPServer {
     }
 
 
-    public TCPProcessorPipeline getProcessorPipeline() {
-        return eventDispatcher.getProcessorPipeline();
-    }
-
-
     public TCPServer run(InetAddress address, int... ports) throws IOException {
         if(ports.length < 1)
             throw new IllegalArgumentException("At least one port must be specified");
@@ -121,7 +115,7 @@ public class TCPServer {
             throw new IllegalStateException("TCP server is already running");
 
         connections.clear();
-        selectorController.open();
+        selectorLoop.open();
 
         serverChannels = new ServerSocketChannel[ports.length];
         for(int i = 0; i < ports.length; i++) {
@@ -137,13 +131,13 @@ public class TCPServer {
             }
 
             serverChannel.configureBlocking(false);
-            selectorController.registerAcceptKey(serverChannel);
+            selectorLoop.registerAcceptKey(serverChannel);
 
             serverChannels[i] = serverChannel;
         }
 
         final String threadName = (CLASS_NAME + "-selector-thread-#" + this.hashCode());
-        selectorController.startSelectionLoopThread(threadName, this::onKeySelected);
+        selectorLoop.startSelectionLoopThread(threadName, this::onKeySelected);
 
         return this;
     }
@@ -181,9 +175,9 @@ public class TCPServer {
             channel.configureBlocking(false);
             initialOptions.applyPostConnect(channel);
 
-            final SelectionKey key = selectorController.registerReadKey(channel);
+            final SelectionKey key = selectorLoop.registerReadKey(channel);
 
-            final TCPConnectionCodec codec = codecFactory.create();
+            final ConnectionCodec codec = codecFactory.create();
             if(codec == null)
                 throw new IllegalStateException("TCP connection codec factory returned null");
 
@@ -220,7 +214,7 @@ public class TCPServer {
         if(this.isClosed())
             return this;
 
-        selectorController.close();
+        selectorLoop.close();
 
         for(TCPConnection connection : connections)
             connection.close(CloseReason.CLOSE_SERVER, null);

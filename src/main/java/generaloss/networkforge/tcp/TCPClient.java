@@ -2,13 +2,12 @@ package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.ISendable;
-import generaloss.networkforge.tcp.codec.TCPConnectionCodec;
+import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.event.*;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.packet.NetPacket;
-import generaloss.networkforge.tcp.processor.TCPProcessorPipeline;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
 import javax.crypto.Cipher;
@@ -26,10 +25,10 @@ public class TCPClient implements ISendable {
 
     private static final String CLASS_NAME = TCPClient.class.getSimpleName();
 
-    private TCPConnectionCodec connectionCodec;
+    private ConnectionCodec connectionCodec;
     private TCPConnectionOptionsHolder initialOptions;
     private final EventDispatcher eventDispatcher;
-    private final SelectorController selectorController;
+    private final SelectorLoop selectorLoop;
 
     private TCPConnection connection;
 
@@ -41,7 +40,7 @@ public class TCPClient implements ISendable {
                 ErrorHandler.printErrorCatch(CLASS_NAME, connection, source, throwable);
 
         this.eventDispatcher = new EventDispatcher(defaultErrorHandler);
-        this.selectorController = new SelectorController();
+        this.selectorLoop = new SelectorLoop();
     }
 
     public TCPClient() {
@@ -66,7 +65,7 @@ public class TCPClient implements ISendable {
     }
 
 
-    public TCPClient setCodec(TCPConnectionCodec connectionCodec) {
+    public TCPClient setCodec(ConnectionCodec connectionCodec) {
         if(connectionCodec == null)
             throw new IllegalArgumentException("Argument 'connectionCodec' cannot be null");
 
@@ -122,16 +121,11 @@ public class TCPClient implements ISendable {
     }
 
 
-    public TCPProcessorPipeline getProcessorPipeline() {
-        return eventDispatcher.getProcessorPipeline();
-    }
-
-
     public TCPClient connect(SocketAddress socketAddress, long timeoutMillis) throws IOException, TimeoutException {
         if(this.isConnected())
             throw new AlreadyConnectedException();
 
-        selectorController.close();
+        selectorLoop.close();
 
         // channel
         final SocketChannel channel = SocketChannel.open();
@@ -139,7 +133,7 @@ public class TCPClient implements ISendable {
         initialOptions.applyPreConnect(channel);
 
         final boolean connectedInstantly = channel.connect(socketAddress);
-        selectorController.open();
+        selectorLoop.open();
 
         if(connectedInstantly) {
             this.createConnection(channel);
@@ -147,8 +141,8 @@ public class TCPClient implements ISendable {
         }
 
         // wait for connection
-        selectorController.registerConnectKey(channel);
-        final boolean selectResult = selectorController.selectKeys(selectedKey -> {
+        selectorLoop.registerConnectKey(channel);
+        final boolean selectResult = selectorLoop.selectKeys(selectedKey -> {
             if(selectedKey.isConnectable() && channel.finishConnect()) {
                 this.createConnection(channel);
             }else{
@@ -180,7 +174,7 @@ public class TCPClient implements ISendable {
     private void createConnection(SocketChannel channel) throws IOException {
         initialOptions.applyPostConnect(channel);
 
-        final SelectionKey key = selectorController.registerReadKey(channel);
+        final SelectionKey key = selectorLoop.registerReadKey(channel);
 
         connection = new TCPConnection(channel, key, eventDispatcher::invokeOnDisconnect, connectionCodec);
         connection.setName(this.makeConnectionName());
@@ -188,7 +182,7 @@ public class TCPClient implements ISendable {
         initialOptions.copyTo(connection.options());
 
         eventDispatcher.invokeOnConnect(connection);
-        selectorController.startSelectionLoopThread(this.makeThreadName(), this::onKeySelected);
+        selectorLoop.startSelectionLoopThread(this.makeThreadName(), this::onKeySelected);
     }
 
     private String makeConnectionName() {
@@ -223,7 +217,7 @@ public class TCPClient implements ISendable {
         if(this.isClosed())
             return this;
 
-        selectorController.close();
+        selectorLoop.close();
         connection.close(CloseReason.CLOSE_CLIENT, null);
         return this;
     }

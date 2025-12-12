@@ -2,7 +2,7 @@ package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.ISendable;
-import generaloss.networkforge.tcp.codec.TCPConnectionCodec;
+import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.event.CloseReason;
 import generaloss.networkforge.tcp.event.CloseCallback;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
@@ -31,12 +31,12 @@ public class TCPConnection implements Closeable, ISendable {
     private volatile boolean closed;
     private volatile Object attachment;
     private volatile String name;
-
-    private TCPConnectionCodec codec;
+    
+    private ConnectionCodec codec;
     private final Queue<ByteBuffer> sendQueue;
     private final Object writeLock;
 
-    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, CloseCallback onClose, TCPConnectionCodec codec) {
+    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, CloseCallback onClose, ConnectionCodec codec) {
         if(channel == null)
             throw new IllegalArgumentException("Argument 'channel' cannot be null");
         if(selectionKey == null)
@@ -96,7 +96,7 @@ public class TCPConnection implements Closeable, ISendable {
     }
 
 
-    public void setCodec(TCPConnectionCodec codec) {
+    public void setCodec(ConnectionCodec codec) {
         if(codec == null)
             throw new IllegalArgumentException("Argument 'codec' cannot be null");
 

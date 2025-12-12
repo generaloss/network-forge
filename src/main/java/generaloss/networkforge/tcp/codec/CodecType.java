@@ -2,16 +2,16 @@ package generaloss.networkforge.tcp.codec;
 
 public enum CodecType {
 
-    FRAMED (FramedTCPConnectionCodec::new),
-    STREAM (StreamTCPConnectionCodec::new);
+    FRAMED (FramedConnectionCodec::new),
+    STREAM (StreamConnectionCodec::new);
 
-    private final TCPConnectionCodecFactory factory;
+    private final ConnectionCodecFactory factory;
 
-    CodecType(TCPConnectionCodecFactory factory) {
+    CodecType(ConnectionCodecFactory factory) {
         this.factory = factory;
     }
 
-    public TCPConnectionCodecFactory getFactory() {
+    public ConnectionCodecFactory getFactory() {
         return factory;
     }
 

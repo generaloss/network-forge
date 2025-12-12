@@ -8,7 +8,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
- * A {@link TCPConnectionCodec} that treats the TCP stream as a continuous
+ * A {@link ConnectionCodec} that treats the TCP stream as a continuous
  * unframed byte sequence. All available bytes are read, accumulated, and
  * returned as a single decrypted block.
  *
@@ -21,8 +21,8 @@ import java.nio.ByteBuffer;
  * {@link #read()} pulls all currently available bytes from the stream and
  * concatenates them. It returns:
  * <ul>
- *     <li>{@code null} — when no complete chunk is available</li>
- *     <li>a decrypted byte array — when at least one byte was read</li>
+ *     <li>{@code null} - when no complete chunk is available</li>
+ *     <li>a decrypted byte array - when at least one byte was read</li>
  * </ul>
  *
  * This codec relies on external protocol logic to define message boundaries.
@@ -38,15 +38,15 @@ import java.nio.ByteBuffer;
  * Remote closes, invalid states, or I/O errors result in closing the
  * connection with the corresponding {@link CloseReason}.
  */
-public class StreamTCPConnectionCodec implements TCPConnectionCodec {
+public class StreamConnectionCodec implements ConnectionCodec {
 
-    private static final String CLASS_NAME = StreamTCPConnectionCodec.class.getSimpleName();
+    private static final String CLASS_NAME = StreamConnectionCodec.class.getSimpleName();
     private static final int DATA_BUFFER_SIZE = 8192; // 8 kb
 
     private TCPConnection connection;
     private final ByteBuffer dataBuffer;
 
-    public StreamTCPConnectionCodec() {
+    public StreamConnectionCodec() {
         this.dataBuffer = ByteBuffer.allocate(DATA_BUFFER_SIZE);
     }
 
