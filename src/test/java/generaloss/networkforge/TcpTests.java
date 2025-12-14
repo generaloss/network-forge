@@ -4,7 +4,10 @@ import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.packet.TestDisconnectPacket;
 import generaloss.networkforge.packet.TestMessagePacket;
 import generaloss.networkforge.packet.TestPacketHandler;
+import generaloss.networkforge.sslprocessor.ClientTLSHandlerLayer;
+import generaloss.networkforge.sslprocessor.ServerTLSHandlerLayer;
 import generaloss.networkforge.tcp.TCPConnection;
+import generaloss.networkforge.tcp.event.ErrorHandler;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.packet.PacketDispatcher;
 import generaloss.networkforge.tcp.TCPClient;
@@ -27,8 +30,8 @@ public class TcpTests {
         final AtomicInteger counter = new AtomicInteger();
 
         final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> counter.incrementAndGet())
-            .setOnDisconnect((connection, reason, e) -> counter.incrementAndGet())
+            .registerOnConnect((connection) -> counter.incrementAndGet())
+            .registerOnDisconnect((connection, reason, e) -> counter.incrementAndGet())
             .run(65000);
 
         final TCPClient client = new TCPClient();
@@ -46,11 +49,11 @@ public class TcpTests {
         final AtomicBoolean closed = new AtomicBoolean();
 
         final TCPServer server = new TCPServer()
-            .setOnConnect(TCPConnection::close)
+            .registerOnConnect(TCPConnection::close)
             .run(5406);
 
         final TCPClient client = new TCPClient()
-            .setOnDisconnect((connection, reason, e) -> closed.set(true))
+            .registerOnDisconnect((connection, reason, e) -> closed.set(true))
             .connect("localhost", 5406);
 
         TimeUtils.waitFor(closed::get, 5000, Assert::fail);
@@ -62,7 +65,7 @@ public class TcpTests {
         final AtomicBoolean closed = new AtomicBoolean();
 
         final TCPServer server = new TCPServer()
-            .setOnDisconnect((connection, reason, e) -> closed.set(true))
+            .registerOnDisconnect((connection, reason, e) -> closed.set(true))
             .run(5407);
 
         final TCPClient client = new TCPClient();
@@ -79,7 +82,7 @@ public class TcpTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer()
-            .setOnReceive((sender, bytes) -> {
+            .registerOnReceive((sender, bytes) -> {
                 result.set(new String(bytes));
                 sender.close();
             })
@@ -104,8 +107,8 @@ public class TcpTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> connection.ciphers().setCiphers(encryptCipher, decryptCipher))
-            .setOnReceive((sender, bytes) -> {
+            .registerOnConnect((connection) -> connection.ciphers().setCiphers(encryptCipher, decryptCipher))
+            .registerOnReceive((sender, bytes) -> {
                 result.set(new String(bytes));
                 sender.close();
             })
@@ -133,8 +136,8 @@ public class TcpTests {
         final AtomicBoolean hasNotEqual = new AtomicBoolean();
 
         final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> connection.ciphers().setCiphers(encryptCipher, decryptCipher))
-            .setOnReceive((sender, bytes) -> {
+            .registerOnConnect((connection) -> connection.ciphers().setCiphers(encryptCipher, decryptCipher))
+            .registerOnReceive((sender, bytes) -> {
                 final String received = new String(bytes);
                 counter.incrementAndGet();
 
@@ -164,11 +167,11 @@ public class TcpTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer()
-            .setOnConnect((connection) -> connection.send(message))
+            .registerOnConnect((connection) -> connection.send(message))
             .run(5401);
 
         final TCPClient client = new TCPClient()
-            .setOnReceive((connection, bytes) -> {
+            .registerOnReceive((connection, bytes) -> {
                 result.set(new String(bytes));
                 connection.close();
             })
@@ -188,7 +191,7 @@ public class TcpTests {
             .setMaxFrameSize(message.length());
 
         final TCPServer server = new TCPServer(options)
-            .setOnReceive((sender, bytes) -> {
+            .registerOnReceive((sender, bytes) -> {
                 result.set(new String(bytes));
                 sender.close();
             })
@@ -210,11 +213,11 @@ public class TcpTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer()
-            .setOnReceive((sender, bytes) -> {
+            .registerOnReceive((sender, bytes) -> {
                 result.set(new String(bytes));
                 sender.close();
             })
-            .setOnConnect(connection ->
+            .registerOnConnect(connection ->
                 connection.options()
                     .setCloseOnFrameSizeLimit(false)
                     .setMaxFrameSize(message.length())
@@ -240,7 +243,7 @@ public class TcpTests {
         final AtomicBoolean hasNotEqual = new AtomicBoolean();
 
         final TCPServer server = new TCPServer()
-            .setOnReceive((sender, bytes) -> {
+            .registerOnReceive((sender, bytes) -> {
                 final String received = new String(bytes);
                 if(!received.equals(message))
                     hasNotEqual.set(true);
@@ -292,7 +295,7 @@ public class TcpTests {
         };
 
         final TCPServer server = new TCPServer()
-            .setOnReceive((sender, bytes) -> dispatcher.dispatch(bytes, handler))
+            .registerOnReceive((sender, bytes) -> dispatcher.dispatch(bytes, handler))
             .run(5403);
 
         final TCPClient client = new TCPClient();
@@ -323,7 +326,7 @@ public class TcpTests {
         };
 
         final TCPServer server = new TCPServer()
-            .setOnReceive((sender, bytes) -> dispatcher.dispatch(bytes, handler))
+            .registerOnReceive((sender, bytes) -> dispatcher.dispatch(bytes, handler))
             .run(5410);
 
         final TCPClient client = new TCPClient();
@@ -334,6 +337,44 @@ public class TcpTests {
 
         TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
         server.close();
+    }
+
+    @Test
+    public void send_packet_ssl() throws Exception {
+        final String message = "Hello, World!";
+        final AtomicReference<String> result = new AtomicReference<>();
+
+        final PacketDispatcher dispatcher = new PacketDispatcher()
+            .register(TestMessagePacket.class, TestMessagePacket::new);
+
+        final AtomicInteger counter = new AtomicInteger();
+
+        final TestPacketHandler handler = new TestPacketHandler() {
+            public void handleMessage(String message) {
+                result.set(message);
+                counter.incrementAndGet();
+            }
+            public void handleDisconnect(String reason) { }
+        };
+
+        final TCPServer server = new TCPServer();
+        server.getEventHandlers().addHandler(new ServerTLSHandlerLayer());
+        server.registerOnReceive((sender, bytes) -> dispatcher.dispatch(bytes, handler));
+        server.registerOnError(ErrorHandler::printErrorCatch);
+        server.run(5403);
+
+        final TCPClient client = new TCPClient();
+        client.getEventHandlers().addHandler(new ClientTLSHandlerLayer());
+        client.connect("localhost", 5403);
+        client.registerOnConnect(connection -> {
+            client.send(new TestMessagePacket(message));
+            client.send(new TestMessagePacket(message));
+        });
+        client.registerOnError(ErrorHandler::printErrorCatch);
+
+        TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
+        server.close();
+        Assert.assertEquals(message, result.get());
     }
 
 }

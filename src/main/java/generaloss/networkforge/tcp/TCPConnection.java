@@ -3,7 +3,7 @@ package generaloss.networkforge.tcp;
 import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.event.CloseReason;
-import generaloss.networkforge.tcp.event.CloseCallback;
+import generaloss.networkforge.tcp.handler.EventHandlerPipeline;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
@@ -24,7 +24,6 @@ public class TCPConnection implements Closeable, Sendable {
 
     protected final SocketChannel channel;
     protected final SelectionKey selectionKey;
-    protected final CloseCallback onClose;
     protected final TCPConnectionOptions options;
     protected final CipherPair ciphers;
     private volatile boolean closed;
@@ -35,17 +34,18 @@ public class TCPConnection implements Closeable, Sendable {
     private final Queue<ByteBuffer> sendQueue;
     private final Object writeLock;
 
-    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, CloseCallback onClose, ConnectionCodec codec) {
+    private final EventHandlerPipeline sharedEventHandlers;
+
+    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, ConnectionCodec codec, EventHandlerPipeline sharedEventHandlers) {
         if(channel == null)
             throw new IllegalArgumentException("Argument 'channel' cannot be null");
         if(selectionKey == null)
             throw new IllegalArgumentException("Argument 'selectionKey' cannot be null");
-        if(onClose == null)
-            throw new IllegalArgumentException("Argument 'onClose' cannot be null");
+        if(sharedEventHandlers == null)
+            throw new IllegalArgumentException("Argument 'sharedEventHandlers' cannot be null");
 
         this.channel = channel;
         this.selectionKey = selectionKey;
-        this.onClose = onClose;
         this.options = new TCPConnectionOptions(channel.socket());
         this.ciphers = new CipherPair();
         this.name = (this.getClass().getSimpleName() + "#" + this.hashCode());
@@ -53,6 +53,8 @@ public class TCPConnection implements Closeable, Sendable {
         this.setCodec(codec);
         this.sendQueue = new ConcurrentLinkedQueue<>();
         this.writeLock = new Object();
+
+        this.sharedEventHandlers = sharedEventHandlers;
     }
 
     public Socket socket() {
@@ -104,6 +106,11 @@ public class TCPConnection implements Closeable, Sendable {
     }
 
 
+    public EventHandlerPipeline eventHandlers() {
+        return sharedEventHandlers;
+    }
+
+
     public int getPort() {
         return this.socket().getPort();
     }
@@ -137,7 +144,7 @@ public class TCPConnection implements Closeable, Sendable {
         selectionKey.cancel();
         ResUtils.close(channel);
 
-        onClose.onClose(this, reason, e);
+        sharedEventHandlers.fireOnDisconnect(this, reason, e);
     }
 
     @Override
@@ -173,7 +180,17 @@ public class TCPConnection implements Closeable, Sendable {
         }
     }
 
-    protected void pushSendQueue() {
+    protected void pushConnect() {
+        sharedEventHandlers.fireOnConnect(this);
+    }
+
+    protected void pushRead() {
+        final byte[] data = codec.read();
+        if(data != null)
+            sharedEventHandlers.fireOnReceive(this, data);
+    }
+
+    protected void pushSend() {
         try {
             synchronized(writeLock) {
                 final boolean queueFullyWritten = this.tryToSendQueuedBuffers();
@@ -205,13 +222,16 @@ public class TCPConnection implements Closeable, Sendable {
     }
 
 
-    protected byte[] read() {
-        return codec.read();
-    }
-
     @Override
     public boolean send(byte[] byteArray) {
-        return codec.send(byteArray);
+        if(byteArray == null)
+            return false;
+
+        final byte[] processedData = sharedEventHandlers.fireOnSend(this, byteArray);
+        if(processedData == null)
+            return false;
+
+        return codec.send(processedData);
     }
 
     @Override

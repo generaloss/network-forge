@@ -36,15 +36,15 @@ public class ReliabilityTest {
 
     private static void closeOnOtherSideTest() throws Exception {
         final TCPServer server = new TCPServer()
-            .setOnConnect(
+            .registerOnConnect(
                 (connection) -> System.out.println("[Server] Connected")
             )
-            .setOnDisconnect((connection, reason, e) -> System.out.println("[Server] Disconnected: " + reason))
+            .registerOnDisconnect((connection, reason, e) -> System.out.println("[Server] Disconnected: " + reason))
             .run(65000);
 
-        final TCPClient client = new TCPClient().setOnConnect(
+        final TCPClient client = new TCPClient().registerOnConnect(
                 (connection) -> System.out.println("[Client] Connected"))
-            .setOnDisconnect((connection, reason, e) -> System.out.println("[Client] Disconnected: " + reason));
+            .registerOnDisconnect((connection, reason, e) -> System.out.println("[Client] Disconnected: " + reason));
         for(int i = 0; i < 3; i++) {
             client.connect("localhost", 65000);
             client.close();
@@ -59,7 +59,7 @@ public class ReliabilityTest {
 
         final TCPClient client = new TCPClient()
             .setCodec(CodecType.STREAM)
-            .setOnReceive((connection, bytes) -> {
+            .registerOnReceive((connection, bytes) -> {
                 result.set(new String(bytes));
                 connection.close();
             })

@@ -9,21 +9,21 @@ public class TutorialTest {
     public static void main(String[] args) throws Exception {
         // create server
         TCPServer server = new TCPServer();
-        server.setOnConnect(connection ->
+        server.registerOnConnect(connection ->
             connection.send("Hello, client!")
         );
-        server.setOnReceive((senderConnection, byteArray) -> {
+        server.registerOnReceive((senderConnection, byteArray) -> {
             String received = new String(byteArray);
             System.out.println(received); // Output: Hello, server!
         });
-        server.setOnDisconnect((connection, reason, e) -> {
+        server.registerOnDisconnect((connection, reason, e) -> {
             server.close(); // close server
         });
         server.run(5555);
 
         // create client
         TCPClient client = new TCPClient();
-        client.setOnReceive((connection, byteArray) -> {
+        client.registerOnReceive((connection, byteArray) -> {
             String received = new String(byteArray);
             System.out.println(received); // Output: Hello, client!
             client.close(); // disconnect client

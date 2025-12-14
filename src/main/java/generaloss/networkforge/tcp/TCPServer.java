@@ -4,6 +4,8 @@ import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.codec.ConnectionCodecFactory;
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.event.*;
+import generaloss.networkforge.tcp.handler.EventHandlerPipeline;
+import generaloss.networkforge.tcp.handler.EventListenerHolder;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
@@ -26,8 +28,10 @@ public class TCPServer {
 
     private ConnectionCodecFactory codecFactory;
     private TCPConnectionOptionsHolder initialOptions;
-    private final EventDispatcher eventDispatcher;
     private final SelectorLoop selectorLoop;
+
+    private final EventHandlerPipeline eventHandlers;
+    private final EventListenerHolder listeners;
 
     private final ConcurrentLinkedQueue<TCPConnection> connections;
     private int connectionCounter;
@@ -38,12 +42,16 @@ public class TCPServer {
         this.setCodecFactory(CodecType.DEFAULT);
         this.setInitialOptions(initialOptions);
 
-        final ErrorHandler defaultErrorHandler = (connection, source, throwable) ->
-                ErrorHandler.printErrorCatch(CLASS_NAME, connection, source, throwable);
-
-        this.eventDispatcher = new EventDispatcher(defaultErrorHandler);
         this.selectorLoop = new SelectorLoop();
         this.connections = new ConcurrentLinkedQueue<>();
+
+        this.listeners = new EventListenerHolder();
+        this.listeners.registerOnDisconnect(
+            (connection, reason, e) -> connections.remove(connection)
+        );
+
+        this.eventHandlers = new EventHandlerPipeline();
+        this.eventHandlers.addHandler(listeners);
     }
 
     public TCPServer() {
@@ -81,28 +89,54 @@ public class TCPServer {
     }
 
 
-    public TCPServer setOnConnect(ConnectionListener onConnect) {
-        eventDispatcher.setOnConnect(onConnect);
+    public EventHandlerPipeline getEventHandlers() {
+        return eventHandlers;
+    }
+
+
+    public TCPServer registerOnConnect(ConnectionListener onConnect) {
+        listeners.registerOnConnect(onConnect);
         return this;
     }
 
-    public TCPServer setOnDisconnect(CloseCallback onClose) {
-        eventDispatcher.setOnDisconnect(onClose);
+    public TCPServer registerOnDisconnect(CloseCallback onClose) {
+        listeners.registerOnDisconnect(onClose);
         return this;
     }
 
-    public TCPServer setOnReceive(DataReceiver onReceive) {
-        eventDispatcher.setOnReceive(onReceive);
+    public TCPServer registerOnReceive(DataReceiver onReceive) {
+        listeners.registerOnReceive(onReceive);
         return this;
     }
 
-    public TCPServer setOnReceiveStream(StreamDataReceiver onReceive) {
-        eventDispatcher.setOnReceiveStream(onReceive);
+    public TCPServer registerOnReceiveStream(StreamDataReceiver onReceive) {
+        listeners.registerOnReceiveStream(onReceive);
         return this;
     }
 
-    public TCPServer setOnError(ErrorHandler onError) {
-        eventDispatcher.setOnError(onError);
+    public TCPServer registerOnError(ErrorHandler onError) {
+        listeners.registerOnError(onError);
+        return this;
+    }
+
+
+    public TCPServer unregisterOnConnect(ConnectionListener onConnect) {
+        listeners.unregisterOnConnect(onConnect);
+        return this;
+    }
+
+    public TCPServer unregisterOnDisconnect(CloseCallback onClose) {
+        listeners.unregisterOnDisconnect(onClose);
+        return this;
+    }
+
+    public TCPServer unregisterOnReceive(DataReceiver onReceive) {
+        listeners.unregisterOnReceive(onReceive);
+        return this;
+    }
+
+    public TCPServer unregisterOnError(ErrorHandler onError) {
+        listeners.unregisterOnError(onError);
         return this;
     }
 
@@ -154,13 +188,11 @@ public class TCPServer {
     private void onKeySelected(SelectionKey key) {
         if(key.isReadable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
-            final byte[] byteArray = connection.read();
-            if(byteArray != null)
-                eventDispatcher.invokeOnReceive(connection, byteArray);
+            connection.pushRead();
         }
         if(key.isWritable()){
             final TCPConnection connection = ((TCPConnection) key.attachment());
-            connection.pushSendQueue();
+            connection.pushSend();
         }
         if(key.isAcceptable())
             this.acceptNewConnection((ServerSocketChannel) key.channel());
@@ -181,20 +213,15 @@ public class TCPServer {
             if(codec == null)
                 throw new IllegalStateException("TCP connection codec factory returned null");
 
-            final TCPConnection connection = new TCPConnection(channel, key, this::onConnectionClosed, codec);
+            final TCPConnection connection = new TCPConnection(channel, key, codec, eventHandlers);
             connection.setName(CLASS_NAME + "-connection-#" + this.hashCode() + "N" + (connectionCounter++));
             initialOptions.copyTo(connection.options());
             key.attach(connection);
 
             connections.add(connection);
 
-            eventDispatcher.invokeOnConnect(connection);
+            connection.pushConnect();
         } catch (IOException ignored){ }
-    }
-
-    private void onConnectionClosed(TCPConnection connection, CloseReason reason, Exception e) {
-        connections.remove(connection);
-        eventDispatcher.invokeOnDisconnect(connection, reason, e);
     }
 
 

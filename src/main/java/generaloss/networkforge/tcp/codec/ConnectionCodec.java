@@ -6,7 +6,8 @@ public interface ConnectionCodec {
 
     void setup(TCPConnection connection);
 
-    /** @return false when cannot send data */
+    /** @param byteArray is non-null
+     * @return false when cannot send data */
     boolean send(byte[] byteArray);
 
     /** Called by selector.

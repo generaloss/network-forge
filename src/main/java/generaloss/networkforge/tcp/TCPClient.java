@@ -4,6 +4,8 @@ import generaloss.networkforge.CipherPair;
 import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.event.*;
+import generaloss.networkforge.tcp.handler.EventListenerHolder;
+import generaloss.networkforge.tcp.handler.EventHandlerPipeline;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.packet.NetPacket;
@@ -26,8 +28,10 @@ public class TCPClient implements Sendable {
 
     private ConnectionCodec connectionCodec;
     private TCPConnectionOptionsHolder initialOptions;
-    private final EventDispatcher eventDispatcher;
     private final SelectorLoop selectorLoop;
+
+    private final EventHandlerPipeline eventHandlers;
+    private final EventListenerHolder listeners;
 
     private TCPConnection connection;
 
@@ -35,11 +39,11 @@ public class TCPClient implements Sendable {
         this.setCodec(CodecType.DEFAULT);
         this.setInitialOptions(initialOptions);
 
-        final ErrorHandler defaultErrorHandler = (connection, source, throwable) ->
-                ErrorHandler.printErrorCatch(CLASS_NAME, connection, source, throwable);
-
-        this.eventDispatcher = new EventDispatcher(defaultErrorHandler);
         this.selectorLoop = new SelectorLoop();
+
+        this.listeners = new EventListenerHolder();
+        this.eventHandlers = new EventHandlerPipeline();
+        this.eventHandlers.addHandler(listeners);
     }
 
     public TCPClient() {
@@ -94,28 +98,54 @@ public class TCPClient implements Sendable {
     }
 
 
-    public TCPClient setOnConnect(ConnectionListener onConnect) {
-        eventDispatcher.setOnConnect(onConnect);
+    public EventHandlerPipeline getEventHandlers() {
+        return eventHandlers;
+    }
+
+
+    public TCPClient registerOnConnect(ConnectionListener onConnect) {
+        listeners.registerOnConnect(onConnect);
         return this;
     }
 
-    public TCPClient setOnDisconnect(CloseCallback onClose) {
-        eventDispatcher.setOnDisconnect(onClose);
+    public TCPClient registerOnDisconnect(CloseCallback onClose) {
+        listeners.registerOnDisconnect(onClose);
         return this;
     }
 
-    public TCPClient setOnReceive(DataReceiver onReceive) {
-        eventDispatcher.setOnReceive(onReceive);
+    public TCPClient registerOnReceive(DataReceiver onReceive) {
+        listeners.registerOnReceive(onReceive);
         return this;
     }
 
-    public TCPClient setOnReceiveStream(StreamDataReceiver onReceive) {
-        eventDispatcher.setOnReceiveStream(onReceive);
+    public TCPClient registerOnReceiveStream(StreamDataReceiver onReceive) {
+        listeners.registerOnReceiveStream(onReceive);
         return this;
     }
 
-    public TCPClient setOnError(ErrorHandler onError) {
-        eventDispatcher.setOnError(onError);
+    public TCPClient registerOnError(ErrorHandler onError) {
+        listeners.registerOnError(onError);
+        return this;
+    }
+
+
+    public TCPClient unregisterOnConnect(ConnectionListener onConnect) {
+        listeners.unregisterOnConnect(onConnect);
+        return this;
+    }
+
+    public TCPClient unregisterOnDisconnect(CloseCallback onClose) {
+        listeners.unregisterOnDisconnect(onClose);
+        return this;
+    }
+
+    public TCPClient unregisterOnReceive(DataReceiver onReceive) {
+        listeners.unregisterOnReceive(onReceive);
+        return this;
+    }
+
+    public TCPClient unregisterOnError(ErrorHandler onError) {
+        listeners.unregisterOnError(onError);
         return this;
     }
 
@@ -175,12 +205,13 @@ public class TCPClient implements Sendable {
 
         final SelectionKey key = selectorLoop.registerReadKey(channel);
 
-        connection = new TCPConnection(channel, key, eventDispatcher::invokeOnDisconnect, connectionCodec);
+        connection = new TCPConnection(channel, key, connectionCodec, eventHandlers);
         connection.setName(this.makeConnectionName());
 
         initialOptions.copyTo(connection.options());
 
-        eventDispatcher.invokeOnConnect(connection);
+        connection.pushConnect();
+
         selectorLoop.startSelectionLoopThread(this.makeThreadName(), this::onKeySelected);
     }
 
@@ -194,13 +225,10 @@ public class TCPClient implements Sendable {
 
 
     private void onKeySelected(SelectionKey key) {
-        if(key.isReadable()){
-            final byte[] byteArray = connection.read();
-            if(byteArray != null)
-                eventDispatcher.invokeOnReceive(connection, byteArray);
-        }
+        if(key.isReadable())
+            connection.pushRead();
         if(key.isWritable())
-            connection.pushSendQueue();
+            connection.pushSend();
     }
 
 

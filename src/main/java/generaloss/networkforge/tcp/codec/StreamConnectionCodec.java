@@ -57,9 +57,6 @@ public class StreamConnectionCodec implements ConnectionCodec {
 
     @Override
     public boolean send(byte[] byteArray) {
-        if(byteArray == null)
-            throw new IllegalArgumentException("Argument 'byteArray' cannot be null");
-
         if(connection == null || connection.isClosed())
             return false;
 
