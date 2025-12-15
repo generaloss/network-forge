@@ -5,23 +5,23 @@ import generaloss.networkforge.tcp.event.ErrorSource;
 
 public abstract class EventHandlerLayer {
 
-    public boolean handleConnect(PipelineContext context) {
+    public boolean handleConnect(EventHandleContext context) {
         return true;
     }
 
-    public boolean handleDisconnect(PipelineContext context, CloseReason reason, Exception e) {
+    public boolean handleDisconnect(EventHandleContext context, CloseReason reason, Exception e) {
         return true;
     }
 
-    public boolean handleReceive(PipelineContext context, byte[] byteArray) {
+    public boolean handleReceive(EventHandleContext context, byte[] byteArray) {
         return true;
     }
 
-    public byte[] handleSend(PipelineContext context, byte[] byteArray) {
+    public byte[] handleSend(EventHandleContext context, byte[] byteArray) {
         return byteArray;
     }
 
-    public boolean handleError(PipelineContext context, ErrorSource source, Throwable throwable) {
+    public boolean handleError(EventHandleContext context, ErrorSource source, Throwable throwable) {
         return true;
     }
 

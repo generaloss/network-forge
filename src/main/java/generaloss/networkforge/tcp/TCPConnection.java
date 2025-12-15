@@ -6,8 +6,6 @@ import generaloss.networkforge.tcp.event.CloseReason;
 import generaloss.networkforge.tcp.handler.EventHandlerPipeline;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.resourceflow.ResUtils;
-import generaloss.resourceflow.stream.BinaryStreamWriter;
-import generaloss.networkforge.packet.NetPacket;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -20,7 +18,7 @@ import java.nio.channels.SocketChannel;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class TCPConnection implements Closeable, Sendable {
+public class TCPConnection implements DefaultSendable, Closeable {
 
     protected final SocketChannel channel;
     protected final SelectionKey selectionKey;
@@ -180,6 +178,7 @@ public class TCPConnection implements Closeable, Sendable {
         }
     }
 
+
     protected void pushConnect() {
         sharedEventHandlers.fireOnConnect(this);
     }
@@ -222,69 +221,20 @@ public class TCPConnection implements Closeable, Sendable {
     }
 
 
+    public boolean sendDirect(byte[] byteArray) {
+        if(byteArray == null)
+            return false;
+
+        return codec.send(byteArray);
+    }
+
     @Override
     public boolean send(byte[] byteArray) {
         if(byteArray == null)
             return false;
 
         final byte[] processedData = sharedEventHandlers.fireOnSend(this, byteArray);
-        if(processedData == null)
-            return false;
-
-        return codec.send(processedData);
-    }
-
-    @Override
-    public boolean send(ByteBuffer buffer) {
-        if(buffer == null)
-            throw new IllegalArgumentException("Agrument 'buffer' cannot be null");
-        
-        if(this.isClosed())
-            return false;
-
-        final byte[] byteArray = new byte[buffer.remaining()];
-        buffer.get(byteArray);
-        return this.send(byteArray);
-    }
-
-    @Override
-    public boolean send(String string) {
-        if(string == null)
-            throw new IllegalArgumentException("Agrument 'string' cannot be null");
-        
-        return this.send(string.getBytes());
-    }
-
-    @Override
-    public boolean send(BinaryStreamWriter streamWriter) {
-        if(streamWriter == null)
-            throw new IllegalArgumentException("Agrument 'streamWriter' cannot be null");
-
-        if(this.isClosed())
-            return false;
-
-        try {
-            final byte[] byteArray = BinaryStreamWriter.toByteArray(streamWriter);
-            return this.send(byteArray);
-        } catch (IOException ignored) {
-            return false;
-        }
-    }
-
-    @Override
-    public boolean send(NetPacket<?> packet) {
-        if(packet == null)
-            throw new IllegalArgumentException("Agrument 'packet' cannot be null");
-
-        if(this.isClosed())
-            return false;
-
-        try {
-            final byte[] byteArray = packet.toByteArray();
-            return this.send(byteArray);
-        } catch (IOException ignored) {
-            return false;
-        }
+        return this.sendDirect(processedData);
     }
 
 }

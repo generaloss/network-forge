@@ -5,7 +5,6 @@ import generaloss.networkforge.tcp.event.CloseReason;
 import generaloss.networkforge.tcp.event.ErrorHandler;
 import generaloss.networkforge.tcp.event.ErrorSource;
 
-import java.util.Collection;
 import java.util.LinkedList;
 
 public class EventHandlerPipeline {
@@ -16,7 +15,7 @@ public class EventHandlerPipeline {
         this.handlersList = new LinkedList<>();
     }
 
-    public Collection<EventHandlerLayer> getHandlers() {
+    public LinkedList<EventHandlerLayer> getHandlers() {
         return handlersList;
     }
 
@@ -47,15 +46,15 @@ public class EventHandlerPipeline {
             return;
 
         final int length = handlersList.size();
-        if(length == 0)
+        if(length == 0 || indexFrom >= length)
             return;
 
-        final PipelineContext context = new PipelineContext(connection);
-
+        final EventHandleContext context = new EventHandleContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            final EventHandlerLayer handler = handlersList.get(i);
+            context.setIndex(indexFrom);
 
             try {
+                final EventHandlerLayer handler = handlersList.get(i);
                 final boolean result = handler.handleConnect(context);
                 if(!result)
                     break;
@@ -86,11 +85,16 @@ public class EventHandlerPipeline {
             return;
 
         final int length = handlersList.size();
+        if(length == 0 || indexFrom >= length)
+            return;
+
+        final EventHandleContext context = new EventHandleContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            final EventHandlerLayer handler = handlersList.get(i);
+            context.setIndex(indexFrom);
 
             try {
-                final boolean result = handler.handleDisconnect(connection, reason, e);
+                final EventHandlerLayer handler = handlersList.get(i);
+                final boolean result = handler.handleDisconnect(context, reason, e);
                 if(!result)
                     break;
 
@@ -120,11 +124,16 @@ public class EventHandlerPipeline {
             return;
 
         final int length = handlersList.size();
+        if(length == 0 || indexFrom >= length)
+            return;
+
+        final EventHandleContext context = new EventHandleContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            final EventHandlerLayer handler = handlersList.get(i);
+            context.setIndex(indexFrom);
 
             try {
-                final boolean result = handler.handleReceive(connection, byteArray);
+                final EventHandlerLayer handler = handlersList.get(i);
+                final boolean result = handler.handleReceive(context, byteArray);
                 if(!result)
                     break;
 
@@ -154,11 +163,16 @@ public class EventHandlerPipeline {
             return byteArray;
 
         final int length = handlersList.size();
+        if(length == 0 || indexFrom >= length)
+            return byteArray;
+
+        final EventHandleContext context = new EventHandleContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            final EventHandlerLayer handler = handlersList.get(i);
+            context.setIndex(indexFrom);
 
             try {
-                byteArray = handler.handleSend(connection, byteArray);
+                final EventHandlerLayer handler = handlersList.get(i);
+                byteArray = handler.handleSend(context, byteArray);
                 if(byteArray == null)
                     break;
 
@@ -189,11 +203,16 @@ public class EventHandlerPipeline {
             return;
 
         final int length = handlersList.size();
+        if(length == 0 || indexFrom >= length)
+            return;
+
+        final EventHandleContext context = new EventHandleContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            final EventHandlerLayer handler = handlersList.get(i);
+            context.setIndex(indexFrom);
 
             try {
-                final boolean result = handler.handleError(connection, source, throwable);
+                final EventHandlerLayer handler = handlersList.get(i);
+                final boolean result = handler.handleError(context, source, throwable);
                 if(!result)
                     break;
 

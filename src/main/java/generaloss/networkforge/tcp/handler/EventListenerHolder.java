@@ -65,28 +65,32 @@ public class EventListenerHolder extends EventHandlerLayer {
 
 
     @Override
-    public boolean handleConnect(TCPConnection connection) {
+    public boolean handleConnect(EventHandleContext context) {
+        final TCPConnection connection = context.getConnection();
         for(ConnectionListener onConnect : connectListeners)
             onConnect.onConnect(connection);
         return true;
     }
 
     @Override
-    public boolean handleDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
+    public boolean handleDisconnect(EventHandleContext context, CloseReason reason, Exception e) {
+        final TCPConnection connection = context.getConnection();
         for(CloseCallback onDisconnect : disconnectCallbacks)
             onDisconnect.onClose(connection, reason, e);
         return true;
     }
 
     @Override
-    public boolean handleReceive(TCPConnection connection, byte[] byteArray) {
+    public boolean handleReceive(EventHandleContext context, byte[] byteArray) {
+        final TCPConnection connection = context.getConnection();
         for(DataReceiver onReceive : dataReceivers)
             onReceive.onReceive(connection, byteArray);
         return true;
     }
 
     @Override
-    public boolean handleError(TCPConnection connection, ErrorSource source, Throwable throwable) {
+    public boolean handleError(EventHandleContext context, ErrorSource source, Throwable throwable) {
+        final TCPConnection connection = context.getConnection();
         for(ErrorHandler onError : errorHandlers)
             onError.onError(connection, source, throwable);
         return true;

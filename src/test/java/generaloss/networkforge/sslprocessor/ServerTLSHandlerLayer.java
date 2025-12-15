@@ -1,6 +1,7 @@
 package generaloss.networkforge.sslprocessor;
 
 import generaloss.networkforge.tcp.TCPConnection;
+import generaloss.networkforge.tcp.handler.EventHandleContext;
 import generaloss.networkforge.tcp.handler.EventHandlerLayer;
 import generaloss.resourceflow.stream.BinaryInputStream;
 
@@ -34,14 +35,14 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
     }
 
     @Override
-    public boolean handleConnect(TCPConnection connection) {
-        this.connection = connection;
-        this.sendPublicKey();
+    public boolean handleConnect(EventHandleContext context) {
+        this.connection = context.getConnection();
+        this.sendPublicKey(context);
         return false;
     }
 
-    private void sendPublicKey() {
-        final boolean success = connection.send(stream -> {
+    private void sendPublicKey(EventHandleContext context) {
+        final boolean success = context.send(stream -> {
             stream.writeByte(TLSBinaryFrames.PUBLIC_KEY.ordinal());
             stream.writeByteArray(keyPair.getPublic().getEncoded());
         });
@@ -50,7 +51,7 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
     }
 
     @Override
-    public boolean handleReceive(TCPConnection connection, byte[] byteArray) {
+    public boolean handleReceive(EventHandleContext context, byte[] byteArray) {
         if(handshakeCompleted)
             return true;
 
@@ -59,7 +60,7 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
             if(binaryFrame == TLSBinaryFrames.ENCRYPTED_SECRET_KEY.ordinal()) {
                 // ENCRYPTED_SECRET_KEY
                 final byte[] encryptedSecretKey = stream.readByteArray();
-                this.onReceiveEncryptedSecretKey(encryptedSecretKey);
+                this.onReceiveEncryptedSecretKey(context, encryptedSecretKey);
             } else {
                 // ?
                 throw new RuntimeException("Invalid binary frame");
@@ -70,7 +71,7 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
         return false;
     }
 
-    private void onReceiveEncryptedSecretKey(byte[] encryptedSecretKeyBytes) {
+    private void onReceiveEncryptedSecretKey(EventHandleContext context, byte[] encryptedSecretKeyBytes) {
         try {
             final PrivateKey privateKey = keyPair.getPrivate();
 
@@ -90,7 +91,7 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
                 final Cipher decryptCipher = Cipher.getInstance("AES");
                 decryptCipher.init(Cipher.DECRYPT_MODE, key);
 
-                this.sendConnectionEncryptedSignal();
+                this.sendConnectionEncryptedSignal(context);
 
                 connection.ciphers().setCiphers(encryptCipher, decryptCipher);
 
@@ -113,8 +114,8 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
         }
     }
 
-    private void sendConnectionEncryptedSignal() {
-        final boolean success = connection.send(stream ->
+    private void sendConnectionEncryptedSignal(EventHandleContext context) {
+        final boolean success = context.send(stream ->
             stream.writeByte(TLSBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal())
         );
         if(!success)
@@ -122,9 +123,9 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
     }
 
     @Override
-    public byte[] handleSend(TCPConnection connection, byte[] byteArray) {
+    public byte[] handleSend(EventHandleContext context, byte[] byteArray) {
         if(handshakeCompleted)
-            return super.handleSend(connection, byteArray);
+            return byteArray;
 
         pendingData.writeBytes(byteArray);
         return null;
