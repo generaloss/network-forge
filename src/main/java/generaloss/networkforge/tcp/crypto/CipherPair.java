@@ -1,4 +1,4 @@
-package generaloss.networkforge;
+package generaloss.networkforge.tcp.crypto;
 
 import javax.crypto.Cipher;
 
@@ -31,27 +31,27 @@ public class CipherPair {
     }
 
 
-    public synchronized byte[] encrypt(byte[] byteArray) {
+    public synchronized byte[] encrypt(byte[] data) {
         if(encryptCipher == null)
-            return byteArray;
-        if(byteArray == null)
+            return data;
+        if(data == null)
             return null;
 
         try {
-            return encryptCipher.doFinal(byteArray);
+            return encryptCipher.doFinal(data);
         } catch (Exception e) {
             throw new IllegalStateException("Encryption error: " + e.getMessage());
         }
     }
 
-    public synchronized byte[] decrypt(byte[] byteArray) {
+    public synchronized byte[] decrypt(byte[] data) {
         if(decryptCipher == null)
-            return byteArray;
-        if(byteArray == null)
+            return data;
+        if(data == null)
             return null;
 
         try {
-            return decryptCipher.doFinal(byteArray);
+            return decryptCipher.doFinal(data);
         } catch (Exception e) {
             throw new IllegalStateException("Decryption error: " + e.getMessage());
         }

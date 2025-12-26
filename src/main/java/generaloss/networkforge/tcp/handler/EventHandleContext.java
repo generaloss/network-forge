@@ -2,16 +2,17 @@ package generaloss.networkforge.tcp.handler;
 
 import generaloss.networkforge.tcp.DefaultSendable;
 import generaloss.networkforge.tcp.TCPConnection;
-import generaloss.networkforge.tcp.event.CloseReason;
+import generaloss.networkforge.tcp.listener.CloseReason;
+import generaloss.networkforge.tcp.listener.ErrorSource;
 
 public class EventHandleContext implements DefaultSendable {
 
     private final TCPConnection connection;
-    private final EventHandlerPipeline handlerPipeline;
+    private final EventPipeline handlerPipeline;
 
     private int index;
 
-    public EventHandleContext(EventHandlerPipeline handlerPipeline, TCPConnection connection) {
+    public EventHandleContext(EventPipeline handlerPipeline, TCPConnection connection) {
         this.handlerPipeline = handlerPipeline;
         this.connection = connection;
     }
@@ -31,13 +32,13 @@ public class EventHandleContext implements DefaultSendable {
     }
 
     @Override
-    public boolean send(byte[] byteArray) {
-        if(byteArray == null)
-            return false;
+    public boolean send(byte[] data) {
+        if(data == null)
+            throw new IllegalArgumentException("Argument 'data' cannot be null");
 
         final int nextIndex = (index + 1);
 
-        final byte[] processedData = handlerPipeline.fireOnSend(nextIndex, connection, byteArray);
+        final byte[] processedData = handlerPipeline.fireOnSend(nextIndex, connection, data);
         return connection.sendDirect(processedData);
     }
 
@@ -47,14 +48,38 @@ public class EventHandleContext implements DefaultSendable {
         handlerPipeline.fireOnConnect(nextIndex, connection);
     }
 
-    public void fireOnDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
+    public void fireOnConnectNext() {
+        this.fireOnConnectNext(connection);
+    }
+
+
+    public void fireOnDisconnectNext(TCPConnection connection, CloseReason reason, Exception e) {
         final int nextIndex = (index + 1);
         handlerPipeline.fireOnDisconnect(nextIndex, connection, reason, e);
     }
 
-    public void fireOnReceive(TCPConnection connection, byte[] byteArray) {
+    public void fireOnDisconnectNext(CloseReason reason, Exception e) {
+        this.fireOnDisconnectNext(connection, reason, e);
+    }
+
+
+    public void fireOnReceiveNext(TCPConnection connection, byte[] data) {
         final int nextIndex = (index + 1);
-        handlerPipeline.fireOnReceive(nextIndex, connection, byteArray);
+        handlerPipeline.fireOnReceive(nextIndex, connection, data);
+    }
+
+    public void fireOnReceiveNext(byte[] data) {
+        this.fireOnReceiveNext(connection, data);
+    }
+
+
+    public void fireOnErrorNext(TCPConnection connection, ErrorSource source, Throwable throwable) {
+        final int nextIndex = (index + 1);
+        handlerPipeline.fireOnError(nextIndex, connection, source, throwable);
+    }
+
+    public void fireOnErrorNext(ErrorSource source, Throwable throwable) {
+        this.fireOnErrorNext(connection, source, throwable);
     }
 
 }

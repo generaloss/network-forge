@@ -1,4 +1,4 @@
-package generaloss.networkforge.sslprocessor;
+package generaloss.networkforge.layer.tls;
 
 public enum TLSBinaryFrames {
 

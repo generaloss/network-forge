@@ -1,4 +1,4 @@
-package generaloss.networkforge.sslprocessor;
+package generaloss.networkforge.layer.tls;
 
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.handler.EventHandleContext;
@@ -13,7 +13,7 @@ import java.io.IOException;
 import java.security.*;
 import java.security.spec.X509EncodedKeySpec;
 
-public class ClientTLSHandlerLayer extends EventHandlerLayer {
+public class ClientTLSLayer extends EventHandlerLayer {
 
     public static final int AES_KEY_SIZE = 128;
 
@@ -22,7 +22,7 @@ public class ClientTLSHandlerLayer extends EventHandlerLayer {
     private volatile boolean handshakeCompleted;
     private final ByteArrayOutputStream pendingData;
 
-    public ClientTLSHandlerLayer() {
+    public ClientTLSLayer() {
         this.pendingData = new ByteArrayOutputStream();
     }
 
@@ -33,11 +33,11 @@ public class ClientTLSHandlerLayer extends EventHandlerLayer {
     }
 
     @Override
-    public boolean handleReceive(EventHandleContext context, byte[] byteArray) {
+    public boolean handleReceive(EventHandleContext context, byte[] data) {
         if(handshakeCompleted)
             return true;
 
-        try (final BinaryInputStream stream = new BinaryInputStream(byteArray)) {
+        try (final BinaryInputStream stream = new BinaryInputStream(data)) {
             final int binaryFrame = stream.readByte();
 
             if(binaryFrame == TLSBinaryFrames.PUBLIC_KEY.ordinal()) {
@@ -97,7 +97,7 @@ public class ClientTLSHandlerLayer extends EventHandlerLayer {
             final Cipher decryptCipher = Cipher.getInstance("AES");
             decryptCipher.init(Cipher.DECRYPT_MODE, secretKey);
 
-            connection.ciphers().setCiphers(encryptCipher, decryptCipher);
+            connection.getCiphers().setCiphers(encryptCipher, decryptCipher);
 
             handshakeCompleted = true;
 
@@ -107,18 +107,18 @@ public class ClientTLSHandlerLayer extends EventHandlerLayer {
                 connection.send(bufferedData);
             }
 
-            connection.eventHandlers().fireOnConnectNext(this, connection);
+            connection.getEventPipeline().fireOnConnectNext(this, connection);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
     }
 
     @Override
-    public byte[] handleSend(EventHandleContext context, byte[] byteArray) {
+    public byte[] handleSend(EventHandleContext context, byte[] data) {
         if(handshakeCompleted)
-            return byteArray;
+            return data;
 
-        pendingData.writeBytes(byteArray);
+        pendingData.writeBytes(data);
         return null;
     }
 

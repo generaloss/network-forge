@@ -34,8 +34,8 @@ TCPServer server = new TCPServer();
 server.setOnConnect(connection -> {
     connection.send("Hello, client!");
 });
-server.setOnReceive((senderConnection, byteArray) -> {
-    String received = new String(byteArray);
+server.setOnReceive((senderConnection, data) -> {
+    String received = new String(data);
     System.out.println(received); // Output: Hello, server!
 });
 server.setOnDisconnect((connection, reason, e) -> {
@@ -48,8 +48,8 @@ server.run(5555);
 
 ``` java
 TCPClient client = new TCPClient();
-client.setOnReceive((connection, byteArray) -> {
-    String received = new String(byteArray);
+client.setOnReceive((connection, data) -> {
+    String received = new String(data);
     System.out.println(received); // Output: Hello, client!
     client.close(); // disconnect client
 });

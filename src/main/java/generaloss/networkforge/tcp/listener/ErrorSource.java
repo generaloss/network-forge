@@ -1,4 +1,4 @@
-package generaloss.networkforge.tcp.event;
+package generaloss.networkforge.tcp.listener;
 
 public enum ErrorSource {
 
@@ -6,5 +6,6 @@ public enum ErrorSource {
     DISCONNECT_HANDLER,
     RECEIVE_HANDLER,
     ERROR_HANDLER,
+    SEND_HANDLER,
 
 }

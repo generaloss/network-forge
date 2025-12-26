@@ -102,17 +102,17 @@ public class PacketDispatcher {
         return packetFactory;
     }
 
-    public <H> void dispatch(byte[] byteArray, NetPacketFunction<H> handlerFunction) throws IllegalStateException, UncheckedIOException {
-        if(byteArray == null)
-            throw new IllegalArgumentException("Argument 'byteArray' cannot be null");
+    public <H> void dispatch(byte[] data, NetPacketFunction<H> handlerFunction) throws IllegalStateException, UncheckedIOException {
+        if(data == null)
+            throw new IllegalArgumentException("Argument 'data' cannot be null");
         if(handlerFunction == null)
             throw new IllegalArgumentException("Argument 'handlerFunction' cannot be null");
 
         // check if data at least contains packetID
-        if(byteArray.length < Short.BYTES)
-            throw new IllegalArgumentException("The 'byteArray' data is too small for NetPacket to read");
+        if(data.length < Short.BYTES)
+            throw new IllegalArgumentException("Size of 'data' is too small for NetPacket to read");
 
-        final BinaryInputStream stream = new BinaryInputStream(byteArray);
+        final BinaryInputStream stream = new BinaryInputStream(data);
         try {
             // create packet with read packetID
             final short packetID = stream.readShort();
@@ -124,7 +124,7 @@ public class PacketDispatcher {
             // get handler
             final H handler = handlerFunction.apply(packet);
             if(handler == null)
-                return;
+                return; // do not handle packet
 
             // handle / to handle queue
             if(directHandling) {
@@ -140,9 +140,9 @@ public class PacketDispatcher {
         }
     }
 
-    public <H> void dispatch(byte[] byteArray, H handler) throws IllegalStateException, UncheckedIOException {
+    public <H> void dispatch(byte[] data, H handler) throws IllegalStateException, UncheckedIOException {
         final NetPacketFunction<H> handlerFunction = (packet -> handler);
-        this.dispatch(byteArray, handlerFunction);
+        this.dispatch(data, handlerFunction);
     }
 
 

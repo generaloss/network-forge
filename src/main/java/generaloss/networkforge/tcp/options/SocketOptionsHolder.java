@@ -252,7 +252,7 @@ public class SocketOptionsHolder {
 
     private static <T> void trySetOption(SocketChannel channel, SocketOption<T> option, T value) {
         if(value == null)
-            return;
+            return; // keep default value
 
         try {
             channel.setOption(option, value);
@@ -261,7 +261,7 @@ public class SocketOptionsHolder {
 
     private static <T> void trySetOption(ServerSocketChannel channel, SocketOption<T> option, T value) {
         if(value == null)
-            return;
+            return; // keep default value
 
         try {
             channel.setOption(option, value);

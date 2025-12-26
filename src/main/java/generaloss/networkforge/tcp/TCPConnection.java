@@ -1,9 +1,11 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.CipherPair;
+import generaloss.networkforge.tcp.codec.ByteStreamReader;
+import generaloss.networkforge.tcp.codec.ByteStreamWriter;
+import generaloss.networkforge.tcp.crypto.CipherPair;
 import generaloss.networkforge.tcp.codec.ConnectionCodec;
-import generaloss.networkforge.tcp.event.CloseReason;
-import generaloss.networkforge.tcp.handler.EventHandlerPipeline;
+import generaloss.networkforge.tcp.listener.CloseReason;
+import generaloss.networkforge.tcp.handler.EventPipeline;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.resourceflow.ResUtils;
 
@@ -12,7 +14,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Queue;
@@ -20,51 +21,79 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class TCPConnection implements DefaultSendable, Closeable {
 
-    protected final SocketChannel channel;
-    protected final SelectionKey selectionKey;
-    protected final TCPConnectionOptions options;
-    protected final CipherPair ciphers;
-    private volatile boolean closed;
+    private static final String CLASS_NAME = TCPConnection.class.getSimpleName();
+
+    private final SocketChannel channel;
+    private final SelectionKey key;
+
+    private ConnectionCodec codec;
+    private final CipherPair ciphers;
+    private final EventPipeline eventPipeline;
+    private final TCPConnectionOptions options;
+
     private volatile Object attachment;
     private volatile String name;
-    
-    private ConnectionCodec codec;
+
     private final Queue<ByteBuffer> sendQueue;
     private final Object writeLock;
 
-    private final EventHandlerPipeline sharedEventHandlers;
-
-    public TCPConnection(SocketChannel channel, SelectionKey selectionKey, ConnectionCodec codec, EventHandlerPipeline sharedEventHandlers) {
+    public TCPConnection(SocketChannel channel, SelectionKey key, ConnectionCodec codec, EventPipeline eventPipeline) {
         if(channel == null)
             throw new IllegalArgumentException("Argument 'channel' cannot be null");
-        if(selectionKey == null)
-            throw new IllegalArgumentException("Argument 'selectionKey' cannot be null");
-        if(sharedEventHandlers == null)
+        if(key == null)
+            throw new IllegalArgumentException("Argument 'key' cannot be null");
+        if(eventPipeline == null)
             throw new IllegalArgumentException("Argument 'sharedEventHandlers' cannot be null");
 
         this.channel = channel;
-        this.selectionKey = selectionKey;
-        this.options = new TCPConnectionOptions(channel.socket());
-        this.ciphers = new CipherPair();
-        this.name = (this.getClass().getSimpleName() + "#" + this.hashCode());
+        this.key = key;
 
         this.setCodec(codec);
+
+        this.ciphers = new CipherPair();
+        this.eventPipeline = eventPipeline;
+
+        this.options = new TCPConnectionOptions(channel.socket());
+        this.name = this.makeConnectionName();
+
         this.sendQueue = new ConcurrentLinkedQueue<>();
         this.writeLock = new Object();
-
-        this.sharedEventHandlers = sharedEventHandlers;
     }
 
-    public Socket socket() {
+    private String makeConnectionName() {
+        return (CLASS_NAME + "#" + this.hashCode());
+    }
+
+
+    public Socket getSocket() {
         return channel.socket();
     }
 
-    public TCPConnectionOptions options() {
-        return options;
+    public ConnectionCodec getCodec() {
+        return codec;
     }
 
-    public CipherPair ciphers() {
+    public void setCodec(ConnectionCodec codec) {
+        if(codec == null)
+            throw new IllegalArgumentException("Argument 'codec' cannot be null");
+
+        final ByteStreamWriter writer = this::onCodecWrite;
+        final ByteStreamReader reader = channel::read;
+        codec.setup(this, writer, reader);
+
+        this.codec = codec;
+    }
+
+    public CipherPair getCiphers() {
         return ciphers;
+    }
+
+    public EventPipeline getEventPipeline() {
+        return eventPipeline;
+    }
+
+    public TCPConnectionOptions getOptions() {
+        return options;
     }
 
 
@@ -95,54 +124,39 @@ public class TCPConnection implements DefaultSendable, Closeable {
     }
 
 
-    public void setCodec(ConnectionCodec codec) {
-        if(codec == null)
-            throw new IllegalArgumentException("Argument 'codec' cannot be null");
-
-        codec.setup(this);
-        this.codec = codec;
-    }
-
-
-    public EventHandlerPipeline eventHandlers() {
-        return sharedEventHandlers;
-    }
-
-
     public int getPort() {
-        return this.socket().getPort();
+        return this.getSocket().getPort();
     }
 
     public int getLocalPort() {
-        return this.socket().getLocalPort();
+        return this.getSocket().getLocalPort();
     }
 
     public InetAddress getAddress() {
-        return this.socket().getInetAddress();
+        return this.getSocket().getInetAddress();
     }
 
     public InetAddress getLocalAddress() {
-        return this.socket().getLocalAddress();
+        return this.getSocket().getLocalAddress();
     }
 
 
     public boolean isConnected() {
-        return (channel.isConnected() && !closed);
+        return (channel.isConnected() && channel.isOpen());
     }
 
     public boolean isClosed() {
-        return closed;
+        return !this.isConnected();
     }
 
     public void close(CloseReason reason, Exception e) {
-        if(closed)
+        if(!channel.isOpen())
             return;
-        closed = true;
 
-        selectionKey.cancel();
+        key.cancel();
         ResUtils.close(channel);
 
-        sharedEventHandlers.fireOnDisconnect(this, reason, e);
+        eventPipeline.fireOnDisconnect(this, reason, e);
     }
 
     @Override
@@ -151,60 +165,74 @@ public class TCPConnection implements DefaultSendable, Closeable {
     }
 
 
-    public int readRaw(ByteBuffer buffer) throws IOException {
-        return channel.read(buffer);
+    protected void onConnectOp() {
+        eventPipeline.fireOnConnect(this);
     }
 
-    public boolean sendRaw(ByteBuffer buffer) {
-        try {
-            synchronized(writeLock) {
-                // if first in queue
-                if(sendQueue.isEmpty())
-                    channel.write(buffer); // write now
+    @Override
+    public boolean send(byte[] data) {
+        if(data == null)
+            throw new IllegalArgumentException("Argument 'data' cannot be null");
 
-                // if data not fully written
-                if(buffer.hasRemaining()) {
-                    // add to queue
-                    sendQueue.add(buffer);
-                    // enable write op & wake up selector
-                    selectionKey.interestOpsOr(SelectionKey.OP_WRITE);
-                    selectionKey.selector().wakeup();
-                }
+        final byte[] processedData = eventPipeline.fireOnSend(this, data);
+        return this.sendDirect(processedData);
+    }
+
+    public boolean sendDirect(byte[] data) {
+        if(data == null)
+            throw new IllegalArgumentException("Argument 'data' cannot be null");
+
+        final byte[] encryptedData = ciphers.encrypt(data);
+        return codec.write(encryptedData);
+    }
+
+    private void onCodecWrite(ByteBuffer buffer) throws IOException {
+        synchronized(writeLock) {
+            // if first in queue
+            if(sendQueue.isEmpty())
+                channel.write(buffer); // write now
+
+            // if data not fully written
+            if(buffer.hasRemaining()) {
+                // add to queue
+                sendQueue.add(buffer);
+                // enable write op & wake up selector
+                key.interestOpsOr(SelectionKey.OP_WRITE);
+                key.selector().wakeup();
             }
-            return true;
-        } catch (IOException | CancelledKeyException e) {
-            this.close(CloseReason.INTERNAL_ERROR, e);
-            return false;
         }
     }
 
 
-    protected void pushConnect() {
-        sharedEventHandlers.fireOnConnect(this);
+    public void onKeySelected() {
+        if(key.isReadable())
+            this.readOperationAvailable();
+        if(key.isWritable())
+            this.writeOperationAvailable();
     }
 
-    protected void pushRead() {
+    private void readOperationAvailable() {
         final byte[] data = codec.read();
-        if(data != null)
-            sharedEventHandlers.fireOnReceive(this, data);
+        if(data == null)
+            return;
+
+        final byte[] decryptedData = ciphers.decrypt(data);
+        eventPipeline.fireOnReceive(this, decryptedData);
     }
 
-    protected void pushSend() {
+    private void writeOperationAvailable() {
         try {
             synchronized(writeLock) {
-                final boolean queueFullyWritten = this.tryToSendQueuedBuffers();
-                if(!queueFullyWritten)
-                    return; // continue writing next time
-
-                // queue fully written => disable write operation
-                selectionKey.interestOps(SelectionKey.OP_READ);
+                final boolean queueFullyWritten = this.writeQueuedBuffers();
+                if(queueFullyWritten)
+                    key.interestOps(SelectionKey.OP_READ); // disable write operation
             }
         } catch (Exception e) {
             this.close(CloseReason.INTERNAL_ERROR, e);
         }
     }
 
-    private boolean tryToSendQueuedBuffers() throws Exception {
+    private boolean writeQueuedBuffers() throws Exception {
         while(!sendQueue.isEmpty()) {
             final ByteBuffer buffer = sendQueue.peek();
 
@@ -216,25 +244,8 @@ public class TCPConnection implements DefaultSendable, Closeable {
 
             sendQueue.poll();
         }
-        // all queue written
+        // queue fully written
         return true;
-    }
-
-
-    public boolean sendDirect(byte[] byteArray) {
-        if(byteArray == null)
-            return false;
-
-        return codec.send(byteArray);
-    }
-
-    @Override
-    public boolean send(byte[] byteArray) {
-        if(byteArray == null)
-            return false;
-
-        final byte[] processedData = sharedEventHandlers.fireOnSend(this, byteArray);
-        return this.sendDirect(processedData);
     }
 
 }

@@ -66,9 +66,9 @@ public class SelectorLoop {
         selectorThread.start();
     }
 
-    public boolean selectKeys(SelectionKeyConsumer selectedKeyConsumer) throws IOException {
+    public boolean selectKeys(long timeout, SelectionKeyConsumer selectedKeyConsumer) throws IOException {
         try {
-            selector.select();
+            selector.select(timeout);
         } catch (IOException ignored) {
             return false;
         }
@@ -80,6 +80,10 @@ public class SelectorLoop {
 
         selectedKeys.clear();
         return true;
+    }
+
+    public boolean selectKeys(SelectionKeyConsumer selectedKeyConsumer) throws IOException {
+        return this.selectKeys(0L, selectedKeyConsumer);
     }
 
 }

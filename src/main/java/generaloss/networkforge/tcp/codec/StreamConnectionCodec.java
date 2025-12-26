@@ -1,49 +1,21 @@
 package generaloss.networkforge.tcp.codec;
 
 import generaloss.networkforge.tcp.TCPConnection;
-import generaloss.networkforge.tcp.event.CloseReason;
+import generaloss.networkforge.tcp.listener.CloseReason;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-/**
- * A {@link ConnectionCodec} that treats the TCP stream as a continuous
- * unframed byte sequence. All available bytes are read, accumulated, and
- * returned as a single decrypted block.
- *
- * <h2>Sending</h2>
- * {@link #send(byte[])} encrypts the payload, checks its size against the
- * configured limit, and writes it directly to the connection without adding
- * any framing metadata.
- *
- * <h2>Reading</h2>
- * {@link #read()} pulls all currently available bytes from the stream and
- * concatenates them. It returns:
- * <ul>
- *     <li>{@code null} - when no complete chunk is available</li>
- *     <li>a decrypted byte array - when at least one byte was read</li>
- * </ul>
- *
- * This codec relies on external protocol logic to define message boundaries.
- *
- * <h2>Oversized reads</h2>
- * If accumulated data exceeds the configured maximum read size, the codec
- * optionally closes the connection or discards the remaining bytes.
- *
- * <h2>Buffering</h2>
- * A reusable fixed-size buffer (8 KB) is used for chunked reads.
- *
- * <h2>Connection handling</h2>
- * Remote closes, invalid states, or I/O errors result in closing the
- * connection with the corresponding {@link CloseReason}.
- */
 public class StreamConnectionCodec implements ConnectionCodec {
 
     private static final String CLASS_NAME = StreamConnectionCodec.class.getSimpleName();
     private static final int DATA_BUFFER_SIZE = 8192; // 8 kb
 
     private TCPConnection connection;
+    private ByteStreamWriter writer;
+    private ByteStreamReader reader;
+
     private final ByteBuffer dataBuffer;
 
     public StreamConnectionCodec() {
@@ -51,27 +23,32 @@ public class StreamConnectionCodec implements ConnectionCodec {
     }
 
     @Override
-    public void setup(TCPConnection connection) {
+    public void setup(TCPConnection connection, ByteStreamWriter writer, ByteStreamReader reader) {
         this.connection = connection;
+        this.writer = writer;
+        this.reader = reader;
     }
 
-    @Override
-    public boolean send(byte[] byteArray) {
+    public boolean write(byte[] data) {
         if(connection == null || connection.isClosed())
             return false;
 
-        // encrypt data
-        final byte[] data = connection.ciphers().encrypt(byteArray);
-
         // check data size
         final int size = data.length;
+        if(size == 0) {
+            System.err.printf(
+                "[%1$s %2$s] Data frame to send cannot be empty (length=0). ",
+                connection.getName(), CLASS_NAME
+            );
+            return false;
+        }
 
-        final int maxSize = connection.options().getMaxWriteFrameSize();
+        final int maxSize = connection.getOptions().getMaxWriteFrameSize();
         if(size > maxSize) {
             System.err.printf(
-                "[%1$s] Frame to send is too large: %2$d bytes. " +
-                "Maximum allowed: %3$d bytes (adjustable).%n",
-                CLASS_NAME, size, maxSize
+                "[%1$s %2$s] Frame to send is too large: %3$d bytes. " +
+                "Maximum allowed: %4$d bytes (adjustable).%n",
+                connection.getName(), CLASS_NAME, size, maxSize
             );
             return false;
         }
@@ -81,8 +58,14 @@ public class StreamConnectionCodec implements ConnectionCodec {
         buffer.put(data);
         buffer.flip();
 
-        // send
-        return connection.sendRaw(buffer);
+        // write
+        try {
+            writer.write(buffer);
+            return true;
+        } catch (IOException e) {
+            connection.close(CloseReason.INTERNAL_ERROR, e);
+            return false;
+        }
     }
 
     @Override
@@ -96,7 +79,7 @@ public class StreamConnectionCodec implements ConnectionCodec {
 
             int length;
             while(true) {
-                length = connection.readRaw(dataBuffer);
+                length = reader.read(dataBuffer);
                 if(length < 1)
                     break;
 
@@ -108,10 +91,10 @@ public class StreamConnectionCodec implements ConnectionCodec {
                 dataBuffer.clear();
 
                 // check size
-                if(bytesStream.size() > connection.options().getMaxReadFrameSize()) {
+                if(bytesStream.size() > connection.getOptions().getMaxReadFrameSize()) {
                     // close connection
-                    if(connection.options().isCloseOnFrameSizeLimit())
-                        connection.close(CloseReason.FRAME_SIZE_LIMIT_EXCEEDED, null);
+                    if(connection.getOptions().isCloseOnFrameReadSizeExceed())
+                        connection.close(CloseReason.FRAME_READ_SIZE_LIMIT_EXCEEDED, null);
 
                     this.discardAvailableBytes();
                     return null;
@@ -127,8 +110,7 @@ public class StreamConnectionCodec implements ConnectionCodec {
             if(bytesStream.size() == 0)
                 return null;
 
-            final byte[] allReadBytes = bytesStream.toByteArray();
-            return connection.ciphers().decrypt(allReadBytes);
+            return bytesStream.toByteArray();
 
         } catch (IOException e) {
             connection.close(CloseReason.INTERNAL_ERROR, e);
@@ -140,7 +122,7 @@ public class StreamConnectionCodec implements ConnectionCodec {
         dataBuffer.clear();
         while(true) {
             // read
-            final int read = connection.readRaw(dataBuffer);
+            final int read = reader.read(dataBuffer);
             dataBuffer.clear();
             // check if no data
             if(read == 0)

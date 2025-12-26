@@ -1,4 +1,4 @@
-package generaloss.networkforge.sslprocessor;
+package generaloss.networkforge.layer.tls;
 
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.handler.EventHandleContext;
@@ -13,7 +13,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.*;
 
-public class ServerTLSHandlerLayer extends EventHandlerLayer {
+public class ServerTLSLayer extends EventHandlerLayer {
 
     public static final int RSA_KEY_SIZE = 2048;
 
@@ -22,7 +22,7 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
     private volatile boolean handshakeCompleted;
     private final ByteArrayOutputStream pendingData;
 
-    public ServerTLSHandlerLayer() {
+    public ServerTLSLayer() {
         this.pendingData = new ByteArrayOutputStream();
         try {
             final KeyPairGenerator pairGenerator = KeyPairGenerator.getInstance("RSA");
@@ -51,11 +51,11 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
     }
 
     @Override
-    public boolean handleReceive(EventHandleContext context, byte[] byteArray) {
+    public boolean handleReceive(EventHandleContext context, byte[] data) {
         if(handshakeCompleted)
             return true;
 
-        try (final BinaryInputStream stream = new BinaryInputStream(byteArray)) {
+        try (final BinaryInputStream stream = new BinaryInputStream(data)) {
             final int binaryFrame = stream.readByte();
             if(binaryFrame == TLSBinaryFrames.ENCRYPTED_SECRET_KEY.ordinal()) {
                 // ENCRYPTED_SECRET_KEY
@@ -93,7 +93,7 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
 
                 this.sendConnectionEncryptedSignal(context);
 
-                connection.ciphers().setCiphers(encryptCipher, decryptCipher);
+                connection.getCiphers().setCiphers(encryptCipher, decryptCipher);
 
                 handshakeCompleted = true;
 
@@ -103,7 +103,7 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
                     connection.send(bufferedData);
                 }
 
-                connection.eventHandlers().fireOnConnectNext(this, connection);
+                connection.getEventPipeline().fireOnConnectNext(this, connection);
 
             }catch(NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
                 throw new RuntimeException(e);
@@ -123,11 +123,11 @@ public class ServerTLSHandlerLayer extends EventHandlerLayer {
     }
 
     @Override
-    public byte[] handleSend(EventHandleContext context, byte[] byteArray) {
+    public byte[] handleSend(EventHandleContext context, byte[] data) {
         if(handshakeCompleted)
-            return byteArray;
+            return data;
 
-        pendingData.writeBytes(byteArray);
+        pendingData.writeBytes(data);
         return null;
     }
 

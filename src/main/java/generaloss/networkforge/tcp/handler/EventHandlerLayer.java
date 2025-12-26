@@ -1,7 +1,7 @@
 package generaloss.networkforge.tcp.handler;
 
-import generaloss.networkforge.tcp.event.CloseReason;
-import generaloss.networkforge.tcp.event.ErrorSource;
+import generaloss.networkforge.tcp.listener.CloseReason;
+import generaloss.networkforge.tcp.listener.ErrorSource;
 
 public abstract class EventHandlerLayer {
 
@@ -13,12 +13,12 @@ public abstract class EventHandlerLayer {
         return true;
     }
 
-    public boolean handleReceive(EventHandleContext context, byte[] byteArray) {
+    public boolean handleReceive(EventHandleContext context, byte[] data) {
         return true;
     }
 
-    public byte[] handleSend(EventHandleContext context, byte[] byteArray) {
-        return byteArray;
+    public byte[] handleSend(EventHandleContext context, byte[] data) {
+        return data;
     }
 
     public boolean handleError(EventHandleContext context, ErrorSource source, Throwable throwable) {
