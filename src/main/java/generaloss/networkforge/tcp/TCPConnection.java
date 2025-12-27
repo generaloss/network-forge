@@ -180,7 +180,7 @@ public class TCPConnection implements DefaultSendable, Closeable {
 
     public boolean sendDirect(byte[] data) {
         if(data == null)
-            throw new IllegalArgumentException("Argument 'data' cannot be null");
+            return false;
 
         final byte[] encryptedData = ciphers.encrypt(data);
         return codec.write(encryptedData);

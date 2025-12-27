@@ -3,6 +3,7 @@ package generaloss.networkforge.layer.tls;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.handler.EventHandleContext;
 import generaloss.networkforge.tcp.handler.EventHandlerLayer;
+import generaloss.networkforge.tcp.listener.CloseReason;
 import generaloss.resourceflow.stream.BinaryInputStream;
 
 import javax.crypto.Cipher;
@@ -12,18 +13,19 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.*;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ServerTLSLayer extends EventHandlerLayer {
 
     public static final int RSA_KEY_SIZE = 2048;
 
-    private volatile TCPConnection connection;
     private final KeyPair keyPair;
-    private volatile boolean handshakeCompleted;
-    private final ByteArrayOutputStream pendingData;
+    private final Map<TCPConnection, ByteArrayOutputStream> pendingDataMap;
+    private final ConcurrentLinkedQueue<TCPConnection> handshakeCompleted;
 
     public ServerTLSLayer() {
-        this.pendingData = new ByteArrayOutputStream();
         try {
             final KeyPairGenerator pairGenerator = KeyPairGenerator.getInstance("RSA");
             pairGenerator.initialize(RSA_KEY_SIZE);
@@ -32,12 +34,15 @@ public class ServerTLSLayer extends EventHandlerLayer {
         } catch (NoSuchAlgorithmException ignored) {
             throw new RuntimeException("Failed to generate RSA key pair");
         }
+
+        this.pendingDataMap = new ConcurrentHashMap<>();
+        this.handshakeCompleted = new ConcurrentLinkedQueue<>();
     }
 
     @Override
     public boolean handleConnect(EventHandleContext context) {
-        this.connection = context.getConnection();
         this.sendPublicKey(context);
+
         return false;
     }
 
@@ -52,7 +57,7 @@ public class ServerTLSLayer extends EventHandlerLayer {
 
     @Override
     public boolean handleReceive(EventHandleContext context, byte[] data) {
-        if(handshakeCompleted)
+        if(handshakeCompleted.contains(context.getConnection()))
             return true;
 
         try (final BinaryInputStream stream = new BinaryInputStream(data)) {
@@ -73,6 +78,8 @@ public class ServerTLSLayer extends EventHandlerLayer {
 
     private void onReceiveEncryptedSecretKey(EventHandleContext context, byte[] encryptedSecretKeyBytes) {
         try {
+            final TCPConnection connection = context.getConnection();
+
             final PrivateKey privateKey = keyPair.getPrivate();
 
             final Cipher privateEncryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
@@ -95,9 +102,10 @@ public class ServerTLSLayer extends EventHandlerLayer {
 
                 connection.getCiphers().setCiphers(encryptCipher, decryptCipher);
 
-                handshakeCompleted = true;
+                handshakeCompleted.add(context.getConnection());
 
-                if(pendingData.size() > 0) {
+                if(pendingDataMap.containsKey(connection)) {
+                    final ByteArrayOutputStream pendingData = pendingDataMap.remove(connection);
                     final byte[] bufferedData = pendingData.toByteArray();
                     pendingData.reset();
                     connection.send(bufferedData);
@@ -116,7 +124,7 @@ public class ServerTLSLayer extends EventHandlerLayer {
 
     private void sendConnectionEncryptedSignal(EventHandleContext context) {
         final boolean success = context.send(stream ->
-            stream.writeByte(TLSBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal())
+                                                 stream.writeByte(TLSBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal())
         );
         if(!success)
             throw new RuntimeException("Failed to send connection encrypted signal");
@@ -124,11 +132,23 @@ public class ServerTLSLayer extends EventHandlerLayer {
 
     @Override
     public byte[] handleSend(EventHandleContext context, byte[] data) {
-        if(handshakeCompleted)
+        if(handshakeCompleted.contains(context.getConnection()))
             return data;
 
-        pendingData.writeBytes(data);
+        final TCPConnection connection = context.getConnection();
+        if(!pendingDataMap.containsKey(connection))
+            pendingDataMap.put(connection, new ByteArrayOutputStream());
+
+        pendingDataMap.get(connection).writeBytes(data);
         return null;
+    }
+
+    @Override
+    public boolean handleDisconnect(EventHandleContext context, CloseReason reason, Exception e) {
+        final TCPConnection connection = context.getConnection();
+        handshakeCompleted.remove(connection);
+        pendingDataMap.remove(connection);
+        return true;
     }
 
 }

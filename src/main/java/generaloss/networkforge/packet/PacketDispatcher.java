@@ -146,7 +146,7 @@ public class PacketDispatcher {
     }
 
 
-    public synchronized int handlePackets() {
+    public int handlePackets() {
         int handledNum = 0;
 
         while(!toHandleQueue.isEmpty()){
@@ -154,7 +154,6 @@ public class PacketDispatcher {
             handleExecutor.execute(task::executePacketHandle);
             handledNum++;
         }
-
         return handledNum;
     }
 

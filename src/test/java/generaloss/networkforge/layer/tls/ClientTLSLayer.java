@@ -3,6 +3,7 @@ package generaloss.networkforge.layer.tls;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.handler.EventHandleContext;
 import generaloss.networkforge.tcp.handler.EventHandlerLayer;
+import generaloss.networkforge.tcp.listener.CloseReason;
 import generaloss.resourceflow.stream.BinaryInputStream;
 
 import javax.crypto.Cipher;
@@ -32,6 +33,12 @@ public class ClientTLSLayer extends EventHandlerLayer {
         return false;
     }
 
+
+    public boolean handleDisconnect(EventHandleContext context, CloseReason reason, Exception e) {
+        handshakeCompleted = false;
+        return true;
+    }
+
     @Override
     public boolean handleReceive(EventHandleContext context, byte[] data) {
         if(handshakeCompleted)
@@ -45,8 +52,8 @@ public class ClientTLSLayer extends EventHandlerLayer {
                 final byte[] publicKeyBytes = stream.readByteArray();
 
                 final PublicKey publicKey = KeyFactory
-                    .getInstance("RSA")
-                    .generatePublic(new X509EncodedKeySpec(publicKeyBytes));
+                                                .getInstance("RSA")
+                                                .generatePublic(new X509EncodedKeySpec(publicKeyBytes));
 
                 this.onReceivePublicKey(context, publicKey);
             }else if(binaryFrame == TLSBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal()) {
