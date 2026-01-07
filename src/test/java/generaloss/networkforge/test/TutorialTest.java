@@ -1,4 +1,4 @@
-package generaloss.networkforge;
+package generaloss.networkforge.test;
 
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.tcp.TCPClient;

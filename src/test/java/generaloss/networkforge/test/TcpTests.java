@@ -1,18 +1,19 @@
-package generaloss.networkforge;
+package generaloss.networkforge.test;
 
-import generaloss.networkforge.layer.CompressionLayer;
+import generaloss.networkforge.test.layer.CompressionLayer;
 import generaloss.chronokit.TimeUtils;
-import generaloss.networkforge.packet.TestDisconnectPacket;
-import generaloss.networkforge.packet.TestMessagePacket;
-import generaloss.networkforge.packet.TestPacketHandler;
-import generaloss.networkforge.layer.tls.ClientTLSLayer;
-import generaloss.networkforge.layer.tls.ServerTLSLayer;
+import generaloss.networkforge.packet.*;
+import generaloss.networkforge.test.layer.tls.ClientTLSLayer;
+import generaloss.networkforge.test.layer.tls.ServerTLSLayer;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.ErrorListener;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
-import generaloss.networkforge.packet.PacketDispatcher;
 import generaloss.networkforge.tcp.TCPClient;
 import generaloss.networkforge.tcp.TCPServer;
+import generaloss.networkforge.test.packet.TestDisconnectPacket;
+import generaloss.networkforge.test.packet.TestMessagePacket;
+import generaloss.networkforge.test.packet.TestPacketHandler;
+import generaloss.resourceflow.resource.Resource;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -20,6 +21,8 @@ import org.junit.Test;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -279,7 +282,7 @@ public class TcpTests {
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
 
-        final PacketDispatcher dispatcher = new PacketDispatcher()
+        final PacketReader packetReader = new PacketReader()
             .register(TestMessagePacket.class, TestMessagePacket::new);
 
         final AtomicInteger counter = new AtomicInteger();
@@ -292,8 +295,14 @@ public class TcpTests {
             public void handleDisconnect(String reason) { }
         };
 
+        final Executor executor = Executors.newSingleThreadExecutor();
+
         final TCPServer server = new TCPServer()
-            .registerOnReceive((sender, bytes) -> dispatcher.dispatch(bytes, handler))
+            .registerOnReceive((sender, bytes) ->
+                packetReader.tryRead(bytes)
+                    .ifPresent(packet ->
+                        executor.execute(packet.createHandleTask(handler)))
+            )
             .run(PORT);
 
         final TCPClient client = new TCPClient();
@@ -310,8 +319,8 @@ public class TcpTests {
     @Test
     public void send_multiple_packets() throws Exception {
         TimeUtils.delayMillis(100);
-        final PacketDispatcher dispatcher = new PacketDispatcher()
-            .registerAll(TestMessagePacket.class, TestDisconnectPacket.class);
+        final PacketReader packetReader = new PacketReader()
+            .registerAllFromPackage(Resource.classpath("generaloss/networkforge/packet/"));
 
         final AtomicInteger counter = new AtomicInteger();
 
@@ -325,7 +334,10 @@ public class TcpTests {
         };
 
         final TCPServer server = new TCPServer()
-            .registerOnReceive((sender, bytes) -> dispatcher.dispatch(bytes, handler))
+            .registerOnReceive((sender, bytes) -> {
+                final NetPacket<TestPacketHandler> packet = packetReader.readOrNull(bytes);
+                packet.handle(handler);
+            })
             .run(PORT);
 
         final TCPClient client = new TCPClient();
@@ -344,7 +356,7 @@ public class TcpTests {
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
 
-        final PacketDispatcher dispatcher = new PacketDispatcher()
+        final PacketReader packetReader = new PacketReader()
             .register(TestMessagePacket.class, TestMessagePacket::new);
 
         final AtomicInteger counter = new AtomicInteger();
@@ -359,7 +371,10 @@ public class TcpTests {
 
         final TCPServer server = new TCPServer();
         server.getEventPipeline().addHandlerFirst(new ServerTLSLayer());
-        server.registerOnReceive((sender, bytes) -> dispatcher.dispatch(bytes, handler));
+        server.registerOnReceive((sender, bytes) -> {
+            final NetPacket<TestPacketHandler> packet = packetReader.readOrNull(bytes);
+            packet.handle(handler);
+        });
         server.registerOnError(ErrorListener::printErrorCatch);
         server.run(PORT);
 

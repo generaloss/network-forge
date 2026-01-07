@@ -1,4 +1,4 @@
-package generaloss.networkforge;
+package generaloss.networkforge.test;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
