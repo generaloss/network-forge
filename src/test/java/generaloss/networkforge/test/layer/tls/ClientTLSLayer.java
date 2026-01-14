@@ -1,7 +1,9 @@
-package generaloss.networkforge.sslprocessor;
+package generaloss.networkforge.test.layer.tls;
 
 import generaloss.networkforge.tcp.TCPConnection;
+import generaloss.networkforge.tcp.handler.EventHandleContext;
 import generaloss.networkforge.tcp.handler.EventHandlerLayer;
+import generaloss.networkforge.tcp.listener.CloseReason;
 import generaloss.resourceflow.stream.BinaryInputStream;
 
 import javax.crypto.Cipher;
@@ -12,7 +14,7 @@ import java.io.IOException;
 import java.security.*;
 import java.security.spec.X509EncodedKeySpec;
 
-public class ClientTLSHandlerLayer extends EventHandlerLayer {
+public class ClientTLSLayer extends EventHandlerLayer {
 
     public static final int AES_KEY_SIZE = 128;
 
@@ -21,22 +23,28 @@ public class ClientTLSHandlerLayer extends EventHandlerLayer {
     private volatile boolean handshakeCompleted;
     private final ByteArrayOutputStream pendingData;
 
-    public ClientTLSHandlerLayer() {
+    public ClientTLSLayer() {
         this.pendingData = new ByteArrayOutputStream();
     }
 
     @Override
-    public boolean handleConnect(TCPConnection connection) {
-        this.connection = connection;
+    public boolean handleConnect(EventHandleContext context) {
+        this.connection = context.getConnection();
         return false;
     }
 
+
+    public boolean handleDisconnect(EventHandleContext context, CloseReason reason, Exception e) {
+        handshakeCompleted = false;
+        return true;
+    }
+
     @Override
-    public boolean handleReceive(TCPConnection connection, byte[] byteArray) {
+    public boolean handleReceive(EventHandleContext context, byte[] data) {
         if(handshakeCompleted)
             return true;
 
-        try (final BinaryInputStream stream = new BinaryInputStream(byteArray)) {
+        try (final BinaryInputStream stream = new BinaryInputStream(data)) {
             final int binaryFrame = stream.readByte();
 
             if(binaryFrame == TLSBinaryFrames.PUBLIC_KEY.ordinal()) {
@@ -44,10 +52,10 @@ public class ClientTLSHandlerLayer extends EventHandlerLayer {
                 final byte[] publicKeyBytes = stream.readByteArray();
 
                 final PublicKey publicKey = KeyFactory
-                    .getInstance("RSA")
-                    .generatePublic(new X509EncodedKeySpec(publicKeyBytes));
+                                                .getInstance("RSA")
+                                                .generatePublic(new X509EncodedKeySpec(publicKeyBytes));
 
-                this.onReceivePublicKey(publicKey);
+                this.onReceivePublicKey(context, publicKey);
             }else if(binaryFrame == TLSBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal()) {
                 // CONNECTION_ENCRYPTED_SIGNAL
                 this.onReceiveEncryptedSignal();
@@ -61,7 +69,7 @@ public class ClientTLSHandlerLayer extends EventHandlerLayer {
         return false;
     }
 
-    private void onReceivePublicKey(PublicKey publicKey) {
+    private void onReceivePublicKey(EventHandleContext context, PublicKey publicKey) {
         try {
             // key
             final KeyGenerator generator = KeyGenerator.getInstance("AES");
@@ -72,14 +80,14 @@ public class ClientTLSHandlerLayer extends EventHandlerLayer {
             encryptCipher.init(Cipher.ENCRYPT_MODE, publicKey);
 
             final byte[] encryptedSecretKey = encryptCipher.doFinal(secretKey.getEncoded());
-            this.sendEncryptedSecretKey(encryptedSecretKey);
+            this.sendEncryptedSecretKey(context, encryptedSecretKey);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    private void sendEncryptedSecretKey(byte[] encryptedSecretKey) {
-        final boolean success = connection.send(stream -> {
+    private void sendEncryptedSecretKey(EventHandleContext context, byte[] encryptedSecretKey) {
+        final boolean success = context.send(stream -> {
             stream.writeByte(TLSBinaryFrames.ENCRYPTED_SECRET_KEY.ordinal());
             stream.writeByteArray(encryptedSecretKey);
         });
@@ -96,7 +104,7 @@ public class ClientTLSHandlerLayer extends EventHandlerLayer {
             final Cipher decryptCipher = Cipher.getInstance("AES");
             decryptCipher.init(Cipher.DECRYPT_MODE, secretKey);
 
-            connection.ciphers().setCiphers(encryptCipher, decryptCipher);
+            connection.getCiphers().setCiphers(encryptCipher, decryptCipher);
 
             handshakeCompleted = true;
 
@@ -106,18 +114,18 @@ public class ClientTLSHandlerLayer extends EventHandlerLayer {
                 connection.send(bufferedData);
             }
 
-            connection.eventHandlers().fireOnConnectNext(this, connection);
+            connection.getEventPipeline().fireOnConnectNext(this, connection);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
     }
 
     @Override
-    public byte[] handleSend(TCPConnection connection, byte[] byteArray) {
+    public byte[] handleSend(EventHandleContext context, byte[] data) {
         if(handshakeCompleted)
-            return super.handleSend(connection, byteArray);
+            return data;
 
-        pendingData.writeBytes(byteArray);
+        pendingData.writeBytes(data);
         return null;
     }
 

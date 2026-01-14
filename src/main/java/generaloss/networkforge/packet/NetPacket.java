@@ -6,6 +6,7 @@ import generaloss.resourceflow.stream.BinaryStreamWriter;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Modifier;
 
 public abstract class NetPacket<H> {
 
@@ -37,6 +38,11 @@ public abstract class NetPacket<H> {
     public byte[] toByteArray() throws IOException {
         final BinaryStreamWriter streamWriter = this.createStreamWriter();
         return BinaryStreamWriter.toByteArray(streamWriter);
+    }
+
+
+    public Runnable createHandleTask(H handler) {
+        return () -> this.handle(handler);
     }
 
 
@@ -76,6 +82,14 @@ public abstract class NetPacket<H> {
         } catch (NoSuchMethodException e) {
             throw new IllegalStateException("Unable to instantiate NetPacket '" + packetClass.getSimpleName() + "': default (no-args) constructor not found.");
         }
+    }
+
+
+    public static boolean isConcretePacketClass(Class<?> c) {
+        return (
+            NetPacket.class.isAssignableFrom(c) && // inherits NetPacket
+            !Modifier.isAbstract(c.getModifiers()) // not abstract
+        );
     }
 
 }

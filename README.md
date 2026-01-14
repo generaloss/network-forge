@@ -16,7 +16,7 @@ Add the dependency from Maven Central:
 <dependency>
     <groupId>io.github.generaloss</groupId>
     <artifactId>network-forge</artifactId>
-    <version>25.11.1</version>
+    <version>26.1.1</version>
 </dependency>
 ```
 
@@ -31,14 +31,14 @@ Requirements:
 
 ``` java
 TCPServer server = new TCPServer();
-server.setOnConnect(connection -> {
+server.registerOnConnect(connection -> {
     connection.send("Hello, client!");
 });
-server.setOnReceive((senderConnection, byteArray) -> {
-    String received = new String(byteArray);
+server.registerOnReceive((senderConnection, data) -> {
+    String received = new String(data);
     System.out.println(received); // Output: Hello, server!
 });
-server.setOnDisconnect((connection, reason, e) -> {
+server.registerOnDisconnect((connection, reason, e) -> {
     server.close(); // close server
 });
 server.run(5555);
@@ -48,8 +48,8 @@ server.run(5555);
 
 ``` java
 TCPClient client = new TCPClient();
-client.setOnReceive((connection, byteArray) -> {
-    String received = new String(byteArray);
+client.registerOnReceive((connection, data) -> {
+    String received = new String(data);
     System.out.println(received); // Output: Hello, client!
     client.close(); // disconnect client
 });

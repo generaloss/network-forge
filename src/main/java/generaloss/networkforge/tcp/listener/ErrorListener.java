@@ -1,8 +1,8 @@
-package generaloss.networkforge.tcp.event;
+package generaloss.networkforge.tcp.listener;
 
 import generaloss.networkforge.tcp.TCPConnection;
 
-public interface ErrorHandler {
+public interface ErrorListener {
 
     void onError(TCPConnection connection, ErrorSource source, Throwable throwable);
 

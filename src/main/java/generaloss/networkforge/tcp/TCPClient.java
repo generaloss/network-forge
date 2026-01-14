@@ -1,11 +1,11 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.CipherPair;
+import generaloss.networkforge.tcp.crypto.CipherPair;
 import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.codec.CodecType;
-import generaloss.networkforge.tcp.event.*;
-import generaloss.networkforge.tcp.handler.EventListenerHolder;
-import generaloss.networkforge.tcp.handler.EventHandlerPipeline;
+import generaloss.networkforge.tcp.listener.*;
+import generaloss.networkforge.tcp.handler.ListenersHolder;
+import generaloss.networkforge.tcp.handler.EventPipeline;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.packet.NetPacket;
@@ -30,24 +30,24 @@ public class TCPClient implements Sendable {
     private TCPConnectionOptionsHolder initialOptions;
     private final SelectorLoop selectorLoop;
 
-    private final EventHandlerPipeline eventHandlers;
-    private final EventListenerHolder listeners;
+    private final ListenersHolder listeners;
+    private final EventPipeline eventPipeline;
 
     private TCPConnection connection;
 
-    public TCPClient(TCPConnectionOptionsHolder initialOptions) {
+    public TCPClient() {
         this.setCodec(CodecType.DEFAULT);
-        this.setInitialOptions(initialOptions);
 
+        this.initialOptions = new TCPConnectionOptionsHolder();
         this.selectorLoop = new SelectorLoop();
 
-        this.listeners = new EventListenerHolder();
-        this.eventHandlers = new EventHandlerPipeline();
-        this.eventHandlers.addHandler(listeners);
-    }
+        this.listeners = new ListenersHolder();
+        this.listeners.registerOnDisconnect(
+            (connection, reason, e) -> selectorLoop.close()
+        );
 
-    public TCPClient() {
-        this(new TCPConnectionOptionsHolder());
+        this.eventPipeline = new EventPipeline();
+        this.eventPipeline.addHandlerLast(listeners);
     }
 
 
@@ -58,13 +58,13 @@ public class TCPClient implements Sendable {
     public TCPConnectionOptions getOptions() {
         if(connection == null)
             return null;
-        return connection.options;
+        return connection.getOptions();
     }
 
     public CipherPair getCiphers() {
         if(connection == null)
             return null;
-        return connection.ciphers;
+        return connection.getCiphers();
     }
 
 
@@ -98,53 +98,48 @@ public class TCPClient implements Sendable {
     }
 
 
-    public EventHandlerPipeline getEventHandlers() {
-        return eventHandlers;
+    public EventPipeline getEventPipeline() {
+        return eventPipeline;
     }
 
 
-    public TCPClient registerOnConnect(ConnectionListener onConnect) {
+    public TCPClient registerOnConnect(ConnectListener onConnect) {
         listeners.registerOnConnect(onConnect);
         return this;
     }
 
-    public TCPClient registerOnDisconnect(CloseCallback onClose) {
+    public TCPClient registerOnDisconnect(DisconnectListener onClose) {
         listeners.registerOnDisconnect(onClose);
         return this;
     }
 
-    public TCPClient registerOnReceive(DataReceiver onReceive) {
+    public TCPClient registerOnReceive(DataListener onReceive) {
         listeners.registerOnReceive(onReceive);
         return this;
     }
 
-    public TCPClient registerOnReceiveStream(StreamDataReceiver onReceive) {
-        listeners.registerOnReceiveStream(onReceive);
-        return this;
-    }
-
-    public TCPClient registerOnError(ErrorHandler onError) {
+    public TCPClient registerOnError(ErrorListener onError) {
         listeners.registerOnError(onError);
         return this;
     }
 
 
-    public TCPClient unregisterOnConnect(ConnectionListener onConnect) {
+    public TCPClient unregisterOnConnect(ConnectListener onConnect) {
         listeners.unregisterOnConnect(onConnect);
         return this;
     }
 
-    public TCPClient unregisterOnDisconnect(CloseCallback onClose) {
+    public TCPClient unregisterOnDisconnect(DisconnectListener onClose) {
         listeners.unregisterOnDisconnect(onClose);
         return this;
     }
 
-    public TCPClient unregisterOnReceive(DataReceiver onReceive) {
+    public TCPClient unregisterOnReceive(DataListener onReceive) {
         listeners.unregisterOnReceive(onReceive);
         return this;
     }
 
-    public TCPClient unregisterOnError(ErrorHandler onError) {
+    public TCPClient unregisterOnError(ErrorListener onError) {
         listeners.unregisterOnError(onError);
         return this;
     }
@@ -153,8 +148,6 @@ public class TCPClient implements Sendable {
     public TCPClient connect(SocketAddress socketAddress, long timeoutMillis) throws IOException, TimeoutException {
         if(this.isConnected())
             throw new AlreadyConnectedException();
-
-        selectorLoop.close();
 
         // channel
         final SocketChannel channel = SocketChannel.open();
@@ -171,10 +164,10 @@ public class TCPClient implements Sendable {
 
         // wait for connection
         selectorLoop.registerConnectKey(channel);
-        final boolean selectResult = selectorLoop.selectKeys(selectedKey -> {
+        final boolean selectResult = selectorLoop.selectKeys(timeoutMillis, selectedKey -> {
             if(selectedKey.isConnectable() && channel.finishConnect()) {
                 this.createConnection(channel);
-            }else{
+            } else {
                 channel.close();
                 throw new ConnectException("Connection failed");
             }
@@ -205,30 +198,22 @@ public class TCPClient implements Sendable {
 
         final SelectionKey key = selectorLoop.registerReadKey(channel);
 
-        connection = new TCPConnection(channel, key, connectionCodec, eventHandlers);
+        connection = new TCPConnection(channel, key, connectionCodec, eventPipeline);
         connection.setName(this.makeConnectionName());
 
-        initialOptions.copyTo(connection.options());
+        initialOptions.copyTo(connection.getOptions());
 
-        connection.pushConnect();
+        connection.onConnectOp();
 
-        selectorLoop.startSelectionLoopThread(this.makeThreadName(), this::onKeySelected);
+        selectorLoop.startSelectionLoopThread(this.makeSelectorThreadName(), (_selectedKey) -> connection.onKeySelected());
     }
 
     private String makeConnectionName() {
         return (CLASS_NAME + "-connection-#" + this.hashCode());
     }
 
-    private String makeThreadName() {
+    private String makeSelectorThreadName() {
         return (CLASS_NAME + "-selector-thread-#" + this.hashCode());
-    }
-
-
-    private void onKeySelected(SelectionKey key) {
-        if(key.isReadable())
-            connection.pushRead();
-        if(key.isWritable())
-            connection.pushSend();
     }
 
 
@@ -254,7 +239,7 @@ public class TCPClient implements Sendable {
         if(connection == null)
             throw new IllegalStateException(CLASS_NAME + " is not connected");
 
-        connection.ciphers().setEncryptCipher(encryptCipher);
+        connection.getCiphers().setEncryptCipher(encryptCipher);
         return this;
     }
 
@@ -262,7 +247,7 @@ public class TCPClient implements Sendable {
         if(connection == null)
             throw new IllegalStateException(CLASS_NAME + " is not connected");
 
-        connection.ciphers().setDecryptCipher(decryptCipher);
+        connection.getCiphers().setDecryptCipher(decryptCipher);
         return this;
     }
 
@@ -270,16 +255,16 @@ public class TCPClient implements Sendable {
         if(connection == null)
             throw new IllegalStateException(CLASS_NAME + " is not connected");
 
-        connection.ciphers().setCiphers(encryptCipher, decryptCipher);
+        connection.getCiphers().setCiphers(encryptCipher, decryptCipher);
         return this;
     }
 
 
     @Override
-    public boolean send(byte[] byteArray) {
+    public boolean send(byte[] data) {
         if(connection == null)
             return false;
-        return connection.send(byteArray);
+        return connection.send(data);
     }
 
     @Override

@@ -49,14 +49,14 @@ public class TCPConnectionOptions extends SocketOptions {
     }
 
 
-    private boolean closeOnFrameSizeLimit;
+    private boolean closeOnFrameReadSizeExceed;
 
-    public boolean isCloseOnFrameSizeLimit() {
-        return closeOnFrameSizeLimit;
+    public boolean isCloseOnFrameReadSizeExceed() {
+        return closeOnFrameReadSizeExceed;
     }
 
-    public TCPConnectionOptions setCloseOnFrameSizeLimit(boolean closeOnFrameSizeLimit) {
-        this.closeOnFrameSizeLimit = closeOnFrameSizeLimit;
+    public TCPConnectionOptions setCloseOnFrameReadSizeExceed(boolean closeOnFrameReadSizeExceed) {
+        this.closeOnFrameReadSizeExceed = closeOnFrameReadSizeExceed;
         return this;
     }
 
@@ -68,7 +68,7 @@ public class TCPConnectionOptions extends SocketOptions {
     }
 
     /** Used only by FramedTCPConnectionCodec.
-      * Buffer will not be narrowed while value is set to 0. */
+      * Buffer will not be narrowed while value is set to 0.*/
     public TCPConnectionOptions setFrameBufferSizeUpperBound(int frameBufferSizeUpperBound) {
         if(frameBufferSizeUpperBound < 0)
             throw new IllegalArgumentException("Argument 'frameBufferSizeUpperBound' must be >= 0");
@@ -83,7 +83,7 @@ public class TCPConnectionOptions extends SocketOptions {
         return TCPConnectionOptions.class.getSimpleName() + "{" +
             "MAX_READ_FRAME_SIZE=" + maxReadFrameSize +
             ", MAX_WRITE_FRAME_SIZE=" + maxWriteFrameSize +
-            ", CLOSE_ON_FRAME_SIZE_LIMIT=" + closeOnFrameSizeLimit +
+            ", CLOSE_ON_FRAME_SIZE_LIMIT=" + closeOnFrameReadSizeExceed +
             ", FRAME_BUFFER_SIZE_UPEER_BOUND=" + frameBufferSizeUpperBound +
             ", " + super.optionsToString() + "}";
     }

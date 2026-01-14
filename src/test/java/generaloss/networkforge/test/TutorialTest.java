@@ -1,4 +1,4 @@
-package generaloss.networkforge;
+package generaloss.networkforge.test;
 
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.tcp.TCPClient;
@@ -12,8 +12,8 @@ public class TutorialTest {
         server.registerOnConnect(connection ->
             connection.send("Hello, client!")
         );
-        server.registerOnReceive((senderConnection, byteArray) -> {
-            String received = new String(byteArray);
+        server.registerOnReceive((senderConnection, data) -> {
+            String received = new String(data);
             System.out.println(received); // Output: Hello, server!
         });
         server.registerOnDisconnect((connection, reason, e) -> {
@@ -23,8 +23,8 @@ public class TutorialTest {
 
         // create client
         TCPClient client = new TCPClient();
-        client.registerOnReceive((connection, byteArray) -> {
-            String received = new String(byteArray);
+        client.registerOnReceive((connection, data) -> {
+            String received = new String(data);
             System.out.println(received); // Output: Hello, client!
             client.close(); // disconnect client
         });

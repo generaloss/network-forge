@@ -7,8 +7,8 @@
         <option name="ENABLED" value="true" />
       </pattern>
     </extension>
-    <option name="PACKAGE_NAME" value="generaloss.networkforge" />
-    <option name="MAIN_CLASS_NAME" value="generaloss.networkforge.TcpTests" />
+    <option name="PACKAGE_NAME" value="generaloss.networkforge.test" />
+    <option name="MAIN_CLASS_NAME" value="generaloss.networkforge.test.TcpTests" />
     <option name="METHOD_NAME" value="" />
     <option name="TEST_OBJECT" value="class" />
     <method v="2">

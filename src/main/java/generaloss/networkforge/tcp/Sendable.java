@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 
 public interface Sendable {
 
-    boolean send(byte[] byteArray);
+    boolean send(byte[] data);
 
     boolean send(ByteBuffer buffer);
 

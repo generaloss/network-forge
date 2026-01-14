@@ -55,7 +55,7 @@ public class SocketOptions {
 
     private <T> void trySetOption(SocketOption<T> option, T value) {
         if(value == null)
-            return;
+            return; // keep default value
         try {
             socket.setOption(option, value);
         } catch (UnsupportedOperationException | IllegalArgumentException | IOException ignored) { }

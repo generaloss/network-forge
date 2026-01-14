@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="ReliabilityTest" type="Application" factoryName="Application" nameIsGenerated="true">
-    <option name="MAIN_CLASS_NAME" value="generaloss.networkforge.ReliabilityTest" />
+    <option name="MAIN_CLASS_NAME" value="generaloss.networkforge.test.ReliabilityTest" />
     <module name="network-forge" />
     <option name="PROGRAM_PARAMETERS" value="-Xmx=1024Mb" />
     <extension name="coverage">

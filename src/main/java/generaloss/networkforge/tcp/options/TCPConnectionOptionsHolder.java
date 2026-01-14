@@ -46,14 +46,14 @@ public class TCPConnectionOptionsHolder extends SocketOptionsHolder {
     }
 
 
-    private boolean closeOnFrameSizeLimit = true;
+    private boolean closeOnFrameReadSizeExceed = true;
 
-    public boolean isCloseOnFrameSizeLimit() {
-        return closeOnFrameSizeLimit;
+    public boolean isCloseOnFrameReadSizeExceed() {
+        return closeOnFrameReadSizeExceed;
     }
 
-    public TCPConnectionOptionsHolder setCloseOnFrameSizeLimit(boolean closeOnFrameSizeLimit) {
-        this.closeOnFrameSizeLimit = closeOnFrameSizeLimit;
+    public TCPConnectionOptionsHolder setCloseOnFrameReadSizeExceed(boolean closeOnFrameReadSizeExceed) {
+        this.closeOnFrameReadSizeExceed = closeOnFrameReadSizeExceed;
         return this;
     }
 
@@ -78,7 +78,7 @@ public class TCPConnectionOptionsHolder extends SocketOptionsHolder {
     public void copyTo(TCPConnectionOptions options) {
         options.setMaxReadFrameSize(maxReadFrameSize);
         options.setMaxWriteFrameSize(maxWriteFrameSize);
-        options.setCloseOnFrameSizeLimit(closeOnFrameSizeLimit);
+        options.setCloseOnFrameReadSizeExceed(closeOnFrameReadSizeExceed);
         options.setFrameBufferSizeUpperBound(frameBufferSizeUpperBound);
     }
 
@@ -88,7 +88,7 @@ public class TCPConnectionOptionsHolder extends SocketOptionsHolder {
         return TCPConnectionOptionsHolder.class.getSimpleName() + "{" +
             "MAX_READ_FRAME_SIZE=" + maxReadFrameSize +
             ", MAX_WRITE_FRAME_SIZE=" + maxWriteFrameSize +
-            ", CLOSE_ON_FRAME_SIZE_LIMIT=" + closeOnFrameSizeLimit +
+            ", CLOSE_ON_FRAME_SIZE_LIMIT=" + closeOnFrameReadSizeExceed +
             ", FRAME_BUFFER_SIZE_UPEER_BOUND=" + frameBufferSizeUpperBound +
             ", " + super.optionsToString() + "}";
     }

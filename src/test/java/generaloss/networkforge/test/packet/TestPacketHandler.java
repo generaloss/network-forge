@@ -1,4 +1,4 @@
-package generaloss.networkforge.packet;
+package generaloss.networkforge.test.packet;
 
 public interface TestPacketHandler {
 
