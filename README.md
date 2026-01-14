@@ -60,8 +60,8 @@ client.send("Hello, server!");
 ---
 
 ## Documentation
-
-See the [**Wiki**](https://github.com/generaloss/network-forge/wiki) for full guides and API documentation.
+- [**English**](https://generaloss.ru/network-forge/en/)
+- [**Русский**](https://generaloss.ru/network-forge/ru/)
 
 ---
 
