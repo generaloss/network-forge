@@ -1,6 +1,6 @@
 package generaloss.networkforge.test.layer.tls;
 
-public enum TLSBinaryFrames {
+enum SecureBinaryFrames {
 
     PUBLIC_KEY,
     ENCRYPTED_SECRET_KEY,

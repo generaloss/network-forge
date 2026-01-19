@@ -13,7 +13,6 @@ import generaloss.networkforge.packet.NetPacket;
 
 import java.io.IOException;
 import java.net.BindException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -21,6 +20,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Collection;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class TCPServer {
 
@@ -31,12 +31,15 @@ public class TCPServer {
     private final SelectorLoop selectorLoop;
 
     private final ConcurrentLinkedQueue<TCPConnection> connections;
-    private int connectionCounter;
+    private final AtomicInteger connectionCounter;
 
     private final ListenersHolder listeners;
     private final EventPipeline eventPipeline;
 
     private ServerSocketChannel[] serverChannels;
+    private int pendingConnectionsLimit;
+
+    private volatile boolean running;
 
     public TCPServer() {
         this.setCodecFactory(CodecType.DEFAULT);
@@ -44,6 +47,7 @@ public class TCPServer {
         this.initialOptions = new TCPConnectionOptionsHolder();
         this.selectorLoop = new SelectorLoop();
         this.connections = new ConcurrentLinkedQueue<>();
+        this.connectionCounter = new AtomicInteger();
 
         this.listeners = new ListenersHolder();
         this.listeners.registerOnDisconnect(
@@ -52,6 +56,9 @@ public class TCPServer {
 
         this.eventPipeline = new EventPipeline();
         this.eventPipeline.addHandlerLast(listeners);
+
+        this.serverChannels = new ServerSocketChannel[0];
+        this.pendingConnectionsLimit = 128;
     }
 
 
@@ -132,9 +139,19 @@ public class TCPServer {
     }
 
 
-    public TCPServer run(InetAddress address, int... ports) throws IOException {
-        if(ports.length < 1)
-            throw new IllegalArgumentException("At least one port must be specified");
+    public TCPServer setPendingConnectionsLimit(int pendingConnectionsLimit) {
+        this.pendingConnectionsLimit = pendingConnectionsLimit;
+        return this;
+    }
+
+    public int getPendingConnectionsLimit() {
+        return pendingConnectionsLimit;
+    }
+
+
+    public TCPServer run(InetSocketAddress... addresses) throws IOException, IllegalStateException {
+        if(addresses.length < 1)
+            throw new IllegalArgumentException("At least one address must be specified");
 
         if(this.isRunning())
             throw new IllegalStateException("TCP server is already running");
@@ -142,17 +159,17 @@ public class TCPServer {
         connections.clear();
         selectorLoop.open();
 
-        serverChannels = new ServerSocketChannel[ports.length];
-        for(int i = 0; i < ports.length; i++) {
-            final int port = ports[i];
+        serverChannels = new ServerSocketChannel[addresses.length];
+        for(int i = 0; i < addresses.length; i++) {
+            final InetSocketAddress address = addresses[i];
 
             final ServerSocketChannel serverChannel = ServerSocketChannel.open();
             initialOptions.applyServerPreBind(serverChannel);
 
             try {
-                serverChannel.bind(new InetSocketAddress(address, port));
+                serverChannel.bind(address, pendingConnectionsLimit);
             } catch (BindException e) {
-                throw new BindException("Failed to bind TCP server to port " + port + ": " + e.getMessage());
+                throw new BindException("Failed to bind TCP server to address '" + address + "': " + e.getMessage());
             }
 
             serverChannel.configureBlocking(false);
@@ -163,19 +180,24 @@ public class TCPServer {
 
         selectorLoop.startSelectionLoopThread(this.makeSelectorThreadName(), this::onKeySelected);
 
+        running = true;
         return this;
-    }
-
-    public TCPServer run(String hostname, int... ports) throws IOException {
-        return this.run(InetAddress.getByName(hostname), ports);
-    }
-
-    public TCPServer run(int... ports) throws IOException {
-        return this.run("0.0.0.0", ports);
     }
 
     private String makeSelectorThreadName() {
         return (CLASS_NAME + "-selector-thread-#" + this.hashCode());
+    }
+
+    public TCPServer run(String hostname, int... ports) throws IOException, IllegalStateException {
+        final InetSocketAddress[] addresses = new InetSocketAddress[ports.length];
+        for(int i = 0; i < ports.length; i++)
+            addresses[i] = new InetSocketAddress(hostname, ports[i]);
+
+        return this.run(addresses);
+    }
+
+    public TCPServer run(int... ports) throws IOException, IllegalStateException {
+        return this.run("0.0.0.0", ports);
     }
 
 
@@ -212,12 +234,14 @@ public class TCPServer {
             connections.add(connection);
 
             connection.onConnectOp();
-        } catch (IOException ignored){ }
+        } catch (IOException e) {
+            eventPipeline.fireOnError(null, ErrorSource.ACCEPT, e);
+        }
     }
 
     private String makeConnectionName() {
-        final int number = connectionCounter++;
-        return (CLASS_NAME + "-connection-#" + this.hashCode() + "N" + number);
+        final int number = connectionCounter.getAndIncrement();
+        return (CLASS_NAME + "-connection-" + number);
     }
 
 
@@ -226,16 +250,18 @@ public class TCPServer {
     }
 
     public boolean isRunning() {
-        return (serverChannels != null && !serverChannels[0].socket().isClosed());
+        return running;
     }
 
     public boolean isClosed() {
-        return (serverChannels == null || serverChannels[0].socket().isClosed());
+        return !running;
     }
 
     public TCPServer close() {
-        if(this.isClosed())
+        if(!running)
             return this;
+
+        running = false;
 
         selectorLoop.close();
 
@@ -245,7 +271,7 @@ public class TCPServer {
 
         for(ServerSocketChannel serverChannel : serverChannels)
             ResUtils.close(serverChannel);
-        serverChannels = null;
+        serverChannels = new ServerSocketChannel[0];
 
         return this;
     }
@@ -285,7 +311,7 @@ public class TCPServer {
             throw new IllegalArgumentException("Argument 'buffer' cannot be null");
 
         final byte[] byteArray = new byte[buffer.remaining()];
-        buffer.get(byteArray);
+        buffer.duplicate().get(byteArray);
 
         return this.broadcast(byteArray);
     }
@@ -295,7 +321,7 @@ public class TCPServer {
             throw new IllegalArgumentException("Argument 'buffer' cannot be null");
 
         final byte[] byteArray = new byte[buffer.remaining()];
-        buffer.get(byteArray);
+        buffer.duplicate().get(byteArray);
 
         return this.broadcast(except, byteArray);
     }
@@ -309,31 +335,35 @@ public class TCPServer {
 
     public int broadcast(TCPConnection except, String string) {
         if(string == null)
-            throw new IllegalArgumentException("Agrument 'string' cannot be null");
+            throw new IllegalArgumentException("Argument 'string' cannot be null");
 
         return this.broadcast(except, string.getBytes());
     }
 
     public int broadcast(BinaryStreamWriter streamWriter) {
         if(streamWriter == null)
-            throw new IllegalArgumentException("Agrument 'streamWriter' cannot be null");
+            throw new IllegalArgumentException("Argument 'streamWriter' cannot be null");
 
         try {
             final byte[] byteArray = BinaryStreamWriter.toByteArray(streamWriter);
             return this.broadcast(byteArray);
-        } catch (IOException ignored) {
+
+        } catch (IOException e) {
+            eventPipeline.fireOnError(null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }
 
     public int broadcast(TCPConnection except, BinaryStreamWriter streamWriter) {
         if(streamWriter == null)
-            throw new IllegalArgumentException("Agrument 'streamWriter' cannot be null");
+            throw new IllegalArgumentException("Argument 'streamWriter' cannot be null");
 
         try {
             final byte[] byteArray = BinaryStreamWriter.toByteArray(streamWriter);
             return this.broadcast(except, byteArray);
-        } catch (IOException ignored) {
+
+        } catch (IOException e) {
+            eventPipeline.fireOnError(null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }
@@ -345,7 +375,9 @@ public class TCPServer {
         try {
             final byte[] byteArray = packet.toByteArray();
             return this.broadcast(byteArray);
-        } catch (IOException ignored) {
+
+        } catch (IOException e) {
+            eventPipeline.fireOnError(null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }
@@ -357,7 +389,9 @@ public class TCPServer {
         try {
             final byte[] byteArray = packet.toByteArray();
             return this.broadcast(except, byteArray);
-        } catch (IOException ignored) {
+
+        } catch (IOException e) {
+            eventPipeline.fireOnError(null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }

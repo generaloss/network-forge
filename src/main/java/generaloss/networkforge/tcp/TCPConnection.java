@@ -1,5 +1,6 @@
 package generaloss.networkforge.tcp;
 
+import generaloss.networkforge.packet.NetPacket;
 import generaloss.networkforge.tcp.codec.ByteStreamReader;
 import generaloss.networkforge.tcp.codec.ByteStreamWriter;
 import generaloss.networkforge.tcp.crypto.CipherPair;
@@ -8,6 +9,7 @@ import generaloss.networkforge.tcp.listener.CloseReason;
 import generaloss.networkforge.tcp.handler.EventPipeline;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.resourceflow.ResUtils;
+import generaloss.resourceflow.stream.BinaryStreamWriter;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -19,7 +21,7 @@ import java.nio.channels.SocketChannel;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class TCPConnection implements DefaultSendable, Closeable {
+public class TCPConnection implements Sendable, Closeable {
 
     private static final String CLASS_NAME = TCPConnection.class.getSimpleName();
 
@@ -34,6 +36,7 @@ public class TCPConnection implements DefaultSendable, Closeable {
     private volatile Object attachment;
     private volatile String name;
 
+    private final SendContext sendContext;
     private final Queue<ByteBuffer> sendQueue;
     private final Object writeLock;
 
@@ -56,6 +59,7 @@ public class TCPConnection implements DefaultSendable, Closeable {
         this.options = new TCPConnectionOptions(channel.socket());
         this.name = this.makeConnectionName();
 
+        this.sendContext = new SendContext(this, eventPipeline);
         this.sendQueue = new ConcurrentLinkedQueue<>();
         this.writeLock = new Object();
     }
@@ -169,14 +173,32 @@ public class TCPConnection implements DefaultSendable, Closeable {
         eventPipeline.fireOnConnect(this);
     }
 
+
     @Override
     public boolean send(byte[] data) {
-        if(data == null)
-            throw new IllegalArgumentException("Argument 'data' cannot be null");
-
-        final byte[] processedData = eventPipeline.fireOnSend(this, data);
-        return this.sendDirect(processedData);
+        return sendContext.send(data);
     }
+
+    @Override
+    public boolean send(ByteBuffer buffer) {
+        return sendContext.send(buffer);
+    }
+
+    @Override
+    public boolean send(String string) {
+        return sendContext.send(string);
+    }
+
+    @Override
+    public boolean send(BinaryStreamWriter streamWriter) {
+        return sendContext.send(streamWriter);
+    }
+
+    @Override
+    public boolean send(NetPacket<?> packet) {
+        return sendContext.send(packet);
+    }
+
 
     public boolean sendDirect(byte[] data) {
         if(data == null)

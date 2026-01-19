@@ -1,51 +1,71 @@
 package generaloss.networkforge.tcp.handler;
 
-import generaloss.networkforge.tcp.DefaultSendable;
+import generaloss.networkforge.packet.NetPacket;
+import generaloss.networkforge.tcp.SendContext;
+import generaloss.networkforge.tcp.Sendable;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.CloseReason;
 import generaloss.networkforge.tcp.listener.ErrorSource;
+import generaloss.resourceflow.stream.BinaryStreamWriter;
 
-public class EventHandleContext implements DefaultSendable {
+import java.nio.ByteBuffer;
 
+public class EventHandleContext implements Sendable {
+
+    private final EventPipeline eventPipeline;
     private final TCPConnection connection;
-    private final EventPipeline handlerPipeline;
+    private final SendContext sendContext;
 
-    private int index;
+    private int nextPipelineIndex;
 
-    public EventHandleContext(EventPipeline handlerPipeline, TCPConnection connection) {
-        this.handlerPipeline = handlerPipeline;
+    public EventHandleContext(EventPipeline eventPipeline, TCPConnection connection) {
+        this.eventPipeline = eventPipeline;
         this.connection = connection;
+        this.sendContext = new SendContext(connection, eventPipeline);
+    }
+
+    public EventPipeline getEventPipeline() {
+        return eventPipeline;
     }
 
     public TCPConnection getConnection() {
         return connection;
     }
 
-    public void setIndex(int index) {
-        this.index = index;
+    public void onPipelineIndexChanged(int index) {
+        nextPipelineIndex = (index + 1);
+        sendContext.setPipelineStartIndex(nextPipelineIndex);
     }
 
-
-    @Override
-    public boolean isClosed() {
-        return connection.isClosed();
-    }
 
     @Override
     public boolean send(byte[] data) {
-        if(data == null)
-            throw new IllegalArgumentException("Argument 'data' cannot be null");
+        return sendContext.send(data);
+    }
 
-        final int nextIndex = (index + 1);
+    @Override
+    public boolean send(ByteBuffer buffer) {
+        return sendContext.send(buffer);
+    }
 
-        final byte[] processedData = handlerPipeline.fireOnSend(nextIndex, connection, data);
-        return connection.sendDirect(processedData);
+    @Override
+    public boolean send(String string) {
+        return sendContext.send(string);
+    }
+
+    @Override
+    public boolean send(BinaryStreamWriter streamWriter) {
+        return sendContext.send(streamWriter);
+    }
+
+    @Override
+    public boolean send(NetPacket<?> packet) {
+        return sendContext.send(packet);
     }
 
 
     public void fireOnConnectNext(TCPConnection connection) {
-        final int nextIndex = (index + 1);
-        handlerPipeline.fireOnConnect(nextIndex, connection);
+        eventPipeline.fireOnConnect(nextPipelineIndex, connection);
     }
 
     public void fireOnConnectNext() {
@@ -54,8 +74,7 @@ public class EventHandleContext implements DefaultSendable {
 
 
     public void fireOnDisconnectNext(TCPConnection connection, CloseReason reason, Exception e) {
-        final int nextIndex = (index + 1);
-        handlerPipeline.fireOnDisconnect(nextIndex, connection, reason, e);
+        eventPipeline.fireOnDisconnect(nextPipelineIndex, connection, reason, e);
     }
 
     public void fireOnDisconnectNext(CloseReason reason, Exception e) {
@@ -64,8 +83,7 @@ public class EventHandleContext implements DefaultSendable {
 
 
     public void fireOnReceiveNext(TCPConnection connection, byte[] data) {
-        final int nextIndex = (index + 1);
-        handlerPipeline.fireOnReceive(nextIndex, connection, data);
+        eventPipeline.fireOnReceive(nextPipelineIndex, connection, data);
     }
 
     public void fireOnReceiveNext(byte[] data) {
@@ -74,8 +92,7 @@ public class EventHandleContext implements DefaultSendable {
 
 
     public void fireOnErrorNext(TCPConnection connection, ErrorSource source, Throwable throwable) {
-        final int nextIndex = (index + 1);
-        handlerPipeline.fireOnError(nextIndex, connection, source, throwable);
+        eventPipeline.fireOnError(nextPipelineIndex, connection, source, throwable);
     }
 
     public void fireOnErrorNext(ErrorSource source, Throwable throwable) {

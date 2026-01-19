@@ -62,7 +62,7 @@ public class EventPipeline {
 
         final EventHandleContext context = new EventHandleContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            context.setIndex(indexFrom);
+            context.onPipelineIndexChanged(i);
 
             try {
                 final EventHandlerLayer handler = handlersList.get(i);
@@ -101,7 +101,7 @@ public class EventPipeline {
 
         final EventHandleContext context = new EventHandleContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            context.setIndex(indexFrom);
+            context.onPipelineIndexChanged(i);
 
             try {
                 final EventHandlerLayer handler = handlersList.get(i);
@@ -140,7 +140,7 @@ public class EventPipeline {
 
         final EventHandleContext context = new EventHandleContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            context.setIndex(indexFrom);
+            context.onPipelineIndexChanged(i);
 
             try {
                 final EventHandlerLayer handler = handlersList.get(i);
@@ -179,7 +179,7 @@ public class EventPipeline {
 
         final EventHandleContext context = new EventHandleContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            context.setIndex(indexFrom);
+            context.onPipelineIndexChanged(i);
 
             try {
                 final EventHandlerLayer handler = handlersList.get(i);
@@ -219,7 +219,7 @@ public class EventPipeline {
 
         final EventHandleContext context = new EventHandleContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            context.setIndex(indexFrom);
+            context.onPipelineIndexChanged(i);
 
             try {
                 final EventHandlerLayer handler = handlersList.get(i);

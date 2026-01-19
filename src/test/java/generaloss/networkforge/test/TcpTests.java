@@ -3,8 +3,8 @@ package generaloss.networkforge.test;
 import generaloss.networkforge.test.layer.CompressionLayer;
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.packet.*;
-import generaloss.networkforge.test.layer.tls.ClientTLSLayer;
-import generaloss.networkforge.test.layer.tls.ServerTLSLayer;
+import generaloss.networkforge.test.layer.tls.ClientSecureLayer;
+import generaloss.networkforge.test.layer.tls.ServerSecureLayer;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.ErrorListener;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
@@ -63,23 +63,23 @@ public class TcpTests {
         final int reconnectsNum = 100;
         final AtomicInteger counter = new AtomicInteger();
 
-        final TCPServer server = new TCPServer()
-            .registerOnConnect((connection) -> {
-                counter.incrementAndGet();
-                connection.close();
-            })
-            .registerOnDisconnect((connection, reason, e) -> counter.incrementAndGet())
-            .run(PORT);
+        final TCPServer server = new TCPServer();
+        server.registerOnConnect((connection) -> {
+            counter.incrementAndGet();
+            connection.close();
+        });
+        server.registerOnDisconnect((connection, reason, e) -> counter.incrementAndGet());
+        server.run(PORT);
 
         final AtomicBoolean disconnected = new AtomicBoolean();
 
         final TCPClient client = new TCPClient();
+        client.registerOnDisconnect((connection, reason, e) -> disconnected.set(true));
         for(int i = 0; i < reconnectsNum; i++) {
             client.connect("localhost", PORT);
-            client.registerOnDisconnect((connection, reason, e) -> disconnected.set(true));
             client.close();
 
-            TimeUtils.waitFor(disconnected::get);
+            TimeUtils.waitFor(disconnected::get, 5000, Assert::fail);
             disconnected.set(false);
         }
 
@@ -150,7 +150,7 @@ public class TcpTests {
         for(int i = 0; i < iterations; i++)
             client.send(message);
 
-        TimeUtils.waitFor(() -> counter.get() == iterations, 5000);
+        TimeUtils.waitFor(() -> counter.get() == iterations, 5000, Assert::fail);
         server.close();
         Assert.assertFalse(hasNotEqual.get());
     }
@@ -200,7 +200,7 @@ public class TcpTests {
 
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 5000);
+        TimeUtils.waitFor(client::isClosed, 5000, Assert::fail);
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -229,7 +229,7 @@ public class TcpTests {
         client.send(message.repeat(2)); // reach bytes limit => will be ignored
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 1000);
+        TimeUtils.waitFor(client::isClosed, 1000, Assert::fail);
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -311,7 +311,7 @@ public class TcpTests {
         client.send(new TestMessagePacket(message));
         client.send(new TestMessagePacket(message));
 
-        TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
+        TimeUtils.waitFor(() -> (counter.get() == 2), 2000, Assert::fail);
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -320,7 +320,7 @@ public class TcpTests {
     public void send_multiple_packets() throws Exception {
         TimeUtils.delayMillis(100);
         final PacketReader packetReader = new PacketReader()
-            .registerAllFromPackage(Resource.classpath("generaloss/networkforge/packet/"));
+            .registerAllFromPackage(Resource.classpath("generaloss/networkforge/test/packet/"));
 
         final AtomicInteger counter = new AtomicInteger();
 
@@ -346,7 +346,7 @@ public class TcpTests {
         client.send(new TestMessagePacket("Hello, World!"));
         client.send(new TestDisconnectPacket("Disconnection"));
 
-        TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
+        TimeUtils.waitFor(() -> (counter.get() == 2), 2000, Assert::fail);
         server.close();
     }
 
@@ -370,7 +370,7 @@ public class TcpTests {
         };
 
         final TCPServer server = new TCPServer();
-        server.getEventPipeline().addHandlerFirst(new ServerTLSLayer());
+        server.getEventPipeline().addHandlerFirst(new ServerSecureLayer());
         server.registerOnReceive((sender, bytes) -> {
             final NetPacket<TestPacketHandler> packet = packetReader.readOrNull(bytes);
             packet.handle(handler);
@@ -379,7 +379,7 @@ public class TcpTests {
         server.run(PORT);
 
         final TCPClient client = new TCPClient();
-        client.getEventPipeline().addHandlerFirst(new ClientTLSLayer());
+        client.getEventPipeline().addHandlerFirst(new ClientSecureLayer());
         client.connect("localhost", PORT);
         client.registerOnConnect(connection -> {
             client.send(new TestMessagePacket(message));
@@ -387,7 +387,7 @@ public class TcpTests {
         });
         client.registerOnError(ErrorListener::printErrorCatch);
 
-        TimeUtils.waitFor(() -> (counter.get() == 2), 2000);
+        TimeUtils.waitFor(() -> (counter.get() == 2), 2000, Assert::fail);
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -409,7 +409,7 @@ public class TcpTests {
         client.connect("localhost", PORT);
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 1000);
+        TimeUtils.waitFor(client::isClosed, 1000, Assert::fail);
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -475,7 +475,7 @@ public class TcpTests {
         for(int i = 0; i < iterations; i++)
             client.send(message);
 
-        TimeUtils.waitFor(() -> counter.get() == iterations, 5000);
+        TimeUtils.waitFor(() -> counter.get() == iterations, 5000, Assert::fail);
         server.close();
         Assert.assertFalse(hasNotEqual.get());
     }

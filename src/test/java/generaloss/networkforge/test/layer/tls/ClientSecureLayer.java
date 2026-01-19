@@ -14,7 +14,7 @@ import java.io.IOException;
 import java.security.*;
 import java.security.spec.X509EncodedKeySpec;
 
-public class ClientTLSLayer extends EventHandlerLayer {
+public class ClientSecureLayer extends EventHandlerLayer {
 
     public static final int AES_KEY_SIZE = 128;
 
@@ -23,7 +23,7 @@ public class ClientTLSLayer extends EventHandlerLayer {
     private volatile boolean handshakeCompleted;
     private final ByteArrayOutputStream pendingData;
 
-    public ClientTLSLayer() {
+    public ClientSecureLayer() {
         this.pendingData = new ByteArrayOutputStream();
     }
 
@@ -47,7 +47,7 @@ public class ClientTLSLayer extends EventHandlerLayer {
         try (final BinaryInputStream stream = new BinaryInputStream(data)) {
             final int binaryFrame = stream.readByte();
 
-            if(binaryFrame == TLSBinaryFrames.PUBLIC_KEY.ordinal()) {
+            if(binaryFrame == SecureBinaryFrames.PUBLIC_KEY.ordinal()) {
                 // PUBLIC_KEY
                 final byte[] publicKeyBytes = stream.readByteArray();
 
@@ -56,7 +56,7 @@ public class ClientTLSLayer extends EventHandlerLayer {
                                                 .generatePublic(new X509EncodedKeySpec(publicKeyBytes));
 
                 this.onReceivePublicKey(context, publicKey);
-            }else if(binaryFrame == TLSBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal()) {
+            }else if(binaryFrame == SecureBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal()) {
                 // CONNECTION_ENCRYPTED_SIGNAL
                 this.onReceiveEncryptedSignal();
             }else{
@@ -88,7 +88,7 @@ public class ClientTLSLayer extends EventHandlerLayer {
 
     private void sendEncryptedSecretKey(EventHandleContext context, byte[] encryptedSecretKey) {
         final boolean success = context.send(stream -> {
-            stream.writeByte(TLSBinaryFrames.ENCRYPTED_SECRET_KEY.ordinal());
+            stream.writeByte(SecureBinaryFrames.ENCRYPTED_SECRET_KEY.ordinal());
             stream.writeByteArray(encryptedSecretKey);
         });
         if(!success)

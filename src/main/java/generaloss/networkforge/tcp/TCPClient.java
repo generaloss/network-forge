@@ -145,7 +145,7 @@ public class TCPClient implements Sendable {
     }
 
 
-    public TCPClient connect(SocketAddress socketAddress, long timeoutMillis) throws IOException, TimeoutException {
+    public TCPClient connect(SocketAddress socketAddress, long timeoutMillis) throws IOException, TimeoutException, AlreadyConnectedException {
         if(this.isConnected())
             throw new AlreadyConnectedException();
 
@@ -180,15 +180,15 @@ public class TCPClient implements Sendable {
         return this;
     }
 
-    public TCPClient connect(SocketAddress socketAddress) throws IOException, TimeoutException  {
+    public TCPClient connect(SocketAddress socketAddress) throws IOException, TimeoutException, AlreadyConnectedException  {
         return this.connect(socketAddress, 0L);
     }
 
-    public TCPClient connect(String hostname, int port, long timeoutMillis) throws IOException, TimeoutException  {
+    public TCPClient connect(String hostname, int port, long timeoutMillis) throws IOException, TimeoutException, AlreadyConnectedException  {
         return this.connect(new InetSocketAddress(hostname, port), timeoutMillis);
     }
 
-    public TCPClient connect(String hostname, int port) throws IOException, TimeoutException  {
+    public TCPClient connect(String hostname, int port) throws IOException, TimeoutException, AlreadyConnectedException  {
         return this.connect(hostname, port, 0L);
     }
 

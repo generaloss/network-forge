@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class ServerTLSLayer extends EventHandlerLayer {
+public class ServerSecureLayer extends EventHandlerLayer {
 
     public static final int RSA_KEY_SIZE = 2048;
 
@@ -25,7 +25,7 @@ public class ServerTLSLayer extends EventHandlerLayer {
     private final Map<TCPConnection, ByteArrayOutputStream> pendingDataMap;
     private final ConcurrentLinkedQueue<TCPConnection> handshakeCompleted;
 
-    public ServerTLSLayer() {
+    public ServerSecureLayer() {
         try {
             final KeyPairGenerator pairGenerator = KeyPairGenerator.getInstance("RSA");
             pairGenerator.initialize(RSA_KEY_SIZE);
@@ -48,7 +48,7 @@ public class ServerTLSLayer extends EventHandlerLayer {
 
     private void sendPublicKey(EventHandleContext context) {
         final boolean success = context.send(stream -> {
-            stream.writeByte(TLSBinaryFrames.PUBLIC_KEY.ordinal());
+            stream.writeByte(SecureBinaryFrames.PUBLIC_KEY.ordinal());
             stream.writeByteArray(keyPair.getPublic().getEncoded());
         });
         if(!success)
@@ -62,7 +62,7 @@ public class ServerTLSLayer extends EventHandlerLayer {
 
         try (final BinaryInputStream stream = new BinaryInputStream(data)) {
             final int binaryFrame = stream.readByte();
-            if(binaryFrame == TLSBinaryFrames.ENCRYPTED_SECRET_KEY.ordinal()) {
+            if(binaryFrame == SecureBinaryFrames.ENCRYPTED_SECRET_KEY.ordinal()) {
                 // ENCRYPTED_SECRET_KEY
                 final byte[] encryptedSecretKey = stream.readByteArray();
                 this.onReceiveEncryptedSecretKey(context, encryptedSecretKey);
@@ -124,7 +124,7 @@ public class ServerTLSLayer extends EventHandlerLayer {
 
     private void sendConnectionEncryptedSignal(EventHandleContext context) {
         final boolean success = context.send(stream ->
-                                                 stream.writeByte(TLSBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal())
+                                                 stream.writeByte(SecureBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal())
         );
         if(!success)
             throw new RuntimeException("Failed to send connection encrypted signal");
