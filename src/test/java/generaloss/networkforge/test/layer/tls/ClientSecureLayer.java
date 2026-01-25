@@ -1,9 +1,9 @@
 package generaloss.networkforge.test.layer.tls;
 
 import generaloss.networkforge.tcp.TCPConnection;
-import generaloss.networkforge.tcp.handler.EventHandleContext;
-import generaloss.networkforge.tcp.handler.EventHandlerLayer;
+import generaloss.networkforge.tcp.pipeline.EventHandlerLayer;
 import generaloss.networkforge.tcp.listener.CloseReason;
+import generaloss.networkforge.tcp.pipeline.EventPipelineContext;
 import generaloss.resourceflow.stream.BinaryInputStream;
 
 import javax.crypto.Cipher;
@@ -28,19 +28,18 @@ public class ClientSecureLayer extends EventHandlerLayer {
     }
 
     @Override
-    public boolean handleConnect(EventHandleContext context) {
+    public boolean handleConnect(EventPipelineContext context) {
         this.connection = context.getConnection();
         return false;
     }
 
 
-    public boolean handleDisconnect(EventHandleContext context, CloseReason reason, Exception e) {
+    public void handleDisconnect(EventPipelineContext context, CloseReason reason, Exception e) {
         handshakeCompleted = false;
-        return true;
     }
 
     @Override
-    public boolean handleReceive(EventHandleContext context, byte[] data) {
+    public boolean handleReceive(EventPipelineContext context, byte[] data) {
         if(handshakeCompleted)
             return true;
 
@@ -58,7 +57,7 @@ public class ClientSecureLayer extends EventHandlerLayer {
                 this.onReceivePublicKey(context, publicKey);
             }else if(binaryFrame == SecureBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal()) {
                 // CONNECTION_ENCRYPTED_SIGNAL
-                this.onReceiveEncryptedSignal();
+                this.onReceiveEncryptedSignal(context);
             }else{
                 // ?
                 throw new RuntimeException("Invalid binary frame");
@@ -69,7 +68,7 @@ public class ClientSecureLayer extends EventHandlerLayer {
         return false;
     }
 
-    private void onReceivePublicKey(EventHandleContext context, PublicKey publicKey) {
+    private void onReceivePublicKey(EventPipelineContext context, PublicKey publicKey) {
         try {
             // key
             final KeyGenerator generator = KeyGenerator.getInstance("AES");
@@ -86,8 +85,8 @@ public class ClientSecureLayer extends EventHandlerLayer {
         }
     }
 
-    private void sendEncryptedSecretKey(EventHandleContext context, byte[] encryptedSecretKey) {
-        final boolean success = context.send(stream -> {
+    private void sendEncryptedSecretKey(EventPipelineContext context, byte[] encryptedSecretKey) {
+        final boolean success = context.fireSend(stream -> {
             stream.writeByte(SecureBinaryFrames.ENCRYPTED_SECRET_KEY.ordinal());
             stream.writeByteArray(encryptedSecretKey);
         });
@@ -95,7 +94,7 @@ public class ClientSecureLayer extends EventHandlerLayer {
             throw new RuntimeException("Failed to send encrypted secret key");
     }
 
-    private void onReceiveEncryptedSignal() {
+    private void onReceiveEncryptedSignal(EventPipelineContext context) {
         try {
             // ciphers
             final Cipher encryptCipher = Cipher.getInstance("AES");
@@ -114,14 +113,14 @@ public class ClientSecureLayer extends EventHandlerLayer {
                 connection.send(bufferedData);
             }
 
-            connection.getEventPipeline().fireOnConnectNext(this, connection);
+            context.fireOnConnect();
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
     }
 
     @Override
-    public byte[] handleSend(EventHandleContext context, byte[] data) {
+    public byte[] handleSend(EventPipelineContext context, byte[] data) {
         if(handshakeCompleted)
             return data;
 

@@ -1,8 +1,8 @@
 package generaloss.networkforge.test.layer;
 
 import generaloss.networkforge.tcp.listener.ErrorSource;
-import generaloss.networkforge.tcp.handler.EventHandleContext;
-import generaloss.networkforge.tcp.handler.EventHandlerLayer;
+import generaloss.networkforge.tcp.pipeline.EventHandlerLayer;
+import generaloss.networkforge.tcp.pipeline.EventPipelineContext;
 
 import java.io.ByteArrayOutputStream;
 import java.util.zip.Deflater;
@@ -28,7 +28,7 @@ public class CompressionLayer extends EventHandlerLayer {
     }
 
     @Override
-    public byte[] handleSend(EventHandleContext context, byte[] data) {
+    public byte[] handleSend(EventPipelineContext context, byte[] data) {
         if(data.length < MINIMUM_SIZE_TO_COMPRESS)
             return data;
 
@@ -53,13 +53,13 @@ public class CompressionLayer extends EventHandlerLayer {
 
             return result;
         } catch (Exception e) {
-            context.fireOnErrorNext(ErrorSource.SEND_HANDLER, e);
+            context.fireOnError(ErrorSource.SEND_HANDLER, e);
             return data;
         }
     }
     
     @Override
-    public boolean handleReceive(EventHandleContext context, byte[] data) {
+    public boolean handleReceive(EventPipelineContext context, byte[] data) {
         if(data[0] != 1)
             return true;
 
@@ -80,10 +80,10 @@ public class CompressionLayer extends EventHandlerLayer {
             inflater.end();
             final byte[] decompressed = outputStream.toByteArray();
 
-            context.fireOnReceiveNext(decompressed);
+            context.fireOnReceive(decompressed);
             return false;
         } catch (Exception e) {
-            context.fireOnErrorNext(ErrorSource.RECEIVE_HANDLER, e);
+            context.fireOnError(ErrorSource.RECEIVE_HANDLER, e);
             return false;
         }
     }

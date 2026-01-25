@@ -10,6 +10,7 @@ import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.AbstractSelectableChannel;
 import java.util.Set;
+import java.util.function.LongSupplier;
 
 public class SelectorLoop {
 
@@ -49,13 +50,12 @@ public class SelectorLoop {
         return this.registerKey(channel, SelectionKey.OP_READ);
     }
 
-    public void startSelectionLoopThread(String threadName, SelectionKeyConsumer selectedKeyConsumer) {
+
+    public void startSelectionLoopThread(String threadName, SelectionKeyConsumer onKeySelected, LongSupplier nextTimeoutGetter) {
         selectorThread = new Thread(() -> {
             while(!Thread.interrupted()) {
                 try {
-                    final boolean selectResult = this.selectKeys(selectedKeyConsumer);
-                    if(!selectResult)
-                        break;
+                    this.selectKeys(onKeySelected, nextTimeoutGetter);
                 } catch (Exception ignored) {
                     // ignore consumer exceptions
                 }
@@ -66,8 +66,14 @@ public class SelectorLoop {
         selectorThread.start();
     }
 
-    public boolean selectKeys(long timeout, SelectionKeyConsumer selectedKeyConsumer) throws IOException {
+    public void startSelectionLoopThread(String threadName, SelectionKeyConsumer onKeySelected) {
+        final LongSupplier defaultTimeoutGetter = () -> 0L;
+        this.startSelectionLoopThread(threadName, onKeySelected, defaultTimeoutGetter);
+    }
+
+    public boolean selectKeys(SelectionKeyConsumer onKeySelected, LongSupplier nextTimeoutGetter) throws Exception {
         try {
+            final long timeout = nextTimeoutGetter.getAsLong();
             selector.select(timeout);
         } catch (IOException ignored) {
             return false;
@@ -76,14 +82,10 @@ public class SelectorLoop {
         final Set<SelectionKey> selectedKeys = selector.selectedKeys();
         for(SelectionKey key : selectedKeys)
             if(key.isValid())
-                selectedKeyConsumer.accept(key);
+                onKeySelected.accept(key); // may throw any exception
 
         selectedKeys.clear();
         return true;
-    }
-
-    public boolean selectKeys(SelectionKeyConsumer selectedKeyConsumer) throws IOException {
-        return this.selectKeys(0L, selectedKeyConsumer);
     }
 
 }

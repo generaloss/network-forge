@@ -1,4 +1,4 @@
-package generaloss.networkforge.tcp.handler;
+package generaloss.networkforge.tcp.pipeline;
 
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.*;
@@ -55,7 +55,7 @@ public class ListenersHolder extends EventHandlerLayer {
 
 
     @Override
-    public boolean handleConnect(EventHandleContext context) {
+    public boolean handleConnect(EventPipelineContext context) {
         final TCPConnection connection = context.getConnection();
         for(ConnectListener onConnect : connectListeners)
             onConnect.onConnect(connection);
@@ -63,15 +63,14 @@ public class ListenersHolder extends EventHandlerLayer {
     }
 
     @Override
-    public boolean handleDisconnect(EventHandleContext context, CloseReason reason, Exception e) {
+    public void handleDisconnect(EventPipelineContext context, CloseReason reason, Exception e) {
         final TCPConnection connection = context.getConnection();
         for(DisconnectListener onDisconnect : disconnectListener)
             onDisconnect.onDisconnect(connection, reason, e);
-        return true;
     }
 
     @Override
-    public boolean handleReceive(EventHandleContext context, byte[] data) {
+    public boolean handleReceive(EventPipelineContext context, byte[] data) {
         final TCPConnection connection = context.getConnection();
         for(DataListener onReceive : dataListeners)
             onReceive.onReceive(connection, data);
@@ -79,7 +78,7 @@ public class ListenersHolder extends EventHandlerLayer {
     }
 
     @Override
-    public boolean handleError(EventHandleContext context, ErrorSource source, Throwable throwable) {
+    public boolean handleError(EventPipelineContext context, ErrorSource source, Throwable throwable) {
         final TCPConnection connection = context.getConnection();
         for(ErrorListener onError : errorListeners)
             onError.onError(connection, source, throwable);

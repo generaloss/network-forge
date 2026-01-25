@@ -5,6 +5,7 @@ public enum ErrorSource {
     ACCEPT,
     SEND,
     BROADCAST,
+    CLOSE,
 
     CONNECT_HANDLER,
     DISCONNECT_HANDLER,

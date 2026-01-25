@@ -1,4 +1,4 @@
-package generaloss.networkforge.tcp.handler;
+package generaloss.networkforge.tcp.pipeline;
 
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.CloseReason;
@@ -60,9 +60,9 @@ public class EventPipeline {
         if(length == 0 || indexFrom >= length)
             return;
 
-        final EventHandleContext context = new EventHandleContext(this, connection);
+        final EventPipelineContext context = new EventPipelineContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            context.onPipelineIndexChanged(i);
+            context.setPipelineStartIndex(i + 1);
 
             try {
                 final EventHandlerLayer handler = handlersList.get(i);
@@ -77,20 +77,6 @@ public class EventPipeline {
         }
     }
 
-    public void fireOnConnectNext(EventHandlerLayer current, TCPConnection connection) {
-        final int currentIndex = handlersList.indexOf(current);
-        if(currentIndex == -1)
-            throw new IllegalStateException("Not found ConnectionHandler '" + current.getClass().getSimpleName() + "'");
-
-        final int nextIndex = (currentIndex + 1);
-        this.fireOnConnect(nextIndex, connection);
-    }
-
-    public void fireOnConnect(TCPConnection connection) {
-        this.fireOnConnect(0, connection);
-    }
-
-
     public void fireOnDisconnect(int indexFrom, TCPConnection connection, CloseReason reason, Exception e) {
         if(indexFrom < 0)
             return;
@@ -99,15 +85,13 @@ public class EventPipeline {
         if(length == 0 || indexFrom >= length)
             return;
 
-        final EventHandleContext context = new EventHandleContext(this, connection);
+        final EventPipelineContext context = new EventPipelineContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            context.onPipelineIndexChanged(i);
+            context.setPipelineStartIndex(i + 1);
 
             try {
                 final EventHandlerLayer handler = handlersList.get(i);
-                final boolean result = handler.handleDisconnect(context, reason, e);
-                if(!result)
-                    break;
+                handler.handleDisconnect(context, reason, e);
 
             } catch (Throwable onDisconnectThrowable) {
                 this.fireOnError(indexFrom, connection, ErrorSource.DISCONNECT_HANDLER, onDisconnectThrowable);
@@ -115,20 +99,6 @@ public class EventPipeline {
             }
         }
     }
-
-    public void fireOnDisconnectNext(EventHandlerLayer current, TCPConnection connection, CloseReason reason, Exception e) {
-        final int currentIndex = handlersList.indexOf(current);
-        if(currentIndex == -1)
-            throw new IllegalStateException("Not found ConnectionHandler '" + current.getClass().getSimpleName() + "'");
-
-        final int nextIndex = (currentIndex + 1);
-        this.fireOnDisconnect(nextIndex, connection, reason, e);
-    }
-
-    public void fireOnDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
-        this.fireOnDisconnect(0, connection, reason, e);
-    }
-
 
     public void fireOnReceive(int indexFrom, TCPConnection connection, byte[] data) {
         if(indexFrom < 0)
@@ -138,9 +108,9 @@ public class EventPipeline {
         if(length == 0 || indexFrom >= length)
             return;
 
-        final EventHandleContext context = new EventHandleContext(this, connection);
+        final EventPipelineContext context = new EventPipelineContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            context.onPipelineIndexChanged(i);
+            context.setPipelineStartIndex(i + 1);
 
             try {
                 final EventHandlerLayer handler = handlersList.get(i);
@@ -155,20 +125,6 @@ public class EventPipeline {
         }
     }
 
-    public void fireOnReceiveNext(EventHandlerLayer current, TCPConnection connection, byte[] data) {
-        final int currentIndex = handlersList.indexOf(current);
-        if(currentIndex == -1)
-            throw new IllegalStateException("Not found ConnectionHandler '" + current.getClass().getSimpleName() + "'");
-
-        final int nextIndex = (currentIndex + 1);
-        this.fireOnReceive(nextIndex, connection, data);
-    }
-
-    public void fireOnReceive(TCPConnection connection, byte[] data) {
-        this.fireOnReceive(0, connection, data);
-    }
-
-
     public byte[] fireOnSend(int indexFrom, TCPConnection connection, byte[] data) {
         if(indexFrom < 0)
             return data;
@@ -177,9 +133,9 @@ public class EventPipeline {
         if(length == 0 || indexFrom >= length)
             return data;
 
-        final EventHandleContext context = new EventHandleContext(this, connection);
+        final EventPipelineContext context = new EventPipelineContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            context.onPipelineIndexChanged(i);
+            context.setPipelineStartIndex(i + 1);
 
             try {
                 final EventHandlerLayer handler = handlersList.get(i);
@@ -195,20 +151,6 @@ public class EventPipeline {
         return data;
     }
 
-    public byte[] fireOnSendNext(EventHandlerLayer current, TCPConnection connection, byte[] data) {
-        final int currentIndex = handlersList.indexOf(current);
-        if(currentIndex == -1)
-            throw new IllegalStateException("Not found ConnectionHandler '" + current.getClass().getSimpleName() + "'");
-
-        final int nextIndex = (currentIndex + 1);
-        return this.fireOnSend(nextIndex, connection, data);
-    }
-
-    public byte[] fireOnSend(TCPConnection connection, byte[] data) {
-        return this.fireOnSend(0, connection, data);
-    }
-
-
     public void fireOnError(int indexFrom, TCPConnection connection, ErrorSource source, Throwable throwable) {
         if(indexFrom < 0)
             return;
@@ -217,9 +159,9 @@ public class EventPipeline {
         if(length == 0 || indexFrom >= length)
             return;
 
-        final EventHandleContext context = new EventHandleContext(this, connection);
+        final EventPipelineContext context = new EventPipelineContext(this, connection);
         for(int i = indexFrom; i < length; i++) {
-            context.onPipelineIndexChanged(i);
+            context.setPipelineStartIndex(i + 1);
 
             try {
                 final EventHandlerLayer handler = handlersList.get(i);
@@ -232,19 +174,6 @@ public class EventPipeline {
                 break;
             }
         }
-    }
-
-    public void fireOnErrorNext(EventHandlerLayer current, TCPConnection connection, ErrorSource source, Throwable throwable) {
-        final int currentIndex = handlersList.indexOf(current);
-        if(currentIndex == -1)
-            throw new IllegalStateException("Not found ConnectionHandler '" + current.getClass().getSimpleName() + "'");
-
-        final int nextIndex = (currentIndex + 1);
-        this.fireOnError(nextIndex, connection, source, throwable);
-    }
-
-    public void fireOnError(TCPConnection connection, ErrorSource source, Throwable throwable) {
-        this.fireOnError(0, connection, source, throwable);
     }
 
 }

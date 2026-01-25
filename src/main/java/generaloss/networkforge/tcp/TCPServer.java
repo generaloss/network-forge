@@ -4,8 +4,8 @@ import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.codec.ConnectionCodecFactory;
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.listener.*;
-import generaloss.networkforge.tcp.handler.EventPipeline;
-import generaloss.networkforge.tcp.handler.ListenersHolder;
+import generaloss.networkforge.tcp.pipeline.EventPipeline;
+import generaloss.networkforge.tcp.pipeline.ListenersHolder;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
@@ -235,7 +235,7 @@ public class TCPServer {
 
             connection.onConnectOp();
         } catch (IOException e) {
-            eventPipeline.fireOnError(null, ErrorSource.ACCEPT, e);
+            eventPipeline.fireOnError(0, null, ErrorSource.ACCEPT, e);
         }
     }
 
@@ -349,7 +349,7 @@ public class TCPServer {
             return this.broadcast(byteArray);
 
         } catch (IOException e) {
-            eventPipeline.fireOnError(null, ErrorSource.BROADCAST, e);
+            eventPipeline.fireOnError(0, null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }
@@ -363,7 +363,7 @@ public class TCPServer {
             return this.broadcast(except, byteArray);
 
         } catch (IOException e) {
-            eventPipeline.fireOnError(null, ErrorSource.BROADCAST, e);
+            eventPipeline.fireOnError(0, null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }
@@ -377,7 +377,7 @@ public class TCPServer {
             return this.broadcast(byteArray);
 
         } catch (IOException e) {
-            eventPipeline.fireOnError(null, ErrorSource.BROADCAST, e);
+            eventPipeline.fireOnError(0, null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }
@@ -391,7 +391,7 @@ public class TCPServer {
             return this.broadcast(except, byteArray);
 
         } catch (IOException e) {
-            eventPipeline.fireOnError(null, ErrorSource.BROADCAST, e);
+            eventPipeline.fireOnError(0, null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }

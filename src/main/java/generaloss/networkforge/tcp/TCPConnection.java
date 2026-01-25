@@ -6,8 +6,9 @@ import generaloss.networkforge.tcp.codec.ByteStreamWriter;
 import generaloss.networkforge.tcp.crypto.CipherPair;
 import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.listener.CloseReason;
-import generaloss.networkforge.tcp.handler.EventPipeline;
+import generaloss.networkforge.tcp.pipeline.EventPipeline;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
+import generaloss.networkforge.tcp.pipeline.EventPipelineContext;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
@@ -30,13 +31,12 @@ public class TCPConnection implements Sendable, Closeable {
 
     private ConnectionCodec codec;
     private final CipherPair ciphers;
-    private final EventPipeline eventPipeline;
+    private final EventPipelineContext eventPipelineContext;
     private final TCPConnectionOptions options;
 
     private volatile Object attachment;
     private volatile String name;
 
-    private final SendContext sendContext;
     private final Queue<ByteBuffer> sendQueue;
     private final Object writeLock;
 
@@ -54,12 +54,11 @@ public class TCPConnection implements Sendable, Closeable {
         this.setCodec(codec);
 
         this.ciphers = new CipherPair();
-        this.eventPipeline = eventPipeline;
+        this.eventPipelineContext = new EventPipelineContext(eventPipeline, this);
 
         this.options = new TCPConnectionOptions(channel.socket());
         this.name = this.makeConnectionName();
 
-        this.sendContext = new SendContext(this, eventPipeline);
         this.sendQueue = new ConcurrentLinkedQueue<>();
         this.writeLock = new Object();
     }
@@ -90,10 +89,6 @@ public class TCPConnection implements Sendable, Closeable {
 
     public CipherPair getCiphers() {
         return ciphers;
-    }
-
-    public EventPipeline getEventPipeline() {
-        return eventPipeline;
     }
 
     public TCPConnectionOptions getOptions() {
@@ -150,7 +145,7 @@ public class TCPConnection implements Sendable, Closeable {
     }
 
     public boolean isClosed() {
-        return !this.isConnected();
+        return (!channel.isConnected() || !channel.isOpen());
     }
 
     public void close(CloseReason reason, Exception e) {
@@ -160,7 +155,7 @@ public class TCPConnection implements Sendable, Closeable {
         key.cancel();
         ResUtils.close(channel);
 
-        eventPipeline.fireOnDisconnect(this, reason, e);
+        eventPipelineContext.fireOnDisconnect(reason, e);
     }
 
     @Override
@@ -170,33 +165,33 @@ public class TCPConnection implements Sendable, Closeable {
 
 
     protected void onConnectOp() {
-        eventPipeline.fireOnConnect(this);
+        eventPipelineContext.fireOnConnect();
     }
 
 
     @Override
     public boolean send(byte[] data) {
-        return sendContext.send(data);
+        return eventPipelineContext.fireSend(data);
     }
 
     @Override
     public boolean send(ByteBuffer buffer) {
-        return sendContext.send(buffer);
+        return eventPipelineContext.fireSend(buffer);
     }
 
     @Override
     public boolean send(String string) {
-        return sendContext.send(string);
+        return eventPipelineContext.fireSend(string);
     }
 
     @Override
     public boolean send(BinaryStreamWriter streamWriter) {
-        return sendContext.send(streamWriter);
+        return eventPipelineContext.fireSend(streamWriter);
     }
 
     @Override
     public boolean send(NetPacket<?> packet) {
-        return sendContext.send(packet);
+        return eventPipelineContext.fireSend(packet);
     }
 
 
@@ -239,7 +234,7 @@ public class TCPConnection implements Sendable, Closeable {
             return;
 
         final byte[] decryptedData = ciphers.decrypt(data);
-        eventPipeline.fireOnReceive(this, decryptedData);
+        eventPipelineContext.fireOnReceive(decryptedData);
     }
 
     private void writeOperationAvailable() {

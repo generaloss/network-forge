@@ -7,7 +7,6 @@ import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 
 import java.io.IOException;
-import java.util.concurrent.TimeoutException;
 
 public class VulnerabilitiesCheck {
 
@@ -29,7 +28,7 @@ public class VulnerabilitiesCheck {
         // memoryOverflow(); // 25.12.1 passed
     }
 
-    private static void memoryOverflow() throws IOException, TimeoutException {
+    private static void memoryOverflow() throws IOException {
         final TCPConnectionOptionsHolder options = new TCPConnectionOptionsHolder()
                 .setCloseOnFrameReadSizeExceed(false);
 
@@ -49,7 +48,7 @@ public class VulnerabilitiesCheck {
 
         // trying to overflow the memory on the server
         final byte[] message = "DATA".repeat(10_000).getBytes();
-        while(client.isConnected()) {
+        while(client.isOpen()) {
             client.send(message);
             TimeUtils.delayMillis(1);
         }

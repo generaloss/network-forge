@@ -39,7 +39,7 @@ server.registerOnReceive((senderConnection, data) -> {
     System.out.println(received); // Output: Hello, server!
 });
 server.registerOnDisconnect((connection, reason, e) -> {
-    server.close(); // close server
+    server.close(); // Close server
 });
 server.run(5555);
 ```
@@ -51,7 +51,7 @@ TCPClient client = new TCPClient();
 client.registerOnReceive((connection, data) -> {
     String received = new String(data);
     System.out.println(received); // Output: Hello, client!
-    client.close(); // disconnect client
+    client.close(); // Disconnect client
 });
 client.connect("localhost", 5555);
 client.send("Hello, server!");
@@ -59,9 +59,9 @@ client.send("Hello, server!");
 
 ---
 
-## Documentation
-- [**English**](https://generaloss.ru/network-forge/en/)
-- [**Русский**](https://generaloss.ru/network-forge/ru/)
+## ~~Documentation~~
+- [**English**](docs/en/index.md)
+- [**Русский**](docs/ru/index.md)
 
 ---
 

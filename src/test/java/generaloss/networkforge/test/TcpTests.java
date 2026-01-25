@@ -1,5 +1,6 @@
 package generaloss.networkforge.test;
 
+import generaloss.networkforge.ConnectState;
 import generaloss.networkforge.test.layer.CompressionLayer;
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.packet.*;
@@ -49,7 +50,11 @@ public class TcpTests {
 
         final TCPClient client = new TCPClient();
         for(int i = 0; i < reconnectsNum; i++){
-            client.connect("localhost", PORT);
+            client.connectAsync("localhost", PORT);
+            TimeUtils.waitFor(client::isOpen, 3000, () -> {
+                server.close();
+                Assert.fail();
+            });
             client.close();
         }
 
@@ -76,14 +81,26 @@ public class TcpTests {
         final TCPClient client = new TCPClient();
         client.registerOnDisconnect((connection, reason, e) -> disconnected.set(true));
         for(int i = 0; i < reconnectsNum; i++) {
-            client.connect("localhost", PORT);
+            client.connectAsync("localhost", PORT);
+            TimeUtils.waitFor(client::isOpen, 3000, () -> {
+                server.close();
+                Assert.fail();
+            });
             client.close();
 
-            TimeUtils.waitFor(disconnected::get, 5000, Assert::fail);
+            TimeUtils.waitFor(disconnected::get, 3000, () -> {
+                client.close();
+                server.close();
+                Assert.fail();
+            });
             disconnected.set(false);
         }
 
-        TimeUtils.waitFor(() -> counter.get() == reconnectsNum * 2, 500, () -> Assert.fail(counter.get() + " / " + (reconnectsNum * 2)));
+        TimeUtils.waitFor(() -> counter.get() == reconnectsNum * 2, 500, () -> {
+            client.close();
+            server.close();
+            Assert.fail(counter.get() + " / " + (reconnectsNum * 2));
+        });
         server.close();
     }
 
@@ -100,7 +117,11 @@ public class TcpTests {
             .registerOnDisconnect((connection, reason, e) -> closed.set(true))
             .connect("localhost", PORT);
 
-        TimeUtils.waitFor(closed::get, 5000, Assert::fail);
+        TimeUtils.waitFor(closed::get, 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
         server.close();
     }
 
@@ -114,10 +135,17 @@ public class TcpTests {
             .run(PORT);
 
         final TCPClient client = new TCPClient();
-        client.connect("localhost", PORT);
+        client.connectAsync("localhost", PORT);
+        TimeUtils.waitFor(client::isOpen, 3000, () -> {
+            server.close();
+            Assert.fail();
+        });
         client.close();
 
-        TimeUtils.waitFor(closed::get, 500, Assert::fail);
+        TimeUtils.waitFor(closed::get, 500, () -> {
+            server.close();
+            Assert.fail();
+        });
         server.close();
     }
 
@@ -142,15 +170,21 @@ public class TcpTests {
         });
         server.run(PORT);
 
+        final int iterations = 10000;
+
         final TCPClient client = new TCPClient();
         client.getEventPipeline().addHandlerFirst(new CompressionLayer());
+        client.registerOnConnect(connection -> {
+            for(int i = 0; i < iterations; i++)
+                client.send(message);
+        });
         client.connect("localhost", PORT);
 
-        final int iterations = 10000;
-        for(int i = 0; i < iterations; i++)
-            client.send(message);
-
-        TimeUtils.waitFor(() -> counter.get() == iterations, 5000, Assert::fail);
+        TimeUtils.waitFor(() -> counter.get() == iterations, 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
         server.close();
         Assert.assertFalse(hasNotEqual.get());
     }
@@ -161,18 +195,22 @@ public class TcpTests {
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
 
-        final TCPServer server = new TCPServer()
-            .registerOnConnect((connection) -> connection.send(message))
-            .run(PORT);
+        final TCPServer server = new TCPServer();
+        server.registerOnConnect((connection) -> connection.send(message));
+        server.run(PORT);
 
-        final TCPClient client = new TCPClient()
-            .registerOnReceive((connection, bytes) -> {
-                result.set(new String(bytes));
-                connection.close();
-            })
-            .connect("localhost", PORT);
+        final TCPClient client = new TCPClient();
+        client.registerOnReceive((connection, bytes) -> {
+            result.set(new String(bytes));
+            connection.close();
+        });
+        client.connect("localhost", PORT);
 
-        TimeUtils.waitFor(client::isClosed);
+        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -200,7 +238,11 @@ public class TcpTests {
 
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 5000, Assert::fail);
+        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -229,7 +271,11 @@ public class TcpTests {
         client.send(message.repeat(2)); // reach bytes limit => will be ignored
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 1000, Assert::fail);
+        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -311,7 +357,11 @@ public class TcpTests {
         client.send(new TestMessagePacket(message));
         client.send(new TestMessagePacket(message));
 
-        TimeUtils.waitFor(() -> (counter.get() == 2), 2000, Assert::fail);
+        TimeUtils.waitFor(() -> (counter.get() == 2), 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -346,7 +396,11 @@ public class TcpTests {
         client.send(new TestMessagePacket("Hello, World!"));
         client.send(new TestDisconnectPacket("Disconnection"));
 
-        TimeUtils.waitFor(() -> (counter.get() == 2), 2000, Assert::fail);
+        TimeUtils.waitFor(() -> (counter.get() == 2), 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
         server.close();
     }
 
@@ -387,7 +441,11 @@ public class TcpTests {
         });
         client.registerOnError(ErrorListener::printErrorCatch);
 
-        TimeUtils.waitFor(() -> (counter.get() == 2), 2000, Assert::fail);
+        TimeUtils.waitFor(() -> (counter.get() == 2), 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -409,7 +467,11 @@ public class TcpTests {
         client.connect("localhost", PORT);
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 1000, Assert::fail);
+        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -424,20 +486,26 @@ public class TcpTests {
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
 
-        final TCPServer server = new TCPServer()
-            .registerOnConnect((connection) -> connection.getCiphers().setCiphers(encryptCipher, decryptCipher))
-            .registerOnReceive((sender, bytes) -> {
-                result.set(new String(bytes));
-                sender.close();
-            })
-            .run(PORT);
+        final TCPServer server = new TCPServer();
+        server.registerOnConnect((connection) -> connection.getCiphers().setCiphers(encryptCipher, decryptCipher));
+        server.registerOnReceive((sender, bytes) -> {
+            result.set(new String(bytes));
+            sender.close();
+        });
+        server.run(PORT);
 
         final TCPClient client = new TCPClient();
+        client.registerOnConnect((connection) -> {
+            connection.getCiphers().setCiphers(encryptCipher, decryptCipher);
+            client.send(message);
+        });
         client.connect("localhost", PORT);
-        client.setCiphers(encryptCipher, decryptCipher);
-        client.send(message);
 
-        TimeUtils.waitFor(client::isClosed);
+        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
         server.close();
         Assert.assertEquals(message, result.get());
     }
@@ -454,30 +522,58 @@ public class TcpTests {
         final AtomicInteger counter = new AtomicInteger();
         final AtomicBoolean hasNotEqual = new AtomicBoolean();
 
-        final TCPServer server = new TCPServer()
-            .registerOnConnect((connection) -> connection.getCiphers().setCiphers(encryptCipher, decryptCipher))
-            .registerOnReceive((sender, bytes) -> {
-                final String received = new String(bytes);
-                counter.incrementAndGet();
+        final TCPServer server = new TCPServer();
+        server.registerOnConnect((connection) -> connection.getCiphers().setCiphers(encryptCipher, decryptCipher));
+        server.registerOnReceive((sender, bytes) -> {
+            final String received = new String(bytes);
+            counter.incrementAndGet();
 
-                if(!message.equals(received)){
-                    hasNotEqual.set(true);
-                    sender.close();
-                }
-            })
-            .run(PORT, PORT + 1);
+            if(!message.equals(received)){
+                hasNotEqual.set(true);
+                sender.close();
+            }
+        });
+        server.run(PORT, PORT + 1);
 
-        final TCPClient client = new TCPClient()
-            .connect("localhost", PORT + (int) Math.round(Math.random()))
-            .setCiphers(encryptCipher, decryptCipher);
+        final TCPClient client = new TCPClient();
+        client.registerOnConnect((connection) -> connection.getCiphers().setCiphers(encryptCipher, decryptCipher));
+        client.connect("localhost", PORT + (int) Math.round(Math.random()));
 
         final int iterations = 10000;
         for(int i = 0; i < iterations; i++)
             client.send(message);
 
-        TimeUtils.waitFor(() -> counter.get() == iterations, 5000, Assert::fail);
+        TimeUtils.waitFor(() -> counter.get() == iterations, 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
         server.close();
         Assert.assertFalse(hasNotEqual.get());
+    }
+
+    @Test
+    public void async_connect_timeout() throws Exception {
+        TimeUtils.delayMillis(100);
+
+        final TimeoutTCPServer server = new TimeoutTCPServer(PORT, 10_000);
+        server.start();
+
+        final TCPClient client = new TCPClient();
+        client.registerOnError((connection, source, throwable) ->
+                System.out.println(connection + " " + source + " " + throwable)
+        );
+        client.connectAsync("localhost", PORT, 3000);
+
+        TimeUtils.waitFor(() -> client.getState() == ConnectState.CONNECTING, 500, Assert::fail);
+
+        TimeUtils.waitFor(client::isClosed, 4000, () -> {
+            Assert.fail("Client is " + client.getState());
+            client.close();
+            server.stop();
+        });
+
+        server.stop();
     }
 
 }

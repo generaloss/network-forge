@@ -2,18 +2,28 @@ package generaloss.networkforge.tcp.listener;
 
 public enum CloseReason {
 
-    CLOSE_CONNECTION              ("Connection closed"                      ),
-    CLOSE_CLIENT                  ("Client closed"                          ),
-    CLOSE_SERVER                  ("Server closed"                          ),
-    CLOSE_BY_OTHER_SIDE           ("Connection closed by the other side"    ),
-    FRAME_READ_SIZE_LIMIT_EXCEEDED("Frame read size limit has been exceeded"),
-    INVALID_FRAME_SIZE            ("Invalid packet size"                    ),
-    INTERNAL_ERROR                ("Internal error occurred"                );
+    ASYNC_CONNECT_ERROR            (true,  "Asynchronous connect error occurred"    , true),
+    ASYNC_CONNECT_TIMEOUT          (true,  "Asynchronous connect timeout"           , false),
+    CLOSE_CONNECTION               (false, "Connection closed"                      , false),
+    CLOSE_CLIENT                   (false, "Client closed"                          , false),
+    CLOSE_SERVER                   (false, "Server closed"                          , false),
+    CLOSE_BY_OTHER_SIDE            (false, "Connection closed by the other side"    , false),
+    FRAME_READ_SIZE_LIMIT_EXCEEDED (true,  "Frame read size limit has been exceeded", false),
+    INVALID_FRAME_SIZE             (true,  "Invalid packet size"                    , false),
+    INTERNAL_ERROR                 (true,  "Internal error occurred"                , true);
 
+    private final boolean isError;
     private final String message;
+    private final boolean hasException;
 
-    CloseReason(String message) {
+    CloseReason(boolean isError, String message, boolean hasException) {
+        this.isError = isError;
         this.message = message;
+        this.hasException = hasException;
+    }
+
+    public boolean isError() {
+        return isError;
     }
 
     public String getMessage() {
@@ -21,7 +31,7 @@ public enum CloseReason {
     }
 
     public boolean hasException() {
-        return (this == INTERNAL_ERROR);
+        return hasException;
     }
 
     @Override

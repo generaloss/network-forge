@@ -1,26 +1,23 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.tcp.crypto.CipherPair;
+import generaloss.networkforge.ConnectState;
 import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.listener.*;
-import generaloss.networkforge.tcp.handler.ListenersHolder;
-import generaloss.networkforge.tcp.handler.EventPipeline;
-import generaloss.networkforge.tcp.options.TCPConnectionOptions;
+import generaloss.networkforge.tcp.pipeline.ListenersHolder;
+import generaloss.networkforge.tcp.pipeline.EventPipeline;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.packet.NetPacket;
+import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
-import javax.crypto.Cipher;
 import java.io.IOException;
-import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.concurrent.TimeoutException;
 
 public class TCPClient implements Sendable {
 
@@ -34,6 +31,10 @@ public class TCPClient implements Sendable {
     private final EventPipeline eventPipeline;
 
     private TCPConnection connection;
+    
+    private volatile ConnectState state;
+    private volatile boolean hasAsyncConnectDeadline;
+    private volatile long asyncConnectDeadlineMillis;
 
     public TCPClient() {
         this.setCodec(CodecType.DEFAULT);
@@ -42,29 +43,12 @@ public class TCPClient implements Sendable {
         this.selectorLoop = new SelectorLoop();
 
         this.listeners = new ListenersHolder();
-        this.listeners.registerOnDisconnect(
-            (connection, reason, e) -> selectorLoop.close()
-        );
+        this.listeners.registerOnDisconnect(this::onConnectionClosed);
 
         this.eventPipeline = new EventPipeline();
         this.eventPipeline.addHandlerLast(listeners);
-    }
-
-
-    public TCPConnection getConnection() {
-        return connection;
-    }
-
-    public TCPConnectionOptions getOptions() {
-        if(connection == null)
-            return null;
-        return connection.getOptions();
-    }
-
-    public CipherPair getCiphers() {
-        if(connection == null)
-            return null;
-        return connection.getCiphers();
+        
+        this.state = ConnectState.CLOSED;
     }
 
 
@@ -95,11 +79,6 @@ public class TCPClient implements Sendable {
 
         this.initialOptions = initialOptions;
         return this;
-    }
-
-
-    public EventPipeline getEventPipeline() {
-        return eventPipeline;
     }
 
 
@@ -145,53 +124,137 @@ public class TCPClient implements Sendable {
     }
 
 
-    public TCPClient connect(SocketAddress socketAddress, long timeoutMillis) throws IOException, TimeoutException, AlreadyConnectedException {
-        if(this.isConnected())
+    public EventPipeline getEventPipeline() {
+        return eventPipeline;
+    }
+
+    public TCPConnection getConnection() {
+        return connection;
+    }
+
+
+    public TCPClient connect(SocketAddress socketAddress, int timeoutMillis) throws IOException, AlreadyConnectedException {
+        if(state != ConnectState.CLOSED)
             throw new AlreadyConnectedException();
+
+        state = ConnectState.CONNECTING;
 
         // channel
         final SocketChannel channel = SocketChannel.open();
-        channel.configureBlocking(false);
         initialOptions.applyPreConnect(channel);
 
-        final boolean connectedInstantly = channel.connect(socketAddress);
+        // blocking connect
+        channel.configureBlocking(true);
+        channel.socket().connect(socketAddress, timeoutMillis);
+        channel.configureBlocking(false);
+
+        // create non-blocking connection
         selectorLoop.open();
-
-        if(connectedInstantly) {
-            this.createConnection(channel);
-            return this;
-        }
-
-        // wait for connection
-        selectorLoop.registerConnectKey(channel);
-        final boolean selectResult = selectorLoop.selectKeys(timeoutMillis, selectedKey -> {
-            if(selectedKey.isConnectable() && channel.finishConnect()) {
-                this.createConnection(channel);
-            } else {
-                channel.close();
-                throw new ConnectException("Connection failed");
-            }
-        });
-        if(!selectResult) {
-            channel.close();
-            throw new TimeoutException("Connection timed out after " + timeoutMillis + " ms");
-        }
+        this.createConnection(channel);
+        this.startSelectorLoop();
 
         return this;
     }
 
-    public TCPClient connect(SocketAddress socketAddress) throws IOException, TimeoutException, AlreadyConnectedException  {
-        return this.connect(socketAddress, 0L);
+    public TCPClient connect(SocketAddress socketAddress) throws IOException, AlreadyConnectedException  {
+        return this.connect(socketAddress, 0);
     }
 
-    public TCPClient connect(String hostname, int port, long timeoutMillis) throws IOException, TimeoutException, AlreadyConnectedException  {
+    public TCPClient connect(String hostname, int port, int timeoutMillis) throws IOException, AlreadyConnectedException  {
         return this.connect(new InetSocketAddress(hostname, port), timeoutMillis);
     }
 
-    public TCPClient connect(String hostname, int port) throws IOException, TimeoutException, AlreadyConnectedException  {
-        return this.connect(hostname, port, 0L);
+    public TCPClient connect(String hostname, int port) throws IOException, AlreadyConnectedException  {
+        return this.connect(hostname, port, 0);
     }
 
+
+    public TCPClient connectAsync(SocketAddress socketAddress, long timeoutMillis) throws IOException, AlreadyConnectedException {
+        if(state != ConnectState.CLOSED)
+            throw new AlreadyConnectedException();
+
+        state = ConnectState.CONNECTING;
+
+        // channel
+        final SocketChannel channel = SocketChannel.open();
+        initialOptions.applyPreConnect(channel);
+        channel.configureBlocking(false);
+
+        // try instant connect
+        final boolean connected = channel.connect(socketAddress);
+        selectorLoop.open();
+
+        if(connected) {
+            this.createConnection(channel);
+        } else {
+            selectorLoop.registerConnectKey(channel);
+
+            if(timeoutMillis < 1) {
+                hasAsyncConnectDeadline = false;
+            } else {
+                hasAsyncConnectDeadline = true;
+                asyncConnectDeadlineMillis = (System.currentTimeMillis() + timeoutMillis);
+            }
+        }
+        this.startSelectorLoop();
+
+        return this;
+    }
+
+    public TCPClient connectAsync(SocketAddress socketAddress) throws IOException, AlreadyConnectedException  {
+        return this.connectAsync(socketAddress, 0L);
+    }
+
+    public TCPClient connectAsync(String hostname, int port, long timeoutMillis) throws IOException, AlreadyConnectedException  {
+        return this.connectAsync(new InetSocketAddress(hostname, port), timeoutMillis);
+    }
+
+    public TCPClient connectAsync(String hostname, int port) throws IOException, AlreadyConnectedException  {
+        return this.connectAsync(hostname, port, 0L);
+    }
+
+
+    private void startSelectorLoop() {
+        final String threadName = (CLASS_NAME + "-selector-thread-#" + this.hashCode());
+        selectorLoop.startSelectionLoopThread(threadName, this::onKeySelected, this::getNextSelectionTimeout);
+    }
+
+    private long getNextSelectionTimeout() {
+        if(!hasAsyncConnectDeadline)
+            return 0L;
+
+        final long timeLeft = (asyncConnectDeadlineMillis - System.currentTimeMillis());
+        System.out.println("GET TIMEOUT timeLeft : " + timeLeft + " AT " + System.currentTimeMillis());
+
+        if(timeLeft < 0) {
+            if(state == ConnectState.CONNECTING) {
+                final Exception e = new IllegalStateException("Connection timed out");
+                this.onConnectionClosed(null, CloseReason.ASYNC_CONNECT_TIMEOUT, e);
+            }
+            return 0L;
+        }
+
+        return timeLeft;
+    }
+
+    private void onKeySelected(SelectionKey key) {
+        if(key.isConnectable()) {
+            final SocketChannel channel = (SocketChannel) key.channel();
+
+            try {
+                channel.finishConnect();
+                key.cancel();
+                this.createConnection(channel);
+
+            } catch (IOException e) {
+                ResUtils.close(channel);
+                this.onConnectionClosed(null, CloseReason.ASYNC_CONNECT_ERROR, e);
+            }
+
+        } else {
+            connection.onKeySelected();
+        }
+    }
 
     private void createConnection(SocketChannel channel) throws IOException {
         initialOptions.applyPostConnect(channel);
@@ -203,94 +266,75 @@ public class TCPClient implements Sendable {
 
         initialOptions.copyTo(connection.getOptions());
 
+        state = ConnectState.CONNECTED;
         connection.onConnectOp();
-
-        selectorLoop.startSelectionLoopThread(this.makeSelectorThreadName(), (_selectedKey) -> connection.onKeySelected());
     }
 
     private String makeConnectionName() {
         return (CLASS_NAME + "-connection-#" + this.hashCode());
     }
 
-    private String makeSelectorThreadName() {
-        return (CLASS_NAME + "-selector-thread-#" + this.hashCode());
-    }
 
-
-    public boolean isConnected() {
-        return (connection != null && connection.isConnected());
+    public boolean isOpen() {
+        return (state == ConnectState.CONNECTED);
     }
 
     public boolean isClosed() {
-        return (connection == null || connection.isClosed());
+        return (state != ConnectState.CONNECTED);
     }
 
-    public TCPClient close() {
-        if(this.isClosed())
-            return this;
+    public ConnectState getState() {
+        return state;
+    }
 
+    public void close() {
+        if(state == ConnectState.CLOSED || state == ConnectState.CLOSING)
+            return;
+        state = ConnectState.CLOSING;
+        connection.close(CloseReason.CLOSE_CLIENT, null); // will call onConnectionClosed(...)
+    }
+
+    private void onConnectionClosed(TCPConnection connection, CloseReason reason, Exception e) {
+        // calls when occurs: TCPConnection internal error / client close / connect fail
         selectorLoop.close();
-        connection.close(CloseReason.CLOSE_CLIENT, null);
-        return this;
-    }
+        state = ConnectState.CLOSED;
 
-
-    public TCPClient setEncryptCipher(Cipher encryptCipher) {
-        if(connection == null)
-            throw new IllegalStateException(CLASS_NAME + " is not connected");
-
-        connection.getCiphers().setEncryptCipher(encryptCipher);
-        return this;
-    }
-
-    public TCPClient setDecryptCipher(Cipher decryptCipher) {
-        if(connection == null)
-            throw new IllegalStateException(CLASS_NAME + " is not connected");
-
-        connection.getCiphers().setDecryptCipher(decryptCipher);
-        return this;
-    }
-
-    public TCPClient setCiphers(Cipher encryptCipher, Cipher decryptCipher) {
-        if(connection == null)
-            throw new IllegalStateException(CLASS_NAME + " is not connected");
-
-        connection.getCiphers().setCiphers(encryptCipher, decryptCipher);
-        return this;
+        if(reason.isError())
+            eventPipeline.fireOnError(0, connection, ErrorSource.CLOSE, e);
     }
 
 
     @Override
     public boolean send(byte[] data) {
-        if(connection == null)
+        if(state != ConnectState.CONNECTED)
             return false;
         return connection.send(data);
     }
 
     @Override
     public boolean send(ByteBuffer buffer) {
-        if(connection == null)
+        if(state != ConnectState.CONNECTED)
             return false;
         return connection.send(buffer);
     }
 
     @Override
     public boolean send(String string) {
-        if(connection == null)
+        if(state != ConnectState.CONNECTED)
             return false;
         return connection.send(string);
     }
 
     @Override
     public boolean send(BinaryStreamWriter streamWriter) {
-        if(connection == null)
+        if(state != ConnectState.CONNECTED)
             return false;
         return connection.send(streamWriter);
     }
 
     @Override
     public boolean send(NetPacket<?> packet) {
-        if(connection == null)
+        if(state != ConnectState.CONNECTED)
             return false;
         return connection.send(packet);
     }
