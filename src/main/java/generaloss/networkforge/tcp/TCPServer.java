@@ -235,7 +235,7 @@ public class TCPServer {
 
             connection.onConnectOp();
         } catch (IOException e) {
-            eventPipeline.fireOnError(0, null, ErrorSource.ACCEPT, e);
+            eventPipeline.fireOnError(0, null, ErrorSource.CONNECT, e);
         }
     }
 

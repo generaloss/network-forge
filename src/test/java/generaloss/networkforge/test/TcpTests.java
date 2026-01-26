@@ -1,6 +1,7 @@
 package generaloss.networkforge.test;
 
 import generaloss.networkforge.ConnectState;
+import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.test.layer.CompressionLayer;
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.packet.*;
@@ -556,24 +557,48 @@ public class TcpTests {
     public void async_connect_timeout() throws Exception {
         TimeUtils.delayMillis(100);
 
-        final TimeoutTCPServer server = new TimeoutTCPServer(PORT, 10_000);
+        final TimeoutTCPServer server = new TimeoutTCPServer(PORT, 100_000_000);
         server.start();
 
         final TCPClient client = new TCPClient();
         client.registerOnError((connection, source, throwable) ->
                 System.out.println(connection + " " + source + " " + throwable)
         );
-        client.connectAsync("localhost", PORT, 3000);
 
-        TimeUtils.waitFor(() -> client.getState() == ConnectState.CONNECTING, 500, Assert::fail);
+        final long timeoutMillis = 1000L;
+        final long startMillis = System.currentTimeMillis();
 
-        TimeUtils.waitFor(client::isClosed, 4000, () -> {
-            Assert.fail("Client is " + client.getState());
-            client.close();
-            server.stop();
-        });
+        client.connectAsync("localhost", PORT, timeoutMillis);
+
+        final long closeTimeMillis = TimeUtils.waitFor(() -> client.getState() == ConnectState.CLOSED, Long.MAX_VALUE);
+        System.out.println("Closed in " + closeTimeMillis + "ms");
 
         server.stop();
+
+        final long elapsedMillis = (System.currentTimeMillis() - startMillis);
+        if(elapsedMillis < timeoutMillis)
+            Assert.fail(elapsedMillis + " >= " + timeoutMillis);
+    }
+
+    @Test
+    public void send_zero_bytes_framed() throws Exception {
+        final TCPServer server = new TCPServer();
+        server.setCodecFactory(CodecType.FRAMED);
+        server.registerOnReceive((c, b) -> {
+            if(b.length == 0)
+                server.close();
+        });
+        server.run(PORT);
+
+        final TCPClient client = new TCPClient();
+        client.setCodec(CodecType.FRAMED);
+        client.connect("localhost", PORT);
+        client.send(new byte[0]);
+
+        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+            client.close();
+            server.close();
+        });
     }
 
 }

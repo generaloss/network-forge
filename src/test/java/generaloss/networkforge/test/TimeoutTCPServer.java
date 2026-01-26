@@ -1,74 +1,52 @@
 package generaloss.networkforge.test;
 
 import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 
 public class TimeoutTCPServer {
 
     private final int port;
-    private final int serverTimeoutMillis;
-    private volatile boolean running;
+    private final long acceptDelayMillis;
 
-    public TimeoutTCPServer(int port, int serverTimeoutMillis) {
+    private volatile boolean running;
+    private ServerSocketChannel serverChannel;
+
+    public TimeoutTCPServer(int port, long acceptDelayMillis) {
         this.port = port;
-        this.serverTimeoutMillis = serverTimeoutMillis;
-        this.running = true;
+        this.acceptDelayMillis = acceptDelayMillis;
     }
 
-    public void start() {
-        final Thread thread = new Thread(() -> {
-            try(final ServerSocket serverSocket = new ServerSocket(port)) {
-                serverSocket.setSoTimeout(0);
-                System.out.println("Timeout TCP server started on port " + port);
+    public void start() throws IOException {
+        serverChannel = ServerSocketChannel.open();
+        serverChannel.bind(new InetSocketAddress(port));
+        serverChannel.configureBlocking(true);
 
-                while(running) {
-                    final Socket clientSocket = serverSocket.accept();
-                    System.out.println("New connection from: " + clientSocket.getInetAddress());
-
-                    clientSocket.setSoTimeout(serverTimeoutMillis);
-
-                    new Thread(() -> handleWithTimeout(clientSocket)).start();
-                }
-            } catch(IOException e) {
-                if(running) {
-                    e.printStackTrace();
-                }
-            }
-        });
-
+        running = true;
+        final Thread thread = new Thread(this::runLoop, "TimeoutTCPServer-" + port);
         thread.setDaemon(true);
         thread.start();
     }
 
-    private void handleWithTimeout(Socket clientSocket) {
+    @SuppressWarnings("BusyWait")
+    private void runLoop() {
         try {
-            final byte[] buffer = new byte[1024];
-
-            final int bytesRead = clientSocket.getInputStream().read(buffer);
-
-            if(bytesRead > 0)
-                System.out.println("Received " + bytesRead + " bytes, but ignoring them...");
-
-            Thread.sleep(serverTimeoutMillis + 1000);
-
-        } catch(java.net.SocketTimeoutException e) {
-            System.out.println("Socket timeout for: " + clientSocket.getInetAddress());
-        } catch(Exception ignored) {
-        } finally {
-            closeQuietly(clientSocket);
-        }
-    }
-
-    private void closeQuietly(Socket socket) {
-        try {
-            if(socket != null && !socket.isClosed())
-                socket.close();
-        } catch(IOException ignored) { }
+            while (running) {
+                final SocketChannel client = serverChannel.accept();
+                if(client != null) {
+                    // imit connecting
+                    Thread.sleep(acceptDelayMillis);
+                }
+            }
+        } catch (Exception ignored) { }
     }
 
     public void stop() {
         running = false;
+        try {
+            if(serverChannel != null)
+                serverChannel.close();
+        } catch (IOException ignored) { }
     }
-
 }

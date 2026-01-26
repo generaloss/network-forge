@@ -4,17 +4,14 @@ import generaloss.networkforge.SelectionKeyConsumer;
 import generaloss.resourceflow.ResUtils;
 
 import java.io.IOException;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.SocketChannel;
+import java.nio.channels.*;
 import java.nio.channels.spi.AbstractSelectableChannel;
 import java.util.Set;
 import java.util.function.LongSupplier;
 
 public class SelectorLoop {
 
-    private Selector selector;
+    private volatile Selector selector;
     private Thread selectorThread;
 
     public void open() throws IOException {
@@ -56,8 +53,10 @@ public class SelectorLoop {
             while(!Thread.interrupted()) {
                 try {
                     this.selectKeys(onKeySelected, nextTimeoutGetter);
-                } catch (Exception ignored) {
-                    // ignore consumer exceptions
+                } catch(ClosedSelectorException | CancelledKeyException ignored) {
+                } catch (Exception e) {
+                    //noinspection CallToPrintStackTrace
+                    e.printStackTrace();
                 }
             }
         }, threadName);
@@ -71,13 +70,16 @@ public class SelectorLoop {
         this.startSelectionLoopThread(threadName, onKeySelected, defaultTimeoutGetter);
     }
 
-    public boolean selectKeys(SelectionKeyConsumer onKeySelected, LongSupplier nextTimeoutGetter) throws Exception {
+    public void selectKeys(SelectionKeyConsumer onKeySelected, LongSupplier nextTimeoutGetter) throws Exception {
         try {
             final long timeout = nextTimeoutGetter.getAsLong();
             selector.select(timeout);
         } catch (IOException ignored) {
-            return false;
+            return;
         }
+
+        if(selector == null)
+            return;
 
         final Set<SelectionKey> selectedKeys = selector.selectedKeys();
         for(SelectionKey key : selectedKeys)
@@ -85,7 +87,6 @@ public class SelectorLoop {
                 onKeySelected.accept(key); // may throw any exception
 
         selectedKeys.clear();
-        return true;
     }
 
 }

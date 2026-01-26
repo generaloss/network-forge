@@ -18,6 +18,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.TimeoutException;
 
 public class TCPClient implements Sendable {
 
@@ -43,7 +44,7 @@ public class TCPClient implements Sendable {
         this.selectorLoop = new SelectorLoop();
 
         this.listeners = new ListenersHolder();
-        this.listeners.registerOnDisconnect(this::onConnectionClosed);
+        this.listeners.registerOnDisconnect(this::onConnectionClosed); // TCPConnection internal close
 
         this.eventPipeline = new EventPipeline();
         this.eventPipeline.addHandlerLast(listeners);
@@ -174,6 +175,7 @@ public class TCPClient implements Sendable {
             throw new AlreadyConnectedException();
 
         state = ConnectState.CONNECTING;
+        System.out.println("connecting");
 
         // channel
         final SocketChannel channel = SocketChannel.open();
@@ -220,35 +222,46 @@ public class TCPClient implements Sendable {
     }
 
     private long getNextSelectionTimeout() {
-        if(!hasAsyncConnectDeadline)
-            return 0L;
-
-        final long timeLeft = (asyncConnectDeadlineMillis - System.currentTimeMillis());
-        System.out.println("GET TIMEOUT timeLeft : " + timeLeft + " AT " + System.currentTimeMillis());
-
-        if(timeLeft < 0) {
-            if(state == ConnectState.CONNECTING) {
-                final Exception e = new IllegalStateException("Connection timed out");
-                this.onConnectionClosed(null, CloseReason.ASYNC_CONNECT_TIMEOUT, e);
-            }
+        if(!hasAsyncConnectDeadline) {
+            System.out.println("next (default) timeout 0");
             return 0L;
         }
 
+        final long timeLeft = (asyncConnectDeadlineMillis - System.currentTimeMillis());
+
+        if(timeLeft <= 0) {
+            if(state == ConnectState.CONNECTING) {
+                System.out.println("closing");
+
+                this.abortConnect();
+
+                eventPipeline.fireOnError(0, null, ErrorSource.CONNECT, new TimeoutException());
+
+                return 100L;
+            }
+            System.out.println("state is " + state);
+            System.out.println("next (last) timeout 0 (" + timeLeft + " <= 0)");
+            return 0L;
+        }
+
+        System.out.println("next (calculated) timeout " + timeLeft);
         return timeLeft;
     }
 
     private void onKeySelected(SelectionKey key) {
-        if(key.isConnectable()) {
+        if(state == ConnectState.CONNECTING && key.isConnectable()) {
             final SocketChannel channel = (SocketChannel) key.channel();
 
             try {
                 channel.finishConnect();
-                key.cancel();
+                key.interestOpsAnd(~SelectionKey.OP_CONNECT);
+                key.selector().wakeup();
                 this.createConnection(channel);
 
             } catch (IOException e) {
                 ResUtils.close(channel);
-                this.onConnectionClosed(null, CloseReason.ASYNC_CONNECT_ERROR, e);
+                this.abortConnect();
+                eventPipeline.fireOnError(0, null, ErrorSource.CONNECT, e);
             }
 
         } else {
@@ -287,20 +300,39 @@ public class TCPClient implements Sendable {
         return state;
     }
 
+
     public void close() {
-        if(state == ConnectState.CLOSED || state == ConnectState.CLOSING)
-            return;
+        if(state == ConnectState.CONNECTED) {
+            this.closeConnection();
+        } else if(state == ConnectState.CONNECTING) {
+            this.abortConnect();
+        }
+    }
+
+    private void closeConnection() {
         state = ConnectState.CLOSING;
         connection.close(CloseReason.CLOSE_CLIENT, null); // will call onConnectionClosed(...)
+        this.stop();
+    }
+
+    private void abortConnect() {
+        state = ConnectState.CLOSING;
+        this.stop();
     }
 
     private void onConnectionClosed(TCPConnection connection, CloseReason reason, Exception e) {
-        // calls when occurs: TCPConnection internal error / client close / connect fail
+        // is it manual close call
+        if(reason == CloseReason.CLOSE_CLIENT)
+            return;
+
+        // calls when occurs: TCPConnection internal error
+        state = ConnectState.CLOSING;
+        this.stop();
+    }
+
+    private void stop() {
         selectorLoop.close();
         state = ConnectState.CLOSED;
-
-        if(reason.isError())
-            eventPipeline.fireOnError(0, connection, ErrorSource.CLOSE, e);
     }
 
 

@@ -2,10 +2,9 @@ package generaloss.networkforge.tcp.listener;
 
 public enum ErrorSource {
 
-    ACCEPT,
+    CONNECT,
     SEND,
     BROADCAST,
-    CLOSE,
 
     CONNECT_HANDLER,
     DISCONNECT_HANDLER,
