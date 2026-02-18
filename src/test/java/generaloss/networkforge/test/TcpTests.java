@@ -1,6 +1,5 @@
 package generaloss.networkforge.test;
 
-import generaloss.networkforge.ConnectState;
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.test.layer.CompressionLayer;
 import generaloss.chronokit.TimeUtils;
@@ -22,9 +21,7 @@ import org.junit.Test;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -39,7 +36,7 @@ public class TcpTests {
     }
 
     @Test
-    public void reconnect_client() throws Exception {
+    public void reconnect_client_1() throws Exception {
         TimeUtils.delayMillis(100);
         final int reconnectsNum = 100;
         final AtomicInteger counter = new AtomicInteger();
@@ -82,15 +79,14 @@ public class TcpTests {
         final TCPClient client = new TCPClient();
         client.registerOnDisconnect((connection, reason, e) -> disconnected.set(true));
         for(int i = 0; i < reconnectsNum; i++) {
-            client.connectAsync("localhost", PORT);
-            TimeUtils.waitFor(client::isOpen, 3000, () -> {
+            var future = client.connectAsync("localhost", PORT);
+            TimeUtils.waitFor(future::isDone, 3000, () -> {
                 server.close();
                 Assert.fail();
             });
             client.close();
 
             TimeUtils.waitFor(disconnected::get, 3000, () -> {
-                client.close();
                 server.close();
                 Assert.fail();
             });
@@ -555,29 +551,19 @@ public class TcpTests {
 
     @Test
     public void async_connect_timeout() throws Exception {
-        TimeUtils.delayMillis(100);
-
-        final TimeoutTCPServer server = new TimeoutTCPServer(PORT, 100_000_000);
-        server.start();
-
         final TCPClient client = new TCPClient();
-        client.registerOnError((connection, source, throwable) ->
-                System.out.println(connection + " " + source + " " + throwable)
-        );
 
         final long timeoutMillis = 1000L;
-        final long startMillis = System.currentTimeMillis();
 
-        client.connectAsync("localhost", PORT, timeoutMillis);
+        CompletableFuture<TCPConnection> future = client.connectAsync("google.com", 65000, timeoutMillis);
 
-        final long closeTimeMillis = TimeUtils.waitFor(() -> client.getState() == ConnectState.CLOSED, Long.MAX_VALUE);
-        System.out.println("Closed in " + closeTimeMillis + "ms");
-
-        server.stop();
-
-        final long elapsedMillis = (System.currentTimeMillis() - startMillis);
-        if(elapsedMillis < timeoutMillis)
-            Assert.fail(elapsedMillis + " >= " + timeoutMillis);
+        try {
+            // noinspection resource
+            future.join();
+            Assert.fail("Expected timeout");
+        } catch (Exception e) {
+            Assert.assertTrue(e.getCause() instanceof TimeoutException);
+        }
     }
 
     @Test

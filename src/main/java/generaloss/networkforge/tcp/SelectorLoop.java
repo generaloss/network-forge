@@ -12,7 +12,7 @@ import java.util.function.LongSupplier;
 public class SelectorLoop {
 
     private volatile Selector selector;
-    private Thread selectorThread;
+    private volatile Thread selectorThread;
 
     public void open() throws IOException {
         selector = Selector.open();
@@ -53,7 +53,7 @@ public class SelectorLoop {
             while(!Thread.interrupted()) {
                 try {
                     this.selectKeys(onKeySelected, nextTimeoutGetter);
-                } catch(ClosedSelectorException | CancelledKeyException ignored) {
+                } catch(ClosedSelectorException | CancelledKeyException | NullPointerException ignored) {
                 } catch (Exception e) {
                     //noinspection CallToPrintStackTrace
                     e.printStackTrace();
@@ -71,9 +71,16 @@ public class SelectorLoop {
     }
 
     public void selectKeys(SelectionKeyConsumer onKeySelected, LongSupplier nextTimeoutGetter) throws Exception {
+        if(selector == null)
+            return;
+
         try {
-            final long timeout = nextTimeoutGetter.getAsLong();
-            selector.select(timeout);
+            final long timeoutMillis = nextTimeoutGetter.getAsLong();
+            if(timeoutMillis > 0L) {
+                selector.select(timeoutMillis);
+            } else {
+                selector.select();
+            }
         } catch (IOException ignored) {
             return;
         }

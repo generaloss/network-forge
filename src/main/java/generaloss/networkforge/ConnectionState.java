@@ -1,6 +1,6 @@
 package generaloss.networkforge;
 
-public enum ConnectState {
+public enum ConnectionState {
 
     CLOSED,
     CONNECTING,
