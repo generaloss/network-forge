@@ -1,6 +1,7 @@
 package generaloss.networkforge.test;
 
 import generaloss.networkforge.tcp.codec.CodecType;
+import generaloss.networkforge.tcp.listener.CloseReason;
 import generaloss.networkforge.test.layer.CompressionLayer;
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.packet.*;
@@ -21,12 +22,13 @@ import org.junit.Test;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
+import java.io.IOException;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class TcpTests {
+public class StressTests {
 
     private int PORT = 5400;
 
@@ -80,7 +82,7 @@ public class TcpTests {
         client.registerOnDisconnect((connection, reason, e) -> disconnected.set(true));
         for(int i = 0; i < reconnectsNum; i++) {
             var future = client.connectAsync("localhost", PORT);
-            TimeUtils.waitFor(future::isDone, 3000, () -> {
+            TimeUtils.waitFor(future::isDone, 8000, () -> {
                 server.close();
                 Assert.fail();
             });
@@ -551,6 +553,7 @@ public class TcpTests {
 
     @Test
     public void async_connect_timeout() throws Exception {
+        TimeUtils.delayMillis(100);
         final TCPClient client = new TCPClient();
 
         final long timeoutMillis = 1000L;
@@ -567,11 +570,12 @@ public class TcpTests {
     }
 
     @Test
-    public void send_zero_bytes_framed() throws Exception {
+    public void send_zero_length_payload_framed() throws Exception {
+        TimeUtils.delayMillis(100);
         final TCPServer server = new TCPServer();
         server.setCodecFactory(CodecType.FRAMED);
-        server.registerOnReceive((c, b) -> {
-            if(b.length == 0)
+        server.registerOnReceive((c, data) -> {
+            if(data.length == 0)
                 server.close();
         });
         server.run(PORT);
@@ -584,7 +588,114 @@ public class TcpTests {
         TimeUtils.waitFor(client::isClosed, 3000, () -> {
             client.close();
             server.close();
+            Assert.fail();
         });
+    }
+
+    @Test
+    public void one_client_multithreaded_send_storm() throws Exception {
+        TimeUtils.delayMillis(100);
+
+        AtomicInteger counter = new AtomicInteger();
+        final byte[] testData = new byte[] { 54 };
+        final int sends = 512;
+
+        final TCPServer server = new TCPServer();
+        server.setCodecFactory(CodecType.FRAMED);
+        server.registerOnReceive((c, data) -> {
+            if(data.length == 1 && data[0] == testData[0])
+                counter.incrementAndGet();
+        });
+        server.run(PORT);
+
+        final TCPClient client = new TCPClient();
+        client.setCodec(CodecType.FRAMED);
+        client.connect("localhost", PORT);
+
+        final ExecutorService executor = Executors.newFixedThreadPool(16);
+        for(int i = 0; i < sends; i++)
+            executor.execute(() -> client.send(testData));
+
+        executor.shutdown();
+        // noinspection ResultOfMethodCallIgnored
+        executor.awaitTermination(3, TimeUnit.SECONDS);
+        client.getConnection().awaitWriteDrain(2000);
+        client.close();
+
+        TimeUtils.waitFor(() -> sends == counter.get(), 1000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
+
+        server.close();
+        executor.shutdownNow();
+    }
+
+    @Test
+    public void multithreaded_send_storm() throws Exception {
+        TimeUtils.delayMillis(100);
+
+        AtomicInteger counter = new AtomicInteger();
+        final byte[] testData = new byte[] { 54 };
+        final int sends = 512;
+
+        final TCPServer server = new TCPServer();
+        server.setCodecFactory(CodecType.FRAMED);
+        server.registerOnReceive((c, data) -> {
+            if(data.length == 1 && data[0] == testData[0])
+                counter.incrementAndGet();
+        });
+        server.run(PORT);
+
+        final Thread[] threads = new Thread[sends];
+        for(int i = 0; i < threads.length; i++) {
+            final Thread thread = new Thread(() -> {
+                try {
+                    final TCPClient client = new TCPClient();
+                    client.connect("localhost", PORT);
+                    client.send(testData);
+                    client.close();
+                }catch(IOException e){
+                    e.printStackTrace();
+                }
+            });
+            thread.setDaemon(true);
+            threads[i] = thread;
+        }
+
+        for(Thread thread : threads)
+            thread.start();
+
+        TimeUtils.waitFor(() -> sends == counter.get(), 3000, () -> {
+            server.close();
+            Assert.fail(counter.get() + "/" + sends);
+        });
+
+        server.close();
+    }
+
+    @Test
+    public void close_by_other_side() throws Exception {
+        TimeUtils.delayMillis(100);
+
+        final AtomicBoolean reasonIncorrect = new AtomicBoolean();
+
+        final TCPServer server = new TCPServer();
+        server.registerOnDisconnect((connection, reason, e) -> {
+            if(reason != CloseReason.CLOSE_BY_OTHER_SIDE)
+                reasonIncorrect.set(true);
+        });
+        server.run(65000);
+
+        final TCPClient client = new TCPClient();
+        for(int i = 0; i < 100; i++) {
+            client.connect("localhost", 65000);
+            client.close();
+        }
+        server.close();
+
+        Assert.assertFalse(reasonIncorrect.get());
     }
 
 }

@@ -208,9 +208,6 @@ public class TCPClient implements Sendable {
             } catch (IOException e) {
                 this.abortAsyncConnect(e);
             }
-
-        } else {
-            System.err.println("Cannot handle a key " + key.interestOps());
         }
     }
 
@@ -221,7 +218,6 @@ public class TCPClient implements Sendable {
 
         connection = new TCPConnection(channel, key, connectionCodec, eventPipeline);
         connection.setName(this.makeConnectionName());
-
         initialOptions.copyTo(connection.getOptions());
 
         state = ConnectionState.CONNECTED;

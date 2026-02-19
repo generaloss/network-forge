@@ -163,7 +163,6 @@ public class TCPConnection implements Sendable, Closeable {
         this.close(CloseReason.CLOSE_CONNECTION, null);
     }
 
-
     protected void onConnectOp() {
         eventPipelineContext.fireOnConnect();
     }
@@ -241,8 +240,10 @@ public class TCPConnection implements Sendable, Closeable {
         try {
             synchronized(writeLock) {
                 final boolean queueFullyWritten = this.writeQueuedBuffers();
-                if(queueFullyWritten)
-                    key.interestOps(SelectionKey.OP_READ); // disable write operation
+                if(queueFullyWritten) {
+                    key.interestOpsAnd(~SelectionKey.OP_WRITE); // disable write operation
+                    writeLock.notifyAll();
+                }
             }
         } catch (Exception e) {
             this.close(CloseReason.INTERNAL_ERROR, e);
@@ -263,6 +264,36 @@ public class TCPConnection implements Sendable, Closeable {
         }
         // queue fully written
         return true;
+    }
+
+    public void awaitWriteDrain(long timeoutMillis) throws InterruptedException {
+        final long deadlineNanos = (System.nanoTime() + timeoutMillis * 1_000_000L);
+
+        synchronized(writeLock) {
+            while(true) {
+                if(this.isClosed())
+                    return;
+
+                final boolean queueEmpty = sendQueue.isEmpty();
+                final boolean writeDisabled = (key.interestOps() & SelectionKey.OP_WRITE) == 0;
+                if(queueEmpty && writeDisabled)
+                    return;
+
+                final long remainingNanos = (deadlineNanos - System.nanoTime());
+                if(remainingNanos <= 0L)
+                    throw new IllegalStateException("Write drain timeout");
+
+                long waitMillis = (remainingNanos / 1_000_000L);
+                if(waitMillis == 0L)
+                    waitMillis = 1L;
+
+                writeLock.wait(waitMillis);
+            }
+        }
+    }
+
+    public int getPendingWriteCount() {
+        return sendQueue.size();
     }
 
 }

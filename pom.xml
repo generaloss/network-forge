@@ -5,10 +5,10 @@
 
     <groupId>io.github.generaloss</groupId>
     <artifactId>network-forge</artifactId>
-    <version>26.1.2</version>
+    <version>26.2.1</version>
     <name>NetworkForge</name>
 
-    <description>A lightweight TCP networking library. Provides packet-oriented connections, flexible socket configuration, and optional encryption via JCE ciphers.</description>
+    <description>A lightweight TCP networking library. Provides packet-oriented connections and flexible socket configuration.</description>
     <url>https://github.com/generaloss/${project.artifactId}</url>
 
     <dependencies>

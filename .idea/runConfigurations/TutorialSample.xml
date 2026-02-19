@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="TutorialTest" type="Application" factoryName="Application" nameIsGenerated="true">
-    <option name="MAIN_CLASS_NAME" value="generaloss.networkforge.test.TutorialTest" />
+  <configuration default="false" name="TutorialSample" type="Application" factoryName="Application" nameIsGenerated="true">
+    <option name="MAIN_CLASS_NAME" value="generaloss.networkforge.test.TutorialSample" />
     <module name="network-forge" />
     <extension name="coverage">
       <pattern>

@@ -10,8 +10,8 @@ import java.io.IOException;
 
 public class VulnerabilitiesCheck {
 
-    public static void main(String[] args) {
-        // memoryOverflow(); // 25.12.1 passed
+    public static void main(String[] args) throws Exception {
+        memoryOverflow(); // 26.2.1 passed
     }
 
     private static void memoryOverflow() throws IOException {
@@ -25,7 +25,7 @@ public class VulnerabilitiesCheck {
 
         final TCPClient client = new TCPClient();
         client.setInitialOptions(options);
-        client.setCodec(CodecType.STREAM);
+        client.setCodec(CodecType.STREAM); // to imitate CodecType.FRAMED
         client.connect("localhost", 5400);
 
         // send maximum frame size

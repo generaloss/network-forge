@@ -4,7 +4,7 @@ import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.tcp.TCPClient;
 import generaloss.networkforge.tcp.TCPServer;
 
-public class TutorialTest {
+public class TutorialSample {
 
     public static void main(String[] args) throws Exception {
         // create server
