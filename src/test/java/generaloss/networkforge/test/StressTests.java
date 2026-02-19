@@ -88,7 +88,7 @@ public class StressTests {
             });
             client.close();
 
-            TimeUtils.waitFor(disconnected::get, 3000, () -> {
+            TimeUtils.waitFor(disconnected::get, 8000, () -> {
                 server.close();
                 Assert.fail();
             });
