@@ -16,7 +16,7 @@ Add the dependency from Maven Central:
 <dependency>
     <groupId>io.github.generaloss</groupId>
     <artifactId>network-forge</artifactId>
-    <version>26.1.2</version>
+    <version>26.2.1</version>
 </dependency>
 ```
 
