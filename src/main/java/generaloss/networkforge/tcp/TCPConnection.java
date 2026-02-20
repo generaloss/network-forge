@@ -3,6 +3,7 @@ package generaloss.networkforge.tcp;
 import generaloss.networkforge.packet.NetPacket;
 import generaloss.networkforge.tcp.codec.ByteStreamReader;
 import generaloss.networkforge.tcp.codec.ByteStreamWriter;
+import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.crypto.CipherPair;
 import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.listener.CloseReason;
@@ -87,6 +88,14 @@ public class TCPConnection implements Sendable, Closeable {
         this.codec = codec;
     }
 
+    public void setCodec(CodecType codecType) {
+        if(codecType == null)
+            throw new IllegalArgumentException("Argument 'codecType' cannot be null");
+
+        final ConnectionCodec codec = codecType.getFactory().create();
+        this.setCodec(codec);
+    }
+
     public CipherPair getCiphers() {
         return ciphers;
     }
@@ -155,7 +164,7 @@ public class TCPConnection implements Sendable, Closeable {
         key.cancel();
         ResUtils.close(channel);
 
-        eventPipelineContext.fireOnDisconnect(reason, e);
+        eventPipelineContext.fireDisconnect(reason, e);
     }
 
     @Override
@@ -164,7 +173,7 @@ public class TCPConnection implements Sendable, Closeable {
     }
 
     protected void onConnectOp() {
-        eventPipelineContext.fireOnConnect();
+        eventPipelineContext.fireConnect();
     }
 
 
@@ -233,7 +242,7 @@ public class TCPConnection implements Sendable, Closeable {
             return;
 
         final byte[] decryptedData = ciphers.decrypt(data);
-        eventPipelineContext.fireOnReceive(decryptedData);
+        eventPipelineContext.fireReceive(decryptedData);
     }
 
     private void writeOperationAvailable() {

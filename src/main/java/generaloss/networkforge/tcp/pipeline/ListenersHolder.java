@@ -6,7 +6,7 @@ import generaloss.networkforge.tcp.listener.*;
 import java.util.LinkedList;
 import java.util.List;
 
-public class ListenersHolder extends EventHandlerLayer {
+public class ListenersHolder {
 
     private final List<ConnectListener> connectListeners;
     private final List<DisconnectListener> disconnectListener;
@@ -54,32 +54,24 @@ public class ListenersHolder extends EventHandlerLayer {
     }
 
 
-    @Override
-    public boolean handleConnect(EventPipelineContext context) {
-        final TCPConnection connection = context.getConnection();
+    public boolean handleConnect(TCPConnection connection) {
         for(ConnectListener onConnect : connectListeners)
             onConnect.onConnect(connection);
         return true;
     }
 
-    @Override
-    public void handleDisconnect(EventPipelineContext context, CloseReason reason, Exception e) {
-        final TCPConnection connection = context.getConnection();
+    public void handleDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
         for(DisconnectListener onDisconnect : disconnectListener)
             onDisconnect.onDisconnect(connection, reason, e);
     }
 
-    @Override
-    public boolean handleReceive(EventPipelineContext context, byte[] data) {
-        final TCPConnection connection = context.getConnection();
+    public boolean handleReceive(TCPConnection connection, byte[] data) {
         for(DataListener onReceive : dataListeners)
             onReceive.onReceive(connection, data);
         return true;
     }
 
-    @Override
-    public boolean handleError(EventPipelineContext context, ErrorSource source, Throwable throwable) {
-        final TCPConnection connection = context.getConnection();
+    public boolean handleError(TCPConnection connection, ErrorSource source, Throwable throwable) {
         for(ErrorListener onError : errorListeners)
             onError.onError(connection, source, throwable);
         return true;

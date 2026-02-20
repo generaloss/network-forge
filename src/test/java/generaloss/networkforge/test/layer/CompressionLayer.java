@@ -53,7 +53,7 @@ public class CompressionLayer extends EventHandlerLayer {
 
             return result;
         } catch (Exception e) {
-            context.fireOnError(ErrorSource.SEND_HANDLER, e);
+            context.fireError(ErrorSource.SEND_HANDLER, e);
             return data;
         }
     }
@@ -80,10 +80,10 @@ public class CompressionLayer extends EventHandlerLayer {
             inflater.end();
             final byte[] decompressed = outputStream.toByteArray();
 
-            context.fireOnReceive(decompressed);
+            context.fireReceive(decompressed);
             return false;
         } catch (Exception e) {
-            context.fireOnError(ErrorSource.RECEIVE_HANDLER, e);
+            context.fireError(ErrorSource.RECEIVE_HANDLER, e);
             return false;
         }
     }

@@ -54,8 +54,7 @@ public class TCPServer {
             (connection, reason, e) -> connections.remove(connection)
         );
 
-        this.eventPipeline = new EventPipeline();
-        this.eventPipeline.addHandlerLast(listeners);
+        this.eventPipeline = new EventPipeline(listeners);
 
         this.serverChannels = new ServerSocketChannel[0];
         this.pendingConnectionsLimit = 128;
@@ -235,7 +234,7 @@ public class TCPServer {
 
             connection.onConnectOp();
         } catch (IOException e) {
-            eventPipeline.fireOnError(0, null, ErrorSource.CONNECT, e);
+            eventPipeline.fireError(0, null, ErrorSource.CONNECT, e);
         }
     }
 
@@ -349,7 +348,7 @@ public class TCPServer {
             return this.broadcast(byteArray);
 
         } catch (IOException e) {
-            eventPipeline.fireOnError(0, null, ErrorSource.BROADCAST, e);
+            eventPipeline.fireError(0, null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }
@@ -363,7 +362,7 @@ public class TCPServer {
             return this.broadcast(except, byteArray);
 
         } catch (IOException e) {
-            eventPipeline.fireOnError(0, null, ErrorSource.BROADCAST, e);
+            eventPipeline.fireError(0, null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }
@@ -377,7 +376,7 @@ public class TCPServer {
             return this.broadcast(byteArray);
 
         } catch (IOException e) {
-            eventPipeline.fireOnError(0, null, ErrorSource.BROADCAST, e);
+            eventPipeline.fireError(0, null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }
@@ -391,7 +390,7 @@ public class TCPServer {
             return this.broadcast(except, byteArray);
 
         } catch (IOException e) {
-            eventPipeline.fireOnError(0, null, ErrorSource.BROADCAST, e);
+            eventPipeline.fireError(0, null, ErrorSource.BROADCAST, e);
             return connections.size();
         }
     }

@@ -2,178 +2,176 @@ package generaloss.networkforge.tcp.pipeline;
 
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.CloseReason;
-import generaloss.networkforge.tcp.listener.ErrorListener;
 import generaloss.networkforge.tcp.listener.ErrorSource;
 
 import java.util.LinkedList;
 
 public class EventPipeline {
 
-    private final LinkedList<EventHandlerLayer> handlersList;
+    private final ListenersHolder target;
+    private final LinkedList<EventHandlerLayer> handlers;
 
-    public EventPipeline() {
-        this.handlersList = new LinkedList<>();
+    public EventPipeline(ListenersHolder target) {
+        this.target = target;
+        this.handlers = new LinkedList<>();
+    }
+
+    public ListenersHolder getTarget() {
+        return target;
     }
 
     public LinkedList<EventHandlerLayer> getHandlers() {
-        return handlersList;
+        return handlers;
     }
 
+
+    public EventHandlerLayer getHandler(int index) {
+        return handlers.get(index);
+    }
+
+    public int getHandlersCount() {
+        return handlers.size();
+    }
+
+    public boolean isEmpty() {
+        return handlers.isEmpty();
+    }
+
+
     public void addHandlerFirst(EventHandlerLayer handler) {
-        handlersList.addFirst(handler);
+        handlers.addFirst(handler);
     }
 
     public void addHandlerLast(EventHandlerLayer handler) {
-        handlersList.addLast(handler);
+        handlers.addLast(handler);
     }
 
     public void addHandler(int index, EventHandlerLayer handler) {
-        handlersList.add(index, handler);
+        handlers.add(index, handler);
     }
 
     public void setHandler(int index, EventHandlerLayer handler) {
-        handlersList.set(index, handler);
+        handlers.set(index, handler);
     }
 
     public boolean containsHandler(EventHandlerLayer handler) {
-        return handlersList.contains(handler);
+        return handlers.contains(handler);
     }
 
     public void removeHandler(EventHandlerLayer handler) {
-        handlersList.remove(handler);
+        handlers.remove(handler);
     }
 
     public EventHandlerLayer removeHandler(int index) {
-        return handlersList.remove(index);
+        return handlers.remove(index);
     }
 
     public void clearHandlers() {
-        handlersList.clear();
+        handlers.clear();
     }
 
 
-    public void fireOnConnect(int indexFrom, TCPConnection connection) {
-        if(indexFrom < 0)
+    public void fireConnect(int handlerIndexFrom, TCPConnection connection) {
+        if(handlers.isEmpty() || handlerIndexFrom < 0 || handlerIndexFrom >= handlers.size()) {
+            target.handleConnect(connection);
             return;
-
-        final int length = handlersList.size();
-        if(length == 0 || indexFrom >= length)
-            return;
+        }
 
         final EventPipelineContext context = new EventPipelineContext(this, connection);
-        for(int i = indexFrom; i < length; i++) {
-            context.setPipelineStartIndex(i + 1);
+        do {
+            context.setHandlerIndex(handlerIndexFrom++);
+        } while (
+            context.invokeConnect()
+        );
+    }
+    
+    public void fireConnect(TCPConnection connection) {
+        this.fireConnect(0, connection);
+    }
+    
 
-            try {
-                final EventHandlerLayer handler = handlersList.get(i);
-                final boolean result = handler.handleConnect(context);
-                if(!result)
-                    break;
-
-            } catch (Throwable onConnectThrowable) {
-                this.fireOnError(indexFrom, connection, ErrorSource.CONNECT_HANDLER, onConnectThrowable);
-                break;
-            }
+    public void fireDisconnect(int handlerIndexFrom, TCPConnection connection, CloseReason reason, Exception e) {
+        if(handlers.isEmpty() || handlerIndexFrom < 0 || handlerIndexFrom >= handlers.size()) {
+            target.handleDisconnect(connection, reason, e);
+            return;
         }
+
+        final EventPipelineContext context = new EventPipelineContext(this, connection);
+        do {
+            context.setHandlerIndex(handlerIndexFrom++);
+        } while (
+            context.invokeDisconnect(reason, e)
+        );
     }
 
-    public void fireOnDisconnect(int indexFrom, TCPConnection connection, CloseReason reason, Exception e) {
-        if(indexFrom < 0)
-            return;
-
-        final int length = handlersList.size();
-        if(length == 0 || indexFrom >= length)
-            return;
-
-        final EventPipelineContext context = new EventPipelineContext(this, connection);
-        for(int i = indexFrom; i < length; i++) {
-            context.setPipelineStartIndex(i + 1);
-
-            try {
-                final EventHandlerLayer handler = handlersList.get(i);
-                handler.handleDisconnect(context, reason, e);
-
-            } catch (Throwable onDisconnectThrowable) {
-                this.fireOnError(indexFrom, connection, ErrorSource.DISCONNECT_HANDLER, onDisconnectThrowable);
-                break;
-            }
-        }
+    public void fireDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
+        this.fireDisconnect(0, connection, reason, e);
     }
 
-    public void fireOnReceive(int indexFrom, TCPConnection connection, byte[] data) {
-        if(indexFrom < 0)
-            return;
+    
+    public void fireReceive(int handlerIndexFrom, TCPConnection connection, byte[] data) {
+        if(data == null)
+            throw new RuntimeException("Argument 'data' cannot be null");
 
-        final int length = handlersList.size();
-        if(length == 0 || indexFrom >= length)
+        if(handlers.isEmpty() || handlerIndexFrom < 0 || handlerIndexFrom >= handlers.size()) {
+            target.handleReceive(connection, data);
             return;
+        }
 
         final EventPipelineContext context = new EventPipelineContext(this, connection);
-        for(int i = indexFrom; i < length; i++) {
-            context.setPipelineStartIndex(i + 1);
-
-            try {
-                final EventHandlerLayer handler = handlersList.get(i);
-                final boolean result = handler.handleReceive(context, data);
-                if(!result)
-                    break;
-
-            } catch (Throwable onReceiveThrowable) {
-                this.fireOnError(indexFrom, connection, ErrorSource.RECEIVE_HANDLER, onReceiveThrowable);
-                break;
-            }
-        }
+        do {
+            context.setHandlerIndex(handlerIndexFrom++);
+        } while (
+            context.invokeReceive(data)
+        );
     }
 
-    public byte[] fireOnSend(int indexFrom, TCPConnection connection, byte[] data) {
-        if(indexFrom < 0)
-            return data;
-
-        final int length = handlersList.size();
-        if(length == 0 || indexFrom >= length)
-            return data;
-
-        final EventPipelineContext context = new EventPipelineContext(this, connection);
-        for(int i = indexFrom; i < length; i++) {
-            context.setPipelineStartIndex(i + 1);
-
-            try {
-                final EventHandlerLayer handler = handlersList.get(i);
-                data = handler.handleSend(context, data);
-                if(data == null)
-                    break;
-
-            } catch (Throwable onReceiveThrowable) {
-                this.fireOnError(indexFrom, connection, ErrorSource.RECEIVE_HANDLER, onReceiveThrowable);
-                break;
-            }
-        }
-        return data;
+    public void fireReceive(TCPConnection connection, byte[] data) {
+        this.fireReceive(0, connection, data);
     }
 
-    public void fireOnError(int indexFrom, TCPConnection connection, ErrorSource source, Throwable throwable) {
-        if(indexFrom < 0)
-            return;
+    
+    public boolean fireSend(int handlerIndexFrom, TCPConnection connection, byte[] data) {
+        if(data == null)
+            throw new RuntimeException("Argument 'data' cannot be null");
 
-        final int length = handlersList.size();
-        if(length == 0 || indexFrom >= length)
-            return;
+        if(handlers.isEmpty() || handlerIndexFrom < 0 || handlerIndexFrom >= handlers.size())
+            return connection.sendDirect(data);
 
         final EventPipelineContext context = new EventPipelineContext(this, connection);
-        for(int i = indexFrom; i < length; i++) {
-            context.setPipelineStartIndex(i + 1);
+        do {
+            if(handlerIndexFrom == -1)
+                return connection.sendDirect(context.getSendProcessedData()); // break
 
-            try {
-                final EventHandlerLayer handler = handlersList.get(i);
-                final boolean result = handler.handleError(context, source, throwable);
-                if(!result)
-                    break;
+            context.setHandlerIndex(handlerIndexFrom--);
+        } while (
+            context.invokeSend(data)
+        );
+        return false;
+    }
+    
+    public void fireSend(TCPConnection connection, byte[] data) {
+        final int lastHandlerIndex = (handlers.size() - 1);
+        this.fireSend(lastHandlerIndex, connection, data);
+    }
 
-            } catch (Throwable onErrorThrowable) {
-                ErrorListener.printErrorCatch(connection, ErrorSource.ERROR_HANDLER, onErrorThrowable);
-                break;
-            }
+    
+    public void fireError(int handlerIndexFrom, TCPConnection connection, ErrorSource source, Throwable throwable) {
+        if(handlers.isEmpty() || handlerIndexFrom < 0 || handlerIndexFrom >= handlers.size()) {
+            target.handleError(connection, source, throwable);
+            return;
         }
+
+        final EventPipelineContext context = new EventPipelineContext(this, connection);
+        do {
+            context.setHandlerIndex(handlerIndexFrom++);
+        } while (
+            context.invokeError(source, throwable)
+        );
+    }
+
+    public void fireError(TCPConnection connection, ErrorSource source, Throwable throwable) {
+        this.fireError(0, connection, source, throwable);
     }
 
 }

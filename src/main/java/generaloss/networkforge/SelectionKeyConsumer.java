@@ -7,7 +7,7 @@ import java.util.Objects;
 @FunctionalInterface
 public interface SelectionKeyConsumer {
 
-    void accept(SelectionKey socket) throws IOException;
+    void accept(SelectionKey key) throws IOException;
 
     default SelectionKeyConsumer andThen(SelectionKeyConsumer after) {
         Objects.requireNonNull(after);

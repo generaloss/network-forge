@@ -49,9 +49,8 @@ public class TCPClient implements Sendable {
         this.listeners = new ListenersHolder();
         this.listeners.registerOnDisconnect(this::onConnectionClosed); // TCPConnection internal close
 
-        this.eventPipeline = new EventPipeline();
-        this.eventPipeline.addHandlerLast(listeners);
-        
+        this.eventPipeline = new EventPipeline(listeners);
+
         this.state = ConnectionState.CLOSED;
         this.asyncConnect = new AsyncConnectState();
     }
@@ -242,6 +241,12 @@ public class TCPClient implements Sendable {
     }
 
 
+    public void awaitWriteDrain(long timeoutMillis) throws InterruptedException {
+        if(state == ConnectionState.CONNECTED)
+            connection.awaitWriteDrain(timeoutMillis);
+    }
+
+
     public void close() {
         if(state == ConnectionState.CONNECTED) {
             this.closeConnection();
@@ -270,7 +275,7 @@ public class TCPClient implements Sendable {
     private void abortAsyncConnect(Exception e) {
         this.abortConnect();
         asyncConnect.end(e);
-        eventPipeline.fireOnError(0, null, ErrorSource.CONNECT, e);
+        eventPipeline.fireError(0, null, ErrorSource.CONNECT, e);
     }
 
     private void abortAsyncConnect() {

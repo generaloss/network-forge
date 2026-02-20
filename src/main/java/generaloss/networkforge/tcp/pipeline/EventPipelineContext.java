@@ -3,6 +3,7 @@ package generaloss.networkforge.tcp.pipeline;
 import generaloss.networkforge.packet.NetPacket;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.CloseReason;
+import generaloss.networkforge.tcp.listener.ErrorListener;
 import generaloss.networkforge.tcp.listener.ErrorSource;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
@@ -11,44 +12,125 @@ import java.nio.ByteBuffer;
 
 public class EventPipelineContext {
 
-    private final EventPipeline eventPipeline;
+    private final EventPipeline pipeline;
     private final TCPConnection connection;
-    private int pipelineStartIndex;
+    private int handlerIndex;
 
-    public EventPipelineContext(EventPipeline eventPipeline, TCPConnection connection) {
-        this.eventPipeline = eventPipeline;
+    public EventPipelineContext(EventPipeline pipeline, TCPConnection connection) {
+        if(connection == null)
+            throw new RuntimeException("Argument 'connection' cannot be null");
+
+        this.pipeline = pipeline;
         this.connection = connection;
     }
 
     public EventPipeline getEventPipeline() {
-        return eventPipeline;
+        return pipeline;
     }
 
     public TCPConnection getConnection() {
         return connection;
     }
 
-    public void setPipelineStartIndex(int pipelineStartIndex) {
-        this.pipelineStartIndex = pipelineStartIndex;
+
+    public void setHandlerIndex(int handlerIndex) {
+        this.handlerIndex = handlerIndex;
     }
 
-    public int getPipelineStartIndex() {
-        return pipelineStartIndex;
+    public int getHandlerIndex() {
+        return handlerIndex;
+    }
+
+
+    protected boolean invokeConnect() {
+        if(handlerIndex == pipeline.getHandlersCount()) {
+            pipeline.getTarget().handleConnect(connection);
+            return false; // break
+        }
+        
+        try {
+            final EventHandlerLayer handler = pipeline.getHandler(handlerIndex);
+            return handler.handleConnect(this);
+
+        } catch (Throwable t) {
+            this.fireError(ErrorSource.CONNECT_HANDLER, t);
+            return true; // skip
+        }
+    }
+
+    protected boolean invokeDisconnect(CloseReason reason, Exception e) {
+        if(handlerIndex == pipeline.getHandlersCount()) {
+            pipeline.getTarget().handleDisconnect(connection, reason, e);
+            return false; // break
+        }
+        
+        try {
+            final EventHandlerLayer handler = pipeline.getHandler(handlerIndex);
+            handler.handleDisconnect(this, reason, e);
+            return true;
+
+        } catch (Throwable t) {
+            this.fireError(ErrorSource.DISCONNECT_HANDLER, t);
+            return true; // skip
+        }
+    }
+
+    protected boolean invokeReceive(byte[] data) {
+        if(handlerIndex == pipeline.getHandlersCount()) {
+            pipeline.getTarget().handleReceive(connection, data);
+            return false; // break
+        }
+        
+        try {
+            final EventHandlerLayer handler = pipeline.getHandler(handlerIndex);
+            return handler.handleReceive(this, data);
+
+        } catch (Throwable t) {
+            this.fireError(ErrorSource.RECEIVE_HANDLER, t);
+            return true; // skip
+        }
+    }
+
+    private byte[] sendProcessedData;
+
+    protected boolean invokeSend(byte[] data) {
+        try {
+            final EventHandlerLayer handler = pipeline.getHandler(handlerIndex);
+            sendProcessedData = handler.handleSend(this, data);
+            return (sendProcessedData != null);
+
+        } catch (Throwable t) {
+            this.fireError(ErrorSource.SEND_HANDLER, t);
+            return true; // skip
+        }
+    }
+
+    protected byte[] getSendProcessedData() {
+        return sendProcessedData;
+    }
+
+    protected boolean invokeError(ErrorSource source, Throwable throwable) {
+        if(handlerIndex == pipeline.getHandlersCount()) {
+            pipeline.getTarget().handleError(connection, source, throwable);
+            return false; // break
+        }
+        
+        try {
+            final EventHandlerLayer handler = pipeline.getHandler(handlerIndex);
+            return handler.handleError(this, source, throwable);
+
+        } catch (Throwable t) {
+            ErrorListener.printErrorCatch(connection, ErrorSource.ERROR_HANDLER, t);
+            return true; // skip
+        }
     }
 
 
     public boolean fireSend(TCPConnection connection, byte[] data) {
-        if(data == null)
-            throw new IllegalArgumentException("Argument 'data' cannot be null");
-
         if(connection.isClosed())
             return false;
 
-        final byte[] processedData = eventPipeline.fireOnSend(pipelineStartIndex, connection, data);
-        if(processedData == null)
-            return false;
-
-        return connection.sendDirect(processedData);
+        return pipeline.fireSend(handlerIndex - 1, connection, data);
     }
 
     public boolean fireSend(byte[] data) {
@@ -88,7 +170,8 @@ public class EventPipelineContext {
             return this.fireSend(connection, byteArray);
 
         } catch (IOException e) {
-            eventPipeline.fireOnError(pipelineStartIndex, connection, ErrorSource.SEND, e);
+            final int nextIndex = (handlerIndex + 1);
+            pipeline.fireError(nextIndex, connection, ErrorSource.SEND, e);
             return false;
         }
     }
@@ -106,7 +189,8 @@ public class EventPipelineContext {
             return this.fireSend(connection, byteArray);
 
         } catch (IOException e) {
-            eventPipeline.fireOnError(pipelineStartIndex, connection, ErrorSource.SEND, e);
+            final int nextIndex = (handlerIndex + 1);
+            pipeline.fireError(nextIndex, connection, ErrorSource.SEND, e);
             return false;
         }
     }
@@ -116,39 +200,43 @@ public class EventPipelineContext {
     }
 
 
-    public void fireOnConnect(TCPConnection connection) {
-        eventPipeline.fireOnConnect(pipelineStartIndex, connection);
+    public void fireConnect(TCPConnection connection) {
+        final int nextIndex = (handlerIndex + 1);
+        pipeline.fireConnect(nextIndex, connection);
     }
 
-    public void fireOnConnect() {
-        this.fireOnConnect(connection);
-    }
-
-
-    public void fireOnDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
-        eventPipeline.fireOnDisconnect(pipelineStartIndex, connection, reason, e);
-    }
-
-    public void fireOnDisconnect(CloseReason reason, Exception e) {
-        this.fireOnDisconnect(connection, reason, e);
+    public void fireConnect() {
+        this.fireConnect(connection);
     }
 
 
-    public void fireOnReceive(TCPConnection connection, byte[] data) {
-        eventPipeline.fireOnReceive(pipelineStartIndex, connection, data);
+    public void fireDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
+        final int nextIndex = (handlerIndex + 1);
+        pipeline.fireDisconnect(nextIndex, connection, reason, e);
     }
 
-    public void fireOnReceive(byte[] data) {
-        this.fireOnReceive(connection, data);
+    public void fireDisconnect(CloseReason reason, Exception e) {
+        this.fireDisconnect(connection, reason, e);
     }
 
 
-    public void fireOnError(TCPConnection connection, ErrorSource source, Throwable throwable) {
-        eventPipeline.fireOnError(pipelineStartIndex, connection, source, throwable);
+    public void fireReceive(TCPConnection connection, byte[] data) {
+        final int nextIndex = (handlerIndex + 1);
+        pipeline.fireReceive(nextIndex, connection, data);
     }
 
-    public void fireOnError(ErrorSource source, Throwable throwable) {
-        this.fireOnError(connection, source, throwable);
+    public void fireReceive(byte[] data) {
+        this.fireReceive(connection, data);
+    }
+
+
+    public void fireError(TCPConnection connection, ErrorSource source, Throwable throwable) {
+        final int nextIndex = (handlerIndex + 1);
+        pipeline.fireError(nextIndex, connection, source, throwable);
+    }
+
+    public void fireError(ErrorSource source, Throwable throwable) {
+        this.fireError(connection, source, throwable);
     }
 
 }

@@ -1,38 +1,36 @@
 package generaloss.networkforge.test;
 
-import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.tcp.TCPClient;
 import generaloss.networkforge.tcp.TCPServer;
+
+import java.io.IOException;
 
 public class TutorialSample {
 
     public static void main(String[] args) throws Exception {
-        // create server
+        createServer();
+        createClient();
+    }
+
+    private static void createServer() throws IOException {
         TCPServer server = new TCPServer();
-        server.registerOnConnect(connection ->
-            connection.send("Hello, client!")
-        );
-        server.registerOnReceive((senderConnection, data) -> {
-            String received = new String(data);
-            System.out.println(received); // Output: Hello, server!
+
+        server.registerOnReceive((sender_connection, bytes) -> {
+            String message = new String(bytes);
+            System.out.println(message); // Output - Hello!
+
+            server.close();
         });
-        server.registerOnDisconnect((connection, reason, e) -> {
-            server.close(); // close server
-        });
+
         server.run(5555);
+    }
 
-        // create client
+    private static void createClient() throws IOException, InterruptedException {
         TCPClient client = new TCPClient();
-        client.registerOnReceive((connection, data) -> {
-            String received = new String(data);
-            System.out.println(received); // Output: Hello, client!
-            client.close(); // disconnect client
-        });
         client.connect("localhost", 5555);
-        client.send("Hello, server!");
 
-        // wait for server & exit
-        TimeUtils.waitFor(server::isClosed);
+        client.send("Hello");
+        client.getConnection().awaitWriteDrain(1000L);
     }
 
 }

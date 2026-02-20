@@ -4,7 +4,7 @@
 
 A lightweight and flexible Java networking library for building custom networked applications.
 
-It provides **packet-oriented TCP connections**, **fine-grained socket option control**, and **optional encryption** with JCE ciphers.
+It provides **packet-oriented TCP connections**, **fine-grained socket option control**, and **encryption** with JCE ciphers.
 
 ---
 
@@ -16,7 +16,7 @@ Add the dependency from Maven Central:
 <dependency>
     <groupId>io.github.generaloss</groupId>
     <artifactId>network-forge</artifactId>
-    <version>26.1.2</version>
+    <version>26.2.1</version>
 </dependency>
 ```
 
@@ -59,7 +59,7 @@ client.send("Hello, server!");
 
 ---
 
-## ~~Documentation~~
+## Documentation
 - [**English**](docs/en/index.md)
 - [**Русский**](docs/ru/index.md)
 

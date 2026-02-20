@@ -111,7 +111,7 @@ public class ServerSecureLayer extends EventHandlerLayer {
                     connection.send(bufferedData);
                 }
 
-                context.fireOnConnect();
+                context.fireConnect();
 
             }catch(NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
                 throw new RuntimeException(e);

@@ -113,7 +113,7 @@ public class ClientSecureLayer extends EventHandlerLayer {
                 connection.send(bufferedData);
             }
 
-            context.fireOnConnect();
+            context.fireConnect();
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
