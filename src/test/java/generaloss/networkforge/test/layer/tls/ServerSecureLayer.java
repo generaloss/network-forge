@@ -143,10 +143,11 @@ public class ServerSecureLayer extends EventHandlerLayer {
     }
 
     @Override
-    public void handleDisconnect(EventPipelineContext context, CloseReason reason, Exception e) {
+    public boolean handleDisconnect(EventPipelineContext context, CloseReason reason, Exception e) {
         final TCPConnection connection = context.getConnection();
         handshakeCompleted.remove(connection);
         pendingDataMap.remove(connection);
+        return true;
     }
 
 }

@@ -5,7 +5,7 @@
 
     <groupId>io.github.generaloss</groupId>
     <artifactId>network-forge</artifactId>
-    <version>26.2.1</version>
+    <version>26.2.2</version>
     <name>NetworkForge</name>
 
     <description>A lightweight TCP networking library. Provides packet-oriented connections and flexible socket configuration.</description>

@@ -10,14 +10,16 @@ public class ListenersHolder {
 
     private final List<ConnectListener> connectListeners;
     private final List<DisconnectListener> disconnectListener;
-    private final List<DataListener> dataListeners;
+    private final List<DataListener> receiveListeners;
     private final List<ErrorListener> errorListeners;
+    private final List<DataListener> sendListeners;
 
     public ListenersHolder() {
         this.connectListeners = new LinkedList<>();
         this.disconnectListener = new LinkedList<>();
-        this.dataListeners = new LinkedList<>();
+        this.receiveListeners = new LinkedList<>();
         this.errorListeners = new LinkedList<>();
+        this.sendListeners = new LinkedList<>();
     }
 
     public void registerOnConnect(ConnectListener onConnect) {
@@ -27,13 +29,17 @@ public class ListenersHolder {
     public void registerOnDisconnect(DisconnectListener onClose) {
         disconnectListener.add(onClose);
     }
-
+    
     public void registerOnReceive(DataListener onReceive) {
-        dataListeners.add(onReceive);
+        receiveListeners.add(onReceive);
     }
-
+    
     public void registerOnError(ErrorListener onError) {
         errorListeners.add(onError);
+    }
+
+    public void registerOnSend(DataListener onSend) {
+        sendListeners.add(onSend);
     }
 
 
@@ -46,35 +52,41 @@ public class ListenersHolder {
     }
 
     public boolean unregisterOnReceive(DataListener onReceive) {
-        return dataListeners.remove(onReceive);
+        return receiveListeners.remove(onReceive);
     }
 
     public boolean unregisterOnError(ErrorListener onError) {
         return errorListeners.remove(onError);
     }
 
-
-    public boolean handleConnect(TCPConnection connection) {
-        for(ConnectListener onConnect : connectListeners)
-            onConnect.onConnect(connection);
-        return true;
+    public boolean unregisterOnSend(DataListener onSend) {
+        return sendListeners.remove(onSend);
     }
 
-    public void handleDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
+
+    public void invokeConnect(TCPConnection connection) {
+        for(ConnectListener onConnect : connectListeners)
+            onConnect.onConnect(connection);
+    }
+
+    public void invokeDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
         for(DisconnectListener onDisconnect : disconnectListener)
             onDisconnect.onDisconnect(connection, reason, e);
     }
 
-    public boolean handleReceive(TCPConnection connection, byte[] data) {
-        for(DataListener onReceive : dataListeners)
-            onReceive.onReceive(connection, data);
-        return true;
+    public void invokeReceive(TCPConnection connection, byte[] data) {
+        for(DataListener onReceive : receiveListeners)
+            onReceive.onData(connection, data);
     }
 
-    public boolean handleError(TCPConnection connection, ErrorSource source, Throwable throwable) {
+    public void invokeError(TCPConnection connection, ErrorSource source, Throwable throwable) {
         for(ErrorListener onError : errorListeners)
             onError.onError(connection, source, throwable);
-        return true;
+    }
+
+    public void invokeSend(TCPConnection connection, byte[] data) {
+        for(DataListener onSend : sendListeners)
+            onSend.onData(connection, data);
     }
 
 }

@@ -7,19 +7,15 @@ import generaloss.networkforge.tcp.listener.ErrorListener;
 import generaloss.networkforge.tcp.listener.ErrorSource;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public class EventPipelineContext {
 
     private final EventPipeline pipeline;
-    private final TCPConnection connection;
+    private final TCPConnection connection; // can be null
     private int handlerIndex;
 
     public EventPipelineContext(EventPipeline pipeline, TCPConnection connection) {
-        if(connection == null)
-            throw new RuntimeException("Argument 'connection' cannot be null");
-
         this.pipeline = pipeline;
         this.connection = connection;
     }
@@ -43,13 +39,13 @@ public class EventPipelineContext {
 
 
     protected boolean invokeConnect() {
-        if(handlerIndex == pipeline.getHandlersCount()) {
-            pipeline.getTarget().handleConnect(connection);
+        if(handlerIndex == pipeline.getHandlers().count()) {
+            pipeline.getTarget().invokeConnect(connection);
             return false; // break
         }
         
         try {
-            final EventHandlerLayer handler = pipeline.getHandler(handlerIndex);
+            final EventHandlerLayer handler = pipeline.getHandlers().get(handlerIndex);
             return handler.handleConnect(this);
 
         } catch (Throwable t) {
@@ -59,15 +55,14 @@ public class EventPipelineContext {
     }
 
     protected boolean invokeDisconnect(CloseReason reason, Exception e) {
-        if(handlerIndex == pipeline.getHandlersCount()) {
-            pipeline.getTarget().handleDisconnect(connection, reason, e);
+        if(handlerIndex == pipeline.getHandlers().count()) {
+            pipeline.getTarget().invokeDisconnect(connection, reason, e);
             return false; // break
         }
         
         try {
-            final EventHandlerLayer handler = pipeline.getHandler(handlerIndex);
-            handler.handleDisconnect(this, reason, e);
-            return true;
+            final EventHandlerLayer handler = pipeline.getHandlers().get(handlerIndex);
+            return handler.handleDisconnect(this, reason, e);
 
         } catch (Throwable t) {
             this.fireError(ErrorSource.DISCONNECT_HANDLER, t);
@@ -76,13 +71,13 @@ public class EventPipelineContext {
     }
 
     protected boolean invokeReceive(byte[] data) {
-        if(handlerIndex == pipeline.getHandlersCount()) {
-            pipeline.getTarget().handleReceive(connection, data);
+        if(handlerIndex == pipeline.getHandlers().count()) {
+            pipeline.getTarget().invokeReceive(connection, data);
             return false; // break
         }
         
         try {
-            final EventHandlerLayer handler = pipeline.getHandler(handlerIndex);
+            final EventHandlerLayer handler = pipeline.getHandlers().get(handlerIndex);
             return handler.handleReceive(this, data);
 
         } catch (Throwable t) {
@@ -91,32 +86,15 @@ public class EventPipelineContext {
         }
     }
 
-    private byte[] sendProcessedData;
-
-    protected boolean invokeSend(byte[] data) {
-        try {
-            final EventHandlerLayer handler = pipeline.getHandler(handlerIndex);
-            sendProcessedData = handler.handleSend(this, data);
-            return (sendProcessedData != null);
-
-        } catch (Throwable t) {
-            this.fireError(ErrorSource.SEND_HANDLER, t);
-            return true; // skip
-        }
-    }
-
-    protected byte[] getSendProcessedData() {
-        return sendProcessedData;
-    }
 
     protected boolean invokeError(ErrorSource source, Throwable throwable) {
-        if(handlerIndex == pipeline.getHandlersCount()) {
-            pipeline.getTarget().handleError(connection, source, throwable);
+        if(handlerIndex == pipeline.getHandlers().count()) {
+            pipeline.getTarget().invokeError(connection, source, throwable);
             return false; // break
         }
         
         try {
-            final EventHandlerLayer handler = pipeline.getHandler(handlerIndex);
+            final EventHandlerLayer handler = pipeline.getHandlers().get(handlerIndex);
             return handler.handleError(this, source, throwable);
 
         } catch (Throwable t) {
@@ -127,10 +105,8 @@ public class EventPipelineContext {
 
 
     public boolean fireSend(TCPConnection connection, byte[] data) {
-        if(connection.isClosed())
-            return false;
-
-        return pipeline.fireSend(handlerIndex - 1, connection, data);
+        final int nextIndex = (handlerIndex - 1);
+        return pipeline.fireSend(nextIndex, connection, data);
     }
 
     public boolean fireSend(byte[] data) {
@@ -138,12 +114,8 @@ public class EventPipelineContext {
     }
 
     public boolean fireSend(TCPConnection connection, ByteBuffer buffer) {
-        if(buffer == null)
-            throw new IllegalArgumentException("Argument 'buffer' cannot be null");
-
-        final byte[] byteArray = new byte[buffer.remaining()];
-        buffer.duplicate().get(byteArray);
-        return this.fireSend(connection, byteArray);
+        final int nextIndex = (handlerIndex - 1);
+        return pipeline.fireSend(nextIndex, connection, buffer);
     }
 
     public boolean fireSend(ByteBuffer buffer) {
@@ -151,10 +123,8 @@ public class EventPipelineContext {
     }
 
     public boolean fireSend(TCPConnection connection, String string) {
-        if(string == null)
-            throw new IllegalArgumentException("Argument 'string' cannot be null");
-
-        return this.fireSend(connection, string.getBytes());
+        final int nextIndex = (handlerIndex - 1);
+        return pipeline.fireSend(nextIndex, connection, string);
     }
 
     public boolean fireSend(String string) {
@@ -162,18 +132,8 @@ public class EventPipelineContext {
     }
 
     public boolean fireSend(TCPConnection connection, BinaryStreamWriter streamWriter) {
-        if(streamWriter == null)
-            throw new IllegalArgumentException("Argument 'streamWriter' cannot be null");
-
-        try {
-            final byte[] byteArray = BinaryStreamWriter.toByteArray(streamWriter);
-            return this.fireSend(connection, byteArray);
-
-        } catch (IOException e) {
-            final int nextIndex = (handlerIndex + 1);
-            pipeline.fireError(nextIndex, connection, ErrorSource.SEND, e);
-            return false;
-        }
+        final int nextIndex = (handlerIndex - 1);
+        return pipeline.fireSend(nextIndex, connection, streamWriter);
     }
 
     public boolean fireSend(BinaryStreamWriter streamWriter) {
@@ -181,18 +141,8 @@ public class EventPipelineContext {
     }
 
     public boolean fireSend(TCPConnection connection, NetPacket<?> packet) {
-        if(packet == null)
-            throw new IllegalArgumentException("Argument 'packet' cannot be null");
-
-        try {
-            final byte[] byteArray = packet.toByteArray();
-            return this.fireSend(connection, byteArray);
-
-        } catch (IOException e) {
-            final int nextIndex = (handlerIndex + 1);
-            pipeline.fireError(nextIndex, connection, ErrorSource.SEND, e);
-            return false;
-        }
+        final int nextIndex = (handlerIndex - 1);
+        return pipeline.fireSend(nextIndex, connection, packet);
     }
 
     public boolean fireSend(NetPacket<?> packet) {

@@ -9,18 +9,20 @@ public abstract class EventHandlerLayer {
         return true;
     }
 
-    public void handleDisconnect(EventPipelineContext context, CloseReason reason, Exception e) { }
+    public boolean handleDisconnect(EventPipelineContext context, CloseReason reason, Exception e) {
+        return true;
+    }
 
     public boolean handleReceive(EventPipelineContext context, byte[] data) {
         return true;
     }
 
-    public byte[] handleSend(EventPipelineContext context, byte[] data) {
-        return data;
-    }
-
     public boolean handleError(EventPipelineContext context, ErrorSource source, Throwable throwable) {
         return true;
+    }
+
+    public byte[] handleSend(EventPipelineContext context, byte[] data) {
+        return data;
     }
 
 }
