@@ -319,6 +319,11 @@ public class TCPClient implements Sendable {
         return this;
     }
 
+    public TCPClient registerOnSend(DataListener onSend) {
+        listeners.registerOnSend(onSend);
+        return this;
+    }
+
 
     public TCPClient unregisterOnConnect(ConnectListener onConnect) {
         listeners.unregisterOnConnect(onConnect);
@@ -337,6 +342,11 @@ public class TCPClient implements Sendable {
 
     public TCPClient unregisterOnError(ErrorListener onError) {
         listeners.unregisterOnError(onError);
+        return this;
+    }
+
+    public TCPClient unregisterOnSend(DataListener onSend) {
+        listeners.unregisterOnSend(onSend);
         return this;
     }
 

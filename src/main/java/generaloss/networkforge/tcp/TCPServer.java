@@ -116,6 +116,11 @@ public class TCPServer {
         return this;
     }
 
+    public TCPServer registerOnSend(DataListener onSend) {
+        listeners.registerOnSend(onSend);
+        return this;
+    }
+
 
     public TCPServer unregisterOnConnect(ConnectListener onConnect) {
         listeners.unregisterOnConnect(onConnect);
@@ -134,6 +139,11 @@ public class TCPServer {
 
     public TCPServer unregisterOnError(ErrorListener onError) {
         listeners.unregisterOnError(onError);
+        return this;
+    }
+
+    public TCPServer unregisterOnError(DataListener onSend) {
+        listeners.unregisterOnSend(onSend);
         return this;
     }
 
