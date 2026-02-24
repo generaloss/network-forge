@@ -1,9 +1,9 @@
-package generaloss.networkforge.test.layer.tls;
+package generaloss.networkforge.test.handler.tls;
 
 import generaloss.networkforge.tcp.TCPConnection;
-import generaloss.networkforge.tcp.pipeline.EventHandlerLayer;
+import generaloss.networkforge.tcp.pipeline.EventHandler;
 import generaloss.networkforge.tcp.listener.CloseReason;
-import generaloss.networkforge.tcp.pipeline.EventPipelineContext;
+import generaloss.networkforge.tcp.pipeline.EventInvocationContext;
 import generaloss.resourceflow.stream.BinaryInputStream;
 
 import javax.crypto.Cipher;
@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class ServerSecureLayer extends EventHandlerLayer {
+public class ServerSecureHandler extends EventHandler {
 
     public static final int RSA_KEY_SIZE = 2048;
 
@@ -25,7 +25,7 @@ public class ServerSecureLayer extends EventHandlerLayer {
     private final Map<TCPConnection, ByteArrayOutputStream> pendingDataMap;
     private final ConcurrentLinkedQueue<TCPConnection> handshakeCompleted;
 
-    public ServerSecureLayer() {
+    public ServerSecureHandler() {
         try {
             final KeyPairGenerator pairGenerator = KeyPairGenerator.getInstance("RSA");
             pairGenerator.initialize(RSA_KEY_SIZE);
@@ -40,13 +40,13 @@ public class ServerSecureLayer extends EventHandlerLayer {
     }
 
     @Override
-    public boolean handleConnect(EventPipelineContext context) {
+    public boolean handleConnect(EventInvocationContext context) {
         this.sendPublicKey(context);
 
         return false;
     }
 
-    private void sendPublicKey(EventPipelineContext context) {
+    private void sendPublicKey(EventInvocationContext context) {
         final boolean success = context.fireSend(stream -> {
             stream.writeByte(SecureBinaryFrames.PUBLIC_KEY.ordinal());
             stream.writeByteArray(keyPair.getPublic().getEncoded());
@@ -56,7 +56,7 @@ public class ServerSecureLayer extends EventHandlerLayer {
     }
 
     @Override
-    public boolean handleReceive(EventPipelineContext context, byte[] data) {
+    public boolean handleReceive(EventInvocationContext context, byte[] data) {
         if(handshakeCompleted.contains(context.getConnection()))
             return true;
 
@@ -76,7 +76,7 @@ public class ServerSecureLayer extends EventHandlerLayer {
         return false;
     }
 
-    private void onReceiveEncryptedSecretKey(EventPipelineContext context, byte[] encryptedSecretKeyBytes) {
+    private void onReceiveEncryptedSecretKey(EventInvocationContext context, byte[] encryptedSecretKeyBytes) {
         try {
             final TCPConnection connection = context.getConnection();
 
@@ -122,7 +122,7 @@ public class ServerSecureLayer extends EventHandlerLayer {
         }
     }
 
-    private void sendConnectionEncryptedSignal(EventPipelineContext context) {
+    private void sendConnectionEncryptedSignal(EventInvocationContext context) {
         final boolean success = context.fireSend(stream ->
             stream.writeByte(SecureBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal()));
         if(!success)
@@ -130,7 +130,7 @@ public class ServerSecureLayer extends EventHandlerLayer {
     }
 
     @Override
-    public byte[] handleSend(EventPipelineContext context, byte[] data) {
+    public byte[] handleSend(EventInvocationContext context, byte[] data) {
         if(handshakeCompleted.contains(context.getConnection()))
             return data;
 
@@ -143,7 +143,7 @@ public class ServerSecureLayer extends EventHandlerLayer {
     }
 
     @Override
-    public boolean handleDisconnect(EventPipelineContext context, CloseReason reason, Exception e) {
+    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason, Exception e) {
         final TCPConnection connection = context.getConnection();
         handshakeCompleted.remove(connection);
         pendingDataMap.remove(connection);

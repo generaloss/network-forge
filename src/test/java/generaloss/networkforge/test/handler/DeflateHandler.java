@@ -1,14 +1,14 @@
-package generaloss.networkforge.test.layer;
+package generaloss.networkforge.test.handler;
 
 import generaloss.networkforge.tcp.listener.ErrorSource;
-import generaloss.networkforge.tcp.pipeline.EventHandlerLayer;
-import generaloss.networkforge.tcp.pipeline.EventPipelineContext;
+import generaloss.networkforge.tcp.pipeline.EventHandler;
+import generaloss.networkforge.tcp.pipeline.EventInvocationContext;
 
 import java.io.ByteArrayOutputStream;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
-public class CompressionLayer extends EventHandlerLayer {
+public class DeflateHandler extends EventHandler {
 
     public static final int DEFAULT_BUFFER_SIZE = 8192;
     public static final int MINIMUM_SIZE_TO_COMPRESS = 100;
@@ -17,18 +17,18 @@ public class CompressionLayer extends EventHandlerLayer {
     private final byte[] deflaterBuffer;
     private final byte[] inflaterBuffer;
 
-    public CompressionLayer(int compressionLevel, int bufferSize) {
+    public DeflateHandler(int compressionLevel, int bufferSize) {
         this.compressionLevel = compressionLevel;
         this.deflaterBuffer = new byte[bufferSize];
         this.inflaterBuffer = new byte[bufferSize];
     }
 
-    public CompressionLayer() {
+    public DeflateHandler() {
         this(Deflater.DEFAULT_COMPRESSION, DEFAULT_BUFFER_SIZE);
     }
 
     @Override
-    public byte[] handleSend(EventPipelineContext context, byte[] data) {
+    public byte[] handleSend(EventInvocationContext context, byte[] data) {
         if(data.length < MINIMUM_SIZE_TO_COMPRESS)
             return data;
 
@@ -59,7 +59,7 @@ public class CompressionLayer extends EventHandlerLayer {
     }
     
     @Override
-    public boolean handleReceive(EventPipelineContext context, byte[] data) {
+    public boolean handleReceive(EventInvocationContext context, byte[] data) {
         if(data[0] != 1)
             return true;
 

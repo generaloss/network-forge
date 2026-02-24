@@ -275,7 +275,7 @@ public class TCPClient implements Sendable {
     private void abortAsyncConnect(Exception e) {
         this.abortConnect();
         asyncConnect.end(e);
-        eventPipeline.fireError(0, null, ErrorSource.CONNECT, e);
+        eventPipeline.fireError(null, ErrorSource.CONNECT, e);
     }
 
     private void abortAsyncConnect() {
@@ -284,7 +284,7 @@ public class TCPClient implements Sendable {
     }
 
     private void onConnectionClosed(TCPConnection connection, CloseReason reason, Exception e) {
-        // is it manual close call
+        // is that was client close
         if(reason == CloseReason.CLOSE_CLIENT)
             return;
 

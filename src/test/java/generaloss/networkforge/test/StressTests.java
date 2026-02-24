@@ -2,11 +2,13 @@ package generaloss.networkforge.test;
 
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.listener.CloseReason;
-import generaloss.networkforge.test.layer.CompressionLayer;
+import generaloss.networkforge.tcp.pipeline.EventHandler;
+import generaloss.networkforge.tcp.pipeline.EventInvocationContext;
+import generaloss.networkforge.test.handler.DeflateHandler;
 import generaloss.chronokit.TimeUtils;
 import generaloss.networkforge.packet.*;
-import generaloss.networkforge.test.layer.tls.ClientSecureLayer;
-import generaloss.networkforge.test.layer.tls.ServerSecureLayer;
+import generaloss.networkforge.test.handler.tls.ClientSecureHandler;
+import generaloss.networkforge.test.handler.tls.ServerSecureHandler;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.ErrorListener;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
@@ -148,7 +150,7 @@ public class StressTests {
         final AtomicBoolean hasNotEqual = new AtomicBoolean();
 
         final TCPServer server = new TCPServer();
-        server.getEventPipeline().getHandlers().addFirst(new CompressionLayer());
+        server.getEventPipeline().addHandlerFirst(new DeflateHandler());
         server.registerOnReceive((sender, bytes) -> {
             final String received = new String(bytes);
             counter.incrementAndGet();
@@ -163,7 +165,7 @@ public class StressTests {
         final int iterations = 10000;
 
         final TCPClient client = new TCPClient();
-        client.getEventPipeline().getHandlers().addFirst(new CompressionLayer());
+        client.getEventPipeline().addHandlerFirst(new DeflateHandler());
         client.registerOnConnect(connection -> {
             for(int i = 0; i < iterations; i++)
                 client.send(message);
@@ -414,7 +416,7 @@ public class StressTests {
         };
 
         final TCPServer server = new TCPServer();
-        server.getEventPipeline().getHandlers().addFirst(new ServerSecureLayer());
+        server.getEventPipeline().addHandlerFirst(new ServerSecureHandler());
         server.registerOnReceive((sender, bytes) -> {
             final NetPacket<TestPacketHandler> packet = packetReader.readOrNull(bytes);
             packet.handle(handler);
@@ -423,7 +425,7 @@ public class StressTests {
         server.run(5412);
 
         final TCPClient client = new TCPClient();
-        client.getEventPipeline().getHandlers().addFirst(new ClientSecureLayer());
+        client.getEventPipeline().addHandlerFirst(new ClientSecureHandler());
         client.connect("localhost", 5412);
         client.registerOnConnect(connection -> {
             client.send(new TestMessagePacket(message));
@@ -670,23 +672,81 @@ public class StressTests {
     public void close_by_other_side() throws Exception {
         TimeUtils.delayMillis(100);
 
-        final AtomicBoolean reasonIncorrect = new AtomicBoolean();
+        final int iterations = 200;
+        final AtomicInteger counter = new AtomicInteger();
 
         final TCPServer server = new TCPServer();
         server.registerOnDisconnect((connection, reason, e) -> {
-            if(reason != CloseReason.CLOSE_BY_OTHER_SIDE)
-                reasonIncorrect.set(true);
+            if(reason == CloseReason.CLOSE_BY_OTHER_SIDE) {
+                final int count = counter.incrementAndGet();
+                if(count == iterations)
+                    server.close();
+            } else {
+                System.err.println(reason);
+            }
         });
         server.run(5420);
 
         final TCPClient client = new TCPClient();
-        for(int i = 0; i < 100; i++) {
+        for(int i = 0; i < iterations; i++) {
             client.connect("localhost", 5420);
             client.close();
         }
-        server.close();
 
-        Assert.assertFalse(reasonIncorrect.get());
+        TimeUtils.waitFor(server::isClosed, 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
+    }
+
+    @Test
+    public void dynamic_pipeline_changes() throws Exception {
+        TimeUtils.delayMillis(100);
+
+        final TCPServer server = new TCPServer();
+        server.setInitialOptions(
+            (TCPConnectionOptionsHolder) new TCPConnectionOptionsHolder().setLinger(1)
+        );
+        server.registerOnReceive((connection, data) -> {
+            System.out.println("Server.onReceive('" + new String(data) + "')");
+        });
+
+        server.run(5421);
+
+        final TCPClient client = new TCPClient();
+        // send => Handler_2 => Handler_1     => Server
+        // send => A.        => A. (ch.by_h2) => A. (ch.by_h2) (ch.by_h1)
+        //         send      => A. B.         => A. B. (ch.by_h1)
+        client.getEventPipeline().addHandlerLast(new EventHandler() {
+            public byte[] handleSend(EventInvocationContext context, byte[] data) {
+                final String message = new String(data);
+                System.out.println("Handler_1.handleSend('" + message + "') + 'changed by 1'");
+                return (message + " (ch.by_h1)").getBytes();
+            }
+        });
+        client.getEventPipeline().addHandlerLast(new EventHandler() {
+            public byte[] handleSend(EventInvocationContext context, byte[] data) {
+                final String message = new String(data);
+                System.out.println("Handler_2.handleSend('" + message + "') + 'changed by 2'");
+                context.getEventPipeline().removeHandler(0);
+                context.fireSend(message + " B.");
+                return (message + " (ch.by_h2)").getBytes();
+            }
+        });
+
+        client.connect("localhost", 5421);
+        client.send("A.");
+        client.awaitWriteDrain(3000);
+        client.close();
+
+        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
+
+        server.close();
     }
 
 }

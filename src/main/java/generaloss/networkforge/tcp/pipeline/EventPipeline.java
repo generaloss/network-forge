@@ -9,43 +9,38 @@ import generaloss.resourceflow.stream.BinaryStreamWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public class EventPipeline {
+public class EventPipeline extends EventHandlerRegistry {
 
     private final ListenersHolder target;
-    private final EventHandlerLayerHolder handlers;
 
     public EventPipeline(ListenersHolder target) {
         this.target = target;
-        this.handlers = new EventHandlerLayerHolder();
     }
 
     public ListenersHolder getTarget() {
         return target;
     }
 
-    public EventHandlerLayerHolder getHandlers() {
-        return handlers;
-    }
 
-
-    private boolean isNoHandlersFor(int handlerIndex) {
+    private boolean isNoHandlersFor(EventHandler[] handlers, int index) {
         return (
-            handlers.isEmpty() ||
-            handlerIndex < 0 || handlerIndex >= handlers.count()
+            handlers.length == 0 ||
+            index < 0 || index >= handlers.length
         );
     }
     
 
-    public void fireConnect(int handlerIndexFrom, TCPConnection connection) {
+    public void fireConnect(EventHandler[] handlers, int handlerIndexFrom,
+                            TCPConnection connection) {
         if(connection == null)
             throw new RuntimeException("Argument 'connection' cannot be null");
 
-        if(this.isNoHandlersFor(handlerIndexFrom)) {
+        if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
             target.invokeConnect(connection);
             return;
         }
 
-        final EventPipelineContext context = new EventPipelineContext(this, connection);
+        final EventInvocationContext context = new EventInvocationContext(this, connection, handlers);
         do {
             context.setHandlerIndex(handlerIndexFrom++);
         } while (
@@ -54,20 +49,21 @@ public class EventPipeline {
     }
     
     public void fireConnect(TCPConnection connection) {
-        this.fireConnect(0, connection);
+        this.fireConnect(super.getHandlers(), 0, connection);
     }
     
 
-    public void fireDisconnect(int handlerIndexFrom, TCPConnection connection, CloseReason reason, Exception e) {
+    public void fireDisconnect(EventHandler[] handlers, int handlerIndexFrom,
+                               TCPConnection connection, CloseReason reason, Exception e) {
         if(connection == null)
             throw new RuntimeException("Argument 'connection' cannot be null");
 
-        if(this.isNoHandlersFor(handlerIndexFrom)) {
+        if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
             target.invokeDisconnect(connection, reason, e);
             return;
         }
 
-        final EventPipelineContext context = new EventPipelineContext(this, connection);
+        final EventInvocationContext context = new EventInvocationContext(this, connection, handlers);
         do {
             context.setHandlerIndex(handlerIndexFrom++);
         } while (
@@ -76,22 +72,23 @@ public class EventPipeline {
     }
 
     public void fireDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
-        this.fireDisconnect(0, connection, reason, e);
+        this.fireDisconnect(super.getHandlers(), 0, connection, reason, e);
     }
 
     
-    public void fireReceive(int handlerIndexFrom, TCPConnection connection, byte[] data) {
+    public void fireReceive(EventHandler[] handlers, int handlerIndexFrom,
+                            TCPConnection connection, byte[] data) {
         if(connection == null)
             throw new RuntimeException("Argument 'connection' cannot be null");
         if(data == null)
             throw new RuntimeException("Argument 'data' cannot be null");
 
-        if(this.isNoHandlersFor(handlerIndexFrom)) {
+        if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
             target.invokeReceive(connection, data);
             return;
         }
 
-        final EventPipelineContext context = new EventPipelineContext(this, connection);
+        final EventInvocationContext context = new EventInvocationContext(this, connection, handlers);
         do {
             context.setHandlerIndex(handlerIndexFrom++);
         } while (
@@ -100,19 +97,21 @@ public class EventPipeline {
     }
 
     public void fireReceive(TCPConnection connection, byte[] data) {
-        this.fireReceive(0, connection, data);
+        this.fireReceive(super.getHandlers(), 0, connection, data);
     }
 
 
-    public void fireError(int handlerIndexFrom, TCPConnection connection, ErrorSource source, Throwable throwable) {
+    public void fireError(EventHandler[] handlers, int handlerIndexFrom,
+                          TCPConnection connection, ErrorSource source, Throwable throwable) {
         // Argument 'connection' can be null
 
-        if(this.isNoHandlersFor(handlerIndexFrom)) {
+        if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
             target.invokeError(connection, source, throwable);
             return;
         }
 
-        final EventPipelineContext context = new EventPipelineContext(this, connection);
+        final EventInvocationContext context = new EventInvocationContext(this, connection, handlers);
+
         do {
             context.setHandlerIndex(handlerIndexFrom++);
         } while (
@@ -121,11 +120,12 @@ public class EventPipeline {
     }
 
     public void fireError(TCPConnection connection, ErrorSource source, Throwable throwable) {
-        this.fireError(0, connection, source, throwable);
+        this.fireError(super.getHandlers(), 0, connection, source, throwable);
     }
 
     
-    public boolean fireSend(int handlerIndexFrom, TCPConnection connection, byte[] data) {
+    public boolean fireSend(EventHandler[] handlers, int handlerIndexFrom,
+                            TCPConnection connection, byte[] data) {
         if(connection == null)
             throw new RuntimeException("Argument 'connection' cannot be null");
         if(data == null)
@@ -133,97 +133,107 @@ public class EventPipeline {
 
         target.invokeSend(connection, data);
 
-        if(this.isNoHandlersFor(handlerIndexFrom))
+        if(this.isNoHandlersFor(handlers, handlerIndexFrom))
             return connection.sendDirect(data);
 
-        final EventPipelineContext context = new EventPipelineContext(this, connection);
+        final EventInvocationContext context = new EventInvocationContext(this, connection, handlers);
+        int index = handlerIndexFrom;
         do {
-            context.setHandlerIndex(handlerIndexFrom);
+            context.setHandlerIndex(index);
 
             try {
-                final EventHandlerLayer handler = handlers.get(handlerIndexFrom);
+                final EventHandler handler = handlers[index];
                 data = handler.handleSend(context, data);
                 if(data == null)
                     return false;
 
             } catch(Throwable t) {
-                this.fireError(handlerIndexFrom, connection, ErrorSource.SEND_HANDLER, t);
+                this.fireError(handlers, index, connection, ErrorSource.SEND_HANDLER, t);
             }
 
-            handlerIndexFrom--;
+            index--;
         }
-        while(handlerIndexFrom != -1);
+        while(index != -1);
 
         return connection.sendDirect(data);
     }
     
     public boolean fireSend(TCPConnection connection, byte[] data) {
-        final int lastHandlerIndex = (handlers.size() - 1);
-        return this.fireSend(lastHandlerIndex, connection, data);
+        final EventHandler[] handlers = super.getHandlers();
+        final int lastHandlerIndex = (handlers.length - 1);
+        return this.fireSend(handlers, lastHandlerIndex, connection, data);
     }
 
-    public boolean fireSend(int handlerIndexFrom, TCPConnection connection, ByteBuffer buffer) {
+    public boolean fireSend(EventHandler[] handlers, int handlerIndexFrom,
+                            TCPConnection connection, ByteBuffer buffer) {
         if(buffer == null)
             throw new IllegalArgumentException("Argument 'buffer' cannot be null");
 
         final byte[] byteArray = new byte[buffer.remaining()];
         buffer.duplicate().get(byteArray);
-        return this.fireSend(handlerIndexFrom, connection, byteArray);
+        return this.fireSend(handlers, handlerIndexFrom, connection, byteArray);
     }
 
     public boolean fireSend(TCPConnection connection, ByteBuffer buffer) {
-        final int lastHandlerIndex = (handlers.size() - 1);
-        return this.fireSend(lastHandlerIndex, connection, buffer);
+        final EventHandler[] handlers = super.getHandlers();
+        final int lastHandlerIndex = (handlers.length - 1);
+        return this.fireSend(handlers, lastHandlerIndex, connection, buffer);
     }
 
-    public boolean fireSend(int handlerIndexFrom, TCPConnection connection, String string) {
+    public boolean fireSend(EventHandler[] handlers, int handlerIndexFrom,
+                            TCPConnection connection, String string) {
         if(string == null)
             throw new IllegalArgumentException("Argument 'string' cannot be null");
 
-        return this.fireSend(handlerIndexFrom, connection, string.getBytes());
+        return this.fireSend(handlers, handlerIndexFrom, connection, string.getBytes());
     }
 
     public boolean fireSend(TCPConnection connection, String string) {
-        final int lastHandlerIndex = (handlers.size() - 1);
-        return this.fireSend(lastHandlerIndex, connection, string);
+        final EventHandler[] handlers = super.getHandlers();
+        final int lastHandlerIndex = (handlers.length - 1);
+        return this.fireSend(handlers, lastHandlerIndex, connection, string);
     }
 
-    public boolean fireSend(int handlerIndexFrom, TCPConnection connection, BinaryStreamWriter streamWriter) {
+    public boolean fireSend(EventHandler[] handlers, int handlerIndexFrom,
+                            TCPConnection connection, BinaryStreamWriter streamWriter) {
         if(streamWriter == null)
             throw new IllegalArgumentException("Argument 'streamWriter' cannot be null");
 
         try {
             final byte[] byteArray = BinaryStreamWriter.toByteArray(streamWriter);
-            return this.fireSend(handlerIndexFrom, connection, byteArray);
+            return this.fireSend(handlers, handlerIndexFrom, connection, byteArray);
 
         } catch (IOException e) {
-            this.fireError(handlerIndexFrom, connection, ErrorSource.SEND, e);
+            this.fireError(handlers, handlerIndexFrom, connection, ErrorSource.SEND, e);
             return false;
         }
     }
 
     public boolean fireSend(TCPConnection connection, BinaryStreamWriter streamWriter) {
-        final int lastHandlerIndex = (handlers.size() - 1);
-        return this.fireSend(lastHandlerIndex, connection, streamWriter);
+        final EventHandler[] handlers = super.getHandlers();
+        final int lastHandlerIndex = (handlers.length - 1);
+        return this.fireSend(handlers, lastHandlerIndex, connection, streamWriter);
     }
 
-    public boolean fireSend(int handlerIndexFrom, TCPConnection connection, NetPacket<?> packet) {
+    public boolean fireSend(EventHandler[] handlers, int handlerIndexFrom,
+                            TCPConnection connection, NetPacket<?> packet) {
         if(packet == null)
             throw new IllegalArgumentException("Argument 'packet' cannot be null");
 
         try {
             final byte[] byteArray = packet.toByteArray();
-            return this.fireSend(handlerIndexFrom, connection, byteArray);
+            return this.fireSend(handlers, handlerIndexFrom, connection, byteArray);
 
         } catch (IOException e) {
-            this.fireError(handlerIndexFrom, connection, ErrorSource.SEND, e);
+            this.fireError(handlers, handlerIndexFrom, connection, ErrorSource.SEND, e);
             return false;
         }
     }
 
     public boolean fireSend(TCPConnection connection, NetPacket<?> packet) {
-        final int lastHandlerIndex = (handlers.size() - 1);
-        return this.fireSend(lastHandlerIndex, connection, packet);
+        final EventHandler[] handlers = super.getHandlers();
+        final int lastHandlerIndex = (handlers.length - 1);
+        return this.fireSend(handlers, lastHandlerIndex, connection, packet);
     }
 
 }
