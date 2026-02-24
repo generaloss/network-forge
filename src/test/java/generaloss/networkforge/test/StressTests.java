@@ -708,9 +708,9 @@ public class StressTests {
         server.setInitialOptions(
             (TCPConnectionOptionsHolder) new TCPConnectionOptionsHolder().setLinger(1)
         );
-        server.registerOnReceive((connection, data) -> {
-            System.out.println("Server.onReceive('" + new String(data) + "')");
-        });
+        server.registerOnReceive((connection, data) ->
+            System.out.println("Server.onReceive('" + new String(data) + "')")
+        );
 
         server.run(5421);
 
