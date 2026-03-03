@@ -421,7 +421,7 @@ public class StressTests {
             final NetPacket<TestPacketHandler> packet = packetReader.readOrNull(bytes);
             packet.handle(handler);
         });
-        server.registerOnError(ErrorListener::printErrorCatch);
+        server.registerOnError(ErrorListener::printError);
         server.run(5412);
 
         final TCPClient client = new TCPClient();
@@ -431,7 +431,7 @@ public class StressTests {
             client.send(new TestMessagePacket(message));
             client.send(new TestMessagePacket(message));
         });
-        client.registerOnError(ErrorListener::printErrorCatch);
+        client.registerOnError(ErrorListener::printError);
 
         TimeUtils.waitFor(() -> (counter.get() == 2), 3000, () -> {
             client.close();
@@ -719,19 +719,21 @@ public class StressTests {
         // send => A.        => A. (ch.by_h2) => A. (ch.by_h2) (ch.by_h1)
         //         send      => A. B.         => A. B. (ch.by_h1)
         client.getEventPipeline().addHandlerLast(new EventHandler() {
-            public byte[] handleSend(EventInvocationContext context, byte[] data) {
+            public boolean handleSend(EventInvocationContext context, byte[] data) {
                 final String message = new String(data);
                 System.out.println("Handler_1.handleSend('" + message + "') + 'changed by 1'");
-                return (message + " (ch.by_h1)").getBytes();
+                context.send((message + " (ch.by_h1)").getBytes());
+                return false;
             }
         });
         client.getEventPipeline().addHandlerLast(new EventHandler() {
-            public byte[] handleSend(EventInvocationContext context, byte[] data) {
+            public boolean handleSend(EventInvocationContext context, byte[] data) {
                 final String message = new String(data);
                 System.out.println("Handler_2.handleSend('" + message + "') + 'changed by 2'");
                 context.getEventPipeline().removeHandler(0);
-                context.fireSend(message + " B.");
-                return (message + " (ch.by_h2)").getBytes();
+                context.send((message + " (ch.by_h2)").getBytes());
+                context.send(message + " B.");
+                return false;
             }
         });
 

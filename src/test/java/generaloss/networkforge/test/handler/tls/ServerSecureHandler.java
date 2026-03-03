@@ -47,7 +47,7 @@ public class ServerSecureHandler extends EventHandler {
     }
 
     private void sendPublicKey(EventInvocationContext context) {
-        final boolean success = context.fireSend(stream -> {
+        final boolean success = context.send(stream -> {
             stream.writeByte(SecureBinaryFrames.PUBLIC_KEY.ordinal());
             stream.writeByteArray(keyPair.getPublic().getEncoded());
         });
@@ -68,7 +68,7 @@ public class ServerSecureHandler extends EventHandler {
                 this.onReceiveEncryptedSecretKey(context, encryptedSecretKey);
             } else {
                 // ?
-                throw new RuntimeException("Invalid binary frame");
+                throw new RuntimeException("Invalid binary frame " + binaryFrame);
             }
         } catch (IOException e) {
             throw new RuntimeException("Failed to read binary frame", e);
@@ -108,10 +108,11 @@ public class ServerSecureHandler extends EventHandler {
                     final ByteArrayOutputStream pendingData = pendingDataMap.remove(connection);
                     final byte[] bufferedData = pendingData.toByteArray();
                     pendingData.reset();
-                    connection.send(bufferedData);
+
+                    context.send(bufferedData);
                 }
 
-                context.fireConnect();
+                context.connect();
 
             }catch(NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
                 throw new RuntimeException(e);
@@ -123,23 +124,23 @@ public class ServerSecureHandler extends EventHandler {
     }
 
     private void sendConnectionEncryptedSignal(EventInvocationContext context) {
-        final boolean success = context.fireSend(stream ->
+        final boolean success = context.send(stream ->
             stream.writeByte(SecureBinaryFrames.CONNECTION_ENCRYPTED_SIGNAL.ordinal()));
         if(!success)
             throw new RuntimeException("Failed to send connection encrypted signal");
     }
 
     @Override
-    public byte[] handleSend(EventInvocationContext context, byte[] data) {
+    public boolean handleSend(EventInvocationContext context, byte[] data) {
         if(handshakeCompleted.contains(context.getConnection()))
-            return data;
+            return true;
 
         final TCPConnection connection = context.getConnection();
         if(!pendingDataMap.containsKey(connection))
             pendingDataMap.put(connection, new ByteArrayOutputStream());
 
         pendingDataMap.get(connection).writeBytes(data);
-        return null;
+        return false;
     }
 
     @Override

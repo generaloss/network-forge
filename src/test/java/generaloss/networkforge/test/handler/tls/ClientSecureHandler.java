@@ -61,7 +61,7 @@ public class ClientSecureHandler extends EventHandler {
                 this.onReceiveEncryptedSignal(context);
             }else{
                 // ?
-                throw new RuntimeException("Invalid binary frame");
+                throw new RuntimeException("Invalid binary frame " + binaryFrame);
             }
         } catch (IOException | GeneralSecurityException e) {
             throw new RuntimeException("Failed to read binary frame", e);
@@ -87,7 +87,7 @@ public class ClientSecureHandler extends EventHandler {
     }
 
     private void sendEncryptedSecretKey(EventInvocationContext context, byte[] encryptedSecretKey) {
-        final boolean success = context.fireSend(stream -> {
+        final boolean success = context.send(stream -> {
             stream.writeByte(SecureBinaryFrames.ENCRYPTED_SECRET_KEY.ordinal());
             stream.writeByteArray(encryptedSecretKey);
         });
@@ -111,22 +111,22 @@ public class ClientSecureHandler extends EventHandler {
             if(pendingData.size() > 0) {
                 final byte[] bufferedData = pendingData.toByteArray();
                 pendingData.reset();
-                connection.send(bufferedData);
+                context.send(bufferedData);
             }
 
-            context.fireConnect();
+            context.connect();
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
     }
 
     @Override
-    public byte[] handleSend(EventInvocationContext context, byte[] data) {
+    public boolean handleSend(EventInvocationContext context, byte[] data) {
         if(handshakeCompleted)
-            return data;
+            return true;
 
         pendingData.writeBytes(data);
-        return null;
+        return false;
     }
 
 }

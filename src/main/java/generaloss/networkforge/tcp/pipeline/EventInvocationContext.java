@@ -55,8 +55,8 @@ public class EventInvocationContext {
             return handler.handleConnect(this);
 
         } catch (Throwable t) {
-            this.fireError(ErrorSource.CONNECT_HANDLER, t);
-            return true; // skip
+            this.error(ErrorSource.CONNECT_HANDLER, t);
+            return false; // break
         }
     }
 
@@ -71,8 +71,8 @@ public class EventInvocationContext {
             return handler.handleDisconnect(this, reason, e);
 
         } catch (Throwable t) {
-            this.fireError(ErrorSource.DISCONNECT_HANDLER, t);
-            return true; // skip
+            this.error(ErrorSource.DISCONNECT_HANDLER, t);
+            return false; // break
         }
     }
 
@@ -87,11 +87,10 @@ public class EventInvocationContext {
             return handler.handleReceive(this, data);
 
         } catch (Throwable t) {
-            this.fireError(ErrorSource.RECEIVE_HANDLER, t);
-            return true; // skip
+            this.error(ErrorSource.RECEIVE_HANDLER, t);
+            return false; // break
         }
     }
-
 
     protected boolean invokeError(ErrorSource source, Throwable throwable) {
         if(handlerIndex == handlersShapshot.length) {
@@ -104,95 +103,106 @@ public class EventInvocationContext {
             return handler.handleError(this, source, throwable);
 
         } catch (Throwable t) {
-            ErrorListener.printErrorCatch(connection, ErrorSource.ERROR_HANDLER, t);
-            return true; // skip
+            ErrorListener.printError(connection, ErrorSource.ERROR_HANDLER, t);
+            return false; // break
+        }
+    }
+
+    protected boolean invokeSend(byte[] data) {
+        try {
+            final EventHandler handler = handlersShapshot[handlerIndex];
+            return handler.handleSend(this, data);
+
+        } catch (Throwable t) {
+            this.error(ErrorSource.SEND_HANDLER, t);
+            return false; // break
         }
     }
 
 
-    public boolean fireSend(TCPConnection connection, byte[] data) {
+    public boolean send(TCPConnection connection, byte[] data) {
         final int nextIndex = (handlerIndex - 1);
         return pipeline.fireSend(handlersShapshot, nextIndex, connection, data);
     }
 
-    public boolean fireSend(byte[] data) {
-        return this.fireSend(connection, data);
+    public boolean send(byte[] data) {
+        return this.send(connection, data);
     }
 
-    public boolean fireSend(TCPConnection connection, ByteBuffer buffer) {
+    public boolean send(TCPConnection connection, ByteBuffer buffer) {
         final int nextIndex = (handlerIndex - 1);
         return pipeline.fireSend(handlersShapshot, nextIndex, connection, buffer);
     }
 
-    public boolean fireSend(ByteBuffer buffer) {
-        return this.fireSend(connection, buffer);
+    public boolean send(ByteBuffer buffer) {
+        return this.send(connection, buffer);
     }
 
-    public boolean fireSend(TCPConnection connection, String string) {
+    public boolean send(TCPConnection connection, String string) {
         final int nextIndex = (handlerIndex - 1);
         return pipeline.fireSend(handlersShapshot, nextIndex, connection, string);
     }
 
-    public boolean fireSend(String string) {
-        return this.fireSend(connection, string);
+    public boolean send(String string) {
+        return this.send(connection, string);
     }
 
-    public boolean fireSend(TCPConnection connection, BinaryStreamWriter streamWriter) {
+    public boolean send(TCPConnection connection, BinaryStreamWriter streamWriter) {
         final int nextIndex = (handlerIndex - 1);
         return pipeline.fireSend(handlersShapshot, nextIndex, connection, streamWriter);
     }
 
-    public boolean fireSend(BinaryStreamWriter streamWriter) {
-        return this.fireSend(connection, streamWriter);
+    public boolean send(BinaryStreamWriter streamWriter) {
+        return this.send(connection, streamWriter);
     }
 
-    public boolean fireSend(TCPConnection connection, NetPacket<?> packet) {
+    public boolean send(TCPConnection connection, NetPacket<?> packet) {
         final int nextIndex = (handlerIndex - 1);
         return pipeline.fireSend(handlersShapshot, nextIndex, connection, packet);
     }
 
-    public boolean fireSend(NetPacket<?> packet) {
-        return this.fireSend(connection, packet);
+    public boolean send(NetPacket<?> packet) {
+        return this.send(connection, packet);
     }
 
 
-    public void fireConnect(TCPConnection connection) {
+    public void connect(TCPConnection connection) {
         final int nextIndex = (handlerIndex + 1);
         pipeline.fireConnect(handlersShapshot, nextIndex, connection);
     }
 
-    public void fireConnect() {
-        this.fireConnect(connection);
+    public void connect() {
+        this.connect(connection);
     }
 
 
-    public void fireDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
+    public void disconnect(TCPConnection connection, CloseReason reason, Exception e) {
         final int nextIndex = (handlerIndex + 1);
         pipeline.fireDisconnect(handlersShapshot, nextIndex, connection, reason, e);
     }
 
-    public void fireDisconnect(CloseReason reason, Exception e) {
-        this.fireDisconnect(connection, reason, e);
+    public void disconnect(CloseReason reason, Exception e) {
+        this.disconnect(connection, reason, e);
     }
 
 
-    public void fireReceive(TCPConnection connection, byte[] data) {
+    public void receive(TCPConnection connection, byte[] data) {
         final int nextIndex = (handlerIndex + 1);
         pipeline.fireReceive(handlersShapshot, nextIndex, connection, data);
     }
 
-    public void fireReceive(byte[] data) {
-        this.fireReceive(connection, data);
+    public void receive(byte[] data) {
+        this.receive(connection, data);
     }
 
 
-    public void fireError(TCPConnection connection, ErrorSource source, Throwable throwable) {
+    public void error(TCPConnection connection, ErrorSource source, Throwable throwable) {
         final int nextIndex = (handlerIndex + 1);
         pipeline.fireError(handlersShapshot, nextIndex, connection, source, throwable);
     }
 
-    public void fireError(ErrorSource source, Throwable throwable) {
-        this.fireError(connection, source, throwable);
+    public void error(ErrorSource source, Throwable throwable) {
+        this.error(connection, source, throwable);
     }
 
 }

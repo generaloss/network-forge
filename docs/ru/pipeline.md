@@ -108,6 +108,82 @@ Handler_2 → Handler_1 → Handler_0 → Socket
 
 ---
 
+## Простейший обработчик
+
+Чтобы создать обработчик, достаточно унаследоваться от `EventHandler`  
+и переопределить нужные методы.
+
+```java
+public class LoggingHandler extends EventHandler {
+    @Override
+    public boolean handleConnect(EventInvocationContext context) {
+        System.out.println("Connected: " + context.getConnection());
+        return true;
+    }
+
+    @Override
+    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason, Exception e) {
+        System.out.println("Disconnected: " + reason);
+        return true;
+    }
+
+    @Override
+    public boolean handleReceive(EventInvocationContext context, byte[] data) {
+        System.out.println("Received " + data.length + " bytes");
+        return true;
+    }
+
+    @Override
+    public boolean handleError(EventInvocationContext context, ErrorSource source, Throwable throwable) {
+        System.out.println("Error (" + source + "): " + throwable.getMessage());
+        return true;
+    }
+
+    @Override
+    public byte[] handleSend(EventInvocationContext context, byte[] data) {
+        System.out.println("Sending " + data.length + " bytes");
+        return true;
+    }
+}
+```
+
+Если метод возвращает `true`, событие передаётся дальше.  
+Если вернуть `false` / `null`, обработка останавливается.
+
+## Модификация данных
+
+
+
+## Инициирование событий
+
+Обработчик может сам инициировать отправку (send):
+
+```java
+@Override
+public boolean handleReceive(EventInvocationContext context, byte[] data) {
+    context.send("OK".getBytes());
+    return true;
+}
+```
+Откладывать событие до нужного момента (connect):
+``` java
+@Override
+public boolean handleConnect(EventInvocationContext context) {
+    return false;
+}
+
+@Override
+public boolean handleReceive(EventInvocationContext context, byte[] data) {
+    TCPConnection connection = context.getConnection();
+    if(...){ // например, получение правильных данных для данного подключения
+        context.connect(connection);
+        return false;
+    }
+    return true;
+}
+```
+
+
 *[Главная страница](index.md)*
 
 *Следующая - [.]()*

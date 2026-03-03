@@ -28,9 +28,9 @@ public class DeflateHandler extends EventHandler {
     }
 
     @Override
-    public byte[] handleSend(EventInvocationContext context, byte[] data) {
+    public boolean handleSend(EventInvocationContext context, byte[] data) {
         if(data.length < MINIMUM_SIZE_TO_COMPRESS)
-            return data;
+            return true;
 
         try {
             final Deflater deflater = new Deflater(compressionLevel);
@@ -51,10 +51,11 @@ public class DeflateHandler extends EventHandler {
             result[0] = 1;
             System.arraycopy(compressed, 0, result, 1, compressed.length);
 
-            return result;
+            context.send(result);
+            return false;
         } catch (Exception e) {
-            context.fireError(ErrorSource.SEND_HANDLER, e);
-            return data;
+            context.error(ErrorSource.SEND_HANDLER, e);
+            return true;
         }
     }
     
@@ -80,10 +81,10 @@ public class DeflateHandler extends EventHandler {
             inflater.end();
             final byte[] decompressed = outputStream.toByteArray();
 
-            context.fireReceive(decompressed);
+            context.receive(decompressed);
             return false;
         } catch (Exception e) {
-            context.fireError(ErrorSource.RECEIVE_HANDLER, e);
+            context.error(ErrorSource.RECEIVE_HANDLER, e);
             return false;
         }
     }

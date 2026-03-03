@@ -137,25 +137,16 @@ public class EventPipeline extends EventHandlerRegistry {
             return connection.sendDirect(data);
 
         final EventInvocationContext context = new EventInvocationContext(this, connection, handlers);
-        int index = handlerIndexFrom;
         do {
-            context.setHandlerIndex(index);
+            if(handlerIndexFrom == -1)
+                return connection.sendDirect(data);
 
-            try {
-                final EventHandler handler = handlers[index];
-                data = handler.handleSend(context, data);
-                if(data == null)
-                    return false;
+            context.setHandlerIndex(handlerIndexFrom--);
 
-            } catch(Throwable t) {
-                this.fireError(handlers, index, connection, ErrorSource.SEND_HANDLER, t);
-            }
-
-            index--;
-        }
-        while(index != -1);
-
-        return connection.sendDirect(data);
+        } while (
+            context.invokeSend(data)
+        );
+        return false;
     }
     
     public boolean fireSend(TCPConnection connection, byte[] data) {

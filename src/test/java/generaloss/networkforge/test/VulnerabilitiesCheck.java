@@ -90,7 +90,7 @@ public class VulnerabilitiesCheck {
                 return super.handleError(context, source, throwable);
             }
             @Override
-            public byte[] handleSend(EventInvocationContext context, byte[] data) {
+            public boolean handleSend(EventInvocationContext context, byte[] data) {
                 System.out.println("Layer_1.handleSend(" + context.getConnection() + ", " + Arrays.toString(data) + ")");
                 return super.handleSend(context, data);
             }
@@ -118,7 +118,7 @@ public class VulnerabilitiesCheck {
                 return super.handleError(context, source, throwable);
             }
             @Override
-            public byte[] handleSend(EventInvocationContext context, byte[] data) {
+            public boolean handleSend(EventInvocationContext context, byte[] data) {
                 System.out.println("Layer_2.handleSend(" + context.getConnection() + ", " + Arrays.toString(data) + ")");
                 return super.handleSend(context, data);
             }
