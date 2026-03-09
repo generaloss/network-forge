@@ -148,15 +148,11 @@ public class LoggingHandler extends EventHandler {
 ```
 
 Если метод возвращает `true`, событие передаётся дальше.  
-Если вернуть `false` / `null`, обработка останавливается.
-
-## Модификация данных
-
-
+Если вернуть `false`, обработка останавливается.
 
 ## Инициирование событий
 
-Обработчик может сам инициировать отправку (send):
+Обработчик может сам инициировать событие (в рамках того же snapshot'a обработчиков), которое  
 
 ```java
 @Override
@@ -182,6 +178,9 @@ public boolean handleReceive(EventInvocationContext context, byte[] data) {
     return true;
 }
 ```
+
+## Модификация данных
+
 
 
 *[Главная страница](index.md)*
