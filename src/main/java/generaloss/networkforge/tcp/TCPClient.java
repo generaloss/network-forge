@@ -380,7 +380,7 @@ public class TCPClient implements Sendable {
     }
 
     @Override
-    public boolean send(NetPacket<?> packet) {
+    public boolean send(NetPacket packet) {
         if(state != ConnectionState.CONNECTED)
             return false;
         return connection.send(packet);

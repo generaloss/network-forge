@@ -16,7 +16,6 @@ import generaloss.networkforge.tcp.TCPClient;
 import generaloss.networkforge.tcp.TCPServer;
 import generaloss.networkforge.test.packet.TestDisconnectPacket;
 import generaloss.networkforge.test.packet.TestMessagePacket;
-import generaloss.networkforge.test.packet.TestPacketHandler;
 import generaloss.resourceflow.resource.Resource;
 import org.junit.Assert;
 import org.junit.Test;
@@ -317,30 +316,28 @@ public class StressTests {
     @Test
     public void send_packet() throws Exception {
         TimeUtils.delayMillis(100);
+
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
-
-        final PacketReader packetReader = new PacketReader()
-            .register(TestMessagePacket.class, TestMessagePacket::new);
-
         final AtomicInteger counter = new AtomicInteger();
 
-        final TestPacketHandler handler = new TestPacketHandler() {
-            public void handleMessage(String message) {
-                result.set(message);
-                counter.incrementAndGet();
-            }
-            public void handleDisconnect(String reason) { }
-        };
+        final PacketReader packetReader = new PacketReader();
+        final PacketDispatcher packetDispatcher = new PacketDispatcher();
+
+        packetReader.register(TestMessagePacket.class);
+        packetDispatcher.register(TestMessagePacket.class, (connection, packet) -> {
+            result.set(message);
+            counter.incrementAndGet();
+        });
 
         final Executor executor = Executors.newSingleThreadExecutor();
 
         final TCPServer server = new TCPServer();
-        server.registerOnReceive((sender, bytes) ->
-            packetReader.tryRead(bytes)
-                .ifPresent(packet ->
-                    executor.execute(packet.createHandleTask(handler)))
-        );
+        server.registerOnReceive((sender, data) -> {
+            packetReader.tryRead(data).ifPresent(
+                (packet) -> packetDispatcher.dispatch(sender, packet)
+            );
+        });
         server.run(5410);
 
         final TCPClient client = new TCPClient();
@@ -361,31 +358,29 @@ public class StressTests {
     @Test
     public void send_multiple_packets() throws Exception {
         TimeUtils.delayMillis(100);
-        final PacketReader packetReader = new PacketReader()
-            .registerAllFromPackage(Resource.classpath("generaloss/networkforge/test/packet/"));
 
         final AtomicInteger counter = new AtomicInteger();
 
-        final TestPacketHandler handler = new TestPacketHandler() {
-            public void handleMessage(String message) {
-                counter.incrementAndGet();
-            }
-            public void handleDisconnect(String reason) {
-                counter.incrementAndGet();
-            }
-        };
+        final PacketReader packetReader = new PacketReader();
+        final PacketDispatcher packetDispatcher = new PacketDispatcher();
+
+        packetReader.registerAllFromPackage(Resource.classpath("generaloss/networkforge/test/packet/"));
+
+        packetDispatcher.register(TestMessagePacket.class, (connection, packet) -> counter.incrementAndGet());
+        packetDispatcher.register(TestDisconnectPacket.class, (connection, packet) -> counter.incrementAndGet());
 
         final TCPServer server = new TCPServer();
-        server.registerOnReceive((sender, bytes) -> {
-            final NetPacket<TestPacketHandler> packet = packetReader.readOrNull(bytes);
-            packet.handle(handler);
+        server.registerOnReceive((sender, data) -> {
+            packetReader.tryRead(data).ifPresent(
+                (packet) -> packetDispatcher.dispatch(sender, packet)
+            );
         });
         server.run(5411);
 
         final TCPClient client = new TCPClient();
         client.connect("localhost", 5411);
 
-        client.send(new TestMessagePacket("Hello, World!"));
+        client.send(new TestMessagePacket("Hello, World!").createStreamWriter());
         client.send(new TestDisconnectPacket("Disconnection"));
 
         TimeUtils.waitFor(() -> (counter.get() == 2), 3000, () -> {
@@ -399,27 +394,26 @@ public class StressTests {
     @Test
     public void send_packet_ssl() throws Exception {
         TimeUtils.delayMillis(100);
+
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
-
-        final PacketReader packetReader = new PacketReader()
-            .register(TestMessagePacket.class, TestMessagePacket::new);
-
         final AtomicInteger counter = new AtomicInteger();
 
-        final TestPacketHandler handler = new TestPacketHandler() {
-            public void handleMessage(String message) {
-                result.set(message);
-                counter.incrementAndGet();
-            }
-            public void handleDisconnect(String reason) { }
-        };
+        final PacketReader packetReader = new PacketReader();
+        final PacketDispatcher packetDispatcher = new PacketDispatcher();
+
+        packetReader.register(TestMessagePacket.class, TestMessagePacket::new);
+        packetDispatcher.register(TestMessagePacket.class, (connection, packet) -> {
+            result.set(message);
+            counter.incrementAndGet();
+        });
 
         final TCPServer server = new TCPServer();
         server.getEventPipeline().addHandlerFirst(new ServerSecureHandler());
-        server.registerOnReceive((sender, bytes) -> {
-            final NetPacket<TestPacketHandler> packet = packetReader.readOrNull(bytes);
-            packet.handle(handler);
+        server.registerOnReceive((sender, data) -> {
+            packetReader.tryRead(data).ifPresent(
+                (packet) -> packetDispatcher.dispatch(sender, packet)
+            );
         });
         server.registerOnError(ErrorListener::printError);
         server.run(5412);

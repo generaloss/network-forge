@@ -8,7 +8,7 @@ import generaloss.resourceflow.stream.BinaryOutputStream;
 import java.io.IOException;
 
 @PacketID(0)
-public class TestMessagePacket extends NetPacket<TestPacketHandler> {
+public class TestMessagePacket extends NetPacket {
 
     private String message;
 
@@ -28,9 +28,8 @@ public class TestMessagePacket extends NetPacket<TestPacketHandler> {
         message = stream.readByteString();
     }
 
-    @Override
-    public void handle(TestPacketHandler handler) {
-        handler.handleMessage(message);
+    public String getMessage() {
+        return message;
     }
         
 }

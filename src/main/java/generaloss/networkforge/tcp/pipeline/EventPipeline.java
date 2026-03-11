@@ -101,29 +101,6 @@ public class EventPipeline extends EventHandlerRegistry {
     }
 
 
-    public void fireError(EventHandler[] handlers, int handlerIndexFrom,
-                          TCPConnection connection, ErrorSource source, Throwable throwable) {
-        // Argument 'connection' can be null
-
-        if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
-            target.invokeError(connection, source, throwable);
-            return;
-        }
-
-        final EventInvocationContext context = new EventInvocationContext(this, connection, handlers);
-
-        do {
-            context.setHandlerIndex(handlerIndexFrom++);
-        } while (
-            context.invokeError(source, throwable)
-        );
-    }
-
-    public void fireError(TCPConnection connection, ErrorSource source, Throwable throwable) {
-        this.fireError(super.getHandlers(), 0, connection, source, throwable);
-    }
-
-    
     public boolean fireSend(EventHandler[] handlers, int handlerIndexFrom,
                             TCPConnection connection, byte[] data) {
         if(connection == null)
@@ -148,7 +125,7 @@ public class EventPipeline extends EventHandlerRegistry {
         );
         return false;
     }
-    
+
     public boolean fireSend(TCPConnection connection, byte[] data) {
         final EventHandler[] handlers = super.getHandlers();
         final int lastHandlerIndex = (handlers.length - 1);
@@ -207,7 +184,7 @@ public class EventPipeline extends EventHandlerRegistry {
     }
 
     public boolean fireSend(EventHandler[] handlers, int handlerIndexFrom,
-                            TCPConnection connection, NetPacket<?> packet) {
+                            TCPConnection connection, NetPacket packet) {
         if(packet == null)
             throw new IllegalArgumentException("Argument 'packet' cannot be null");
 
@@ -221,10 +198,33 @@ public class EventPipeline extends EventHandlerRegistry {
         }
     }
 
-    public boolean fireSend(TCPConnection connection, NetPacket<?> packet) {
+    public boolean fireSend(TCPConnection connection, NetPacket packet) {
         final EventHandler[] handlers = super.getHandlers();
         final int lastHandlerIndex = (handlers.length - 1);
         return this.fireSend(handlers, lastHandlerIndex, connection, packet);
+    }
+
+
+    public void fireError(EventHandler[] handlers, int handlerIndexFrom,
+                          TCPConnection connection, ErrorSource source, Throwable throwable) {
+        // Argument 'connection' can be null
+
+        if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
+            target.invokeError(connection, source, throwable);
+            return;
+        }
+
+        final EventInvocationContext context = new EventInvocationContext(this, connection, handlers);
+
+        do {
+            context.setHandlerIndex(handlerIndexFrom++);
+        } while (
+            context.invokeError(source, throwable)
+        );
+    }
+
+    public void fireError(TCPConnection connection, ErrorSource source, Throwable throwable) {
+        this.fireError(super.getHandlers(), 0, connection, source, throwable);
     }
 
 }

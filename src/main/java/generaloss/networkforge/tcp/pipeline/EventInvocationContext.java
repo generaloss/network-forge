@@ -7,6 +7,7 @@ import generaloss.networkforge.tcp.listener.ErrorListener;
 import generaloss.networkforge.tcp.listener.ErrorSource;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public class EventInvocationContext {
@@ -120,6 +121,93 @@ public class EventInvocationContext {
     }
 
 
+    public void connect(TCPConnection connection) {
+        final int nextIndex = (handlerIndex + 1);
+        pipeline.fireConnect(handlersShapshot, nextIndex, connection);
+    }
+
+    public void connect() {
+        this.connect(connection);
+    }
+
+
+    public void disconnect(TCPConnection connection, CloseReason reason, Exception e) {
+        final int nextIndex = (handlerIndex + 1);
+        pipeline.fireDisconnect(handlersShapshot, nextIndex, connection, reason, e);
+    }
+
+    public void disconnect(CloseReason reason, Exception e) {
+        this.disconnect(connection, reason, e);
+    }
+
+
+    public void receive(TCPConnection connection, byte[] data) {
+        final int nextIndex = (handlerIndex + 1);
+        pipeline.fireReceive(handlersShapshot, nextIndex, connection, data);
+    }
+
+    public void receive(byte[] data) {
+        this.receive(connection, data);
+    }
+
+    public void receive(TCPConnection connection, ByteBuffer buffer) {
+        if(buffer == null)
+            throw new IllegalArgumentException("Argument 'buffer' cannot be null");
+
+        final byte[] byteArray = new byte[buffer.remaining()];
+        buffer.duplicate().get(byteArray);
+        this.receive(connection, byteArray);
+    }
+
+    public void receive(ByteBuffer buffer) {
+        this.receive(connection, buffer);
+    }
+
+    public void receive(TCPConnection connection, String string) {
+        if(string == null)
+            throw new IllegalArgumentException("Argument 'string' cannot be null");
+        this.receive(connection, string.getBytes());
+    }
+
+    public void receive(String string) {
+        this.receive(connection, string);
+    }
+
+    public boolean receive(TCPConnection connection, BinaryStreamWriter streamWriter) {
+        if(streamWriter == null)
+            throw new IllegalArgumentException("Argument 'streamWriter' cannot be null");
+
+        try {
+            final byte[] byteArray = BinaryStreamWriter.toByteArray(streamWriter);
+            this.receive(connection, byteArray);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    public boolean receive(BinaryStreamWriter streamWriter) {
+        return this.receive(connection, streamWriter);
+    }
+
+    public boolean receive(TCPConnection connection, NetPacket packet) {
+        if(packet == null)
+            throw new IllegalArgumentException("Argument 'packet' cannot be null");
+
+        try {
+            final byte[] byteArray = packet.toByteArray();
+            this.receive(connection, byteArray);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    public boolean receive(NetPacket packet) {
+        return this.receive(connection, packet);
+    }
+
+
     public boolean send(TCPConnection connection, byte[] data) {
         final int nextIndex = (handlerIndex - 1);
         return pipeline.fireSend(handlersShapshot, nextIndex, connection, data);
@@ -156,43 +244,13 @@ public class EventInvocationContext {
         return this.send(connection, streamWriter);
     }
 
-    public boolean send(TCPConnection connection, NetPacket<?> packet) {
+    public boolean send(TCPConnection connection, NetPacket packet) {
         final int nextIndex = (handlerIndex - 1);
         return pipeline.fireSend(handlersShapshot, nextIndex, connection, packet);
     }
 
-    public boolean send(NetPacket<?> packet) {
+    public boolean send(NetPacket packet) {
         return this.send(connection, packet);
-    }
-
-
-    public void connect(TCPConnection connection) {
-        final int nextIndex = (handlerIndex + 1);
-        pipeline.fireConnect(handlersShapshot, nextIndex, connection);
-    }
-
-    public void connect() {
-        this.connect(connection);
-    }
-
-
-    public void disconnect(TCPConnection connection, CloseReason reason, Exception e) {
-        final int nextIndex = (handlerIndex + 1);
-        pipeline.fireDisconnect(handlersShapshot, nextIndex, connection, reason, e);
-    }
-
-    public void disconnect(CloseReason reason, Exception e) {
-        this.disconnect(connection, reason, e);
-    }
-
-
-    public void receive(TCPConnection connection, byte[] data) {
-        final int nextIndex = (handlerIndex + 1);
-        pipeline.fireReceive(handlersShapshot, nextIndex, connection, data);
-    }
-
-    public void receive(byte[] data) {
-        this.receive(connection, data);
     }
 
 

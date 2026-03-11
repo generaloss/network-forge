@@ -8,7 +8,7 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 
-public abstract class NetPacket<H> {
+public abstract class NetPacket {
 
     private final short ID;
 
@@ -25,8 +25,6 @@ public abstract class NetPacket<H> {
 
     abstract protected void read(BinaryInputStream stream) throws IOException;
 
-    abstract public void handle(H handler);
-
 
     public BinaryStreamWriter createStreamWriter() {
         return (stream) -> {
@@ -38,11 +36,6 @@ public abstract class NetPacket<H> {
     public byte[] toByteArray() throws IOException {
         final BinaryStreamWriter streamWriter = this.createStreamWriter();
         return BinaryStreamWriter.toByteArray(streamWriter);
-    }
-
-
-    public Runnable createHandleTask(H handler) {
-        return () -> this.handle(handler);
     }
 
 
@@ -63,7 +56,7 @@ public abstract class NetPacket<H> {
 
 
     @SuppressWarnings("unchecked")
-    public static <P extends NetPacket<?>> P createInstanceReflect(Class<P> packetClass) throws IllegalStateException {
+    public static <P extends NetPacket> P createInstanceReflect(Class<P> packetClass) throws IllegalStateException {
         try {
             final Constructor<?> defaultConstructor = NetPacket.getDefaultConstructor(packetClass);
             return (P) defaultConstructor.newInstance();

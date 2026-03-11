@@ -5,15 +5,14 @@
 Пайплайн - это механизм расширения.
 
 Новые возможности добавляются не через изменение ядра библиотеки,
-а через подключение новых обработчиков.
-Такие как:
+а через подключение новых обработчиков, такие как:
 
 * метрики
 * шифрование
 * авторизация
 * и прочее..
 
-Ядро остаётся неизменным, а поведение формируется конфигурацией цепочки.
+**Ядро остаётся неизменным. Поведение формируется конфигурацией цепочки обработчиков.**
 
 [EventPipeline](/src/main/java/generaloss/networkforge/tcp/pipeline/EventPipeline.java)
 это цепочка обработчиков
@@ -39,6 +38,9 @@
 
 В системе существуют два направления распространения:
 
+* **Inbound** события идут сверху вниз по цепочке.
+* **Outbound** события идут снизу вверх.
+
 ### Inbound (входящие события)
 
 События идут **с начала цепочки к концу**:
@@ -49,10 +51,10 @@ Handler_0 → Handler_1 → Handler_2 → Target
 
 Сюда относятся события:
 
-* connect
-* receive
-* disconnect
-* error
+* `connect`
+* `receive`
+* `disconnect`
+* `error`
 
 Каждый обработчик решает, продолжать ли цепочку.
 Если метод возвращает `false`, распространение останавливается.
@@ -61,7 +63,7 @@ Handler_0 → Handler_1 → Handler_2 → Target
 
 ### Outbound (исходящие события)
 
-Отправка данных (send) идёт **в обратном направлении**:
+Событие `send` идёт **в обратном направлении**:
 
 ```
 Handler_2 → Handler_1 → Handler_0 → Socket
@@ -72,8 +74,6 @@ Handler_2 → Handler_1 → Handler_0 → Socket
 * шифровать данные
 * сжимать
 * логировать отправку
-
-Каждый обработчик может изменить данные перед передачей дальше.
 
 ---
 
@@ -93,6 +93,9 @@ Handler_2 → Handler_1 → Handler_0 → Socket
 На время обработки события используется **снимок обработчиков**.
 
 По этому изменения пайплайна (добавление/удаление обработчиков) не влияют на уже запущенные события.
+
+**Каждое событие использует тот snapshot обработчиков,
+который существовал в момент его запуска.**
 
 При добавлении или удалении обработчиков создаётся новый массив.
 Текущие события продолжают работать со старой версией.
@@ -140,7 +143,7 @@ public class LoggingHandler extends EventHandler {
     }
 
     @Override
-    public byte[] handleSend(EventInvocationContext context, byte[] data) {
+    public boolean handleSend(EventInvocationContext context, byte[] data) {
         System.out.println("Sending " + data.length + " bytes");
         return true;
     }
@@ -150,39 +153,85 @@ public class LoggingHandler extends EventHandler {
 Если метод возвращает `true`, событие передаётся дальше.  
 Если вернуть `false`, обработка останавливается.
 
+Методы можно переопределять выборочно.
+Необязательно реализовывать все события.
+
 ## Инициирование событий
 
-Обработчик может сам инициировать событие (в рамках того же snapshot'a обработчиков), которое  
+Обработчик может инициировать новые события, которое пойдет через следующие обработчики:
 
 ```java
 @Override
 public boolean handleReceive(EventInvocationContext context, byte[] data) {
-    context.send("OK".getBytes());
+    context.send(message_to_send);
+    context.receive(message_to_receive);
+    context.connect(connection);
+    context.disconnect(connection, CloseReason.INTERNAL_ERROR, exception);
+    context.error(ErrorSource.RECEIVE_HANDLER, throwable);
     return true;
 }
 ```
-Откладывать событие до нужного момента (connect):
-``` java
-@Override
-public boolean handleConnect(EventInvocationContext context) {
-    return false;
-}
+Событие, инициированное из обработчика, **продолжает работу в том же snapshot'е обработчиков.**
+Это гарантирует, что порядок обработчиков остаётся стабильным
+на протяжении всего события.
 
-@Override
-public boolean handleReceive(EventInvocationContext context, byte[] data) {
-    TCPConnection connection = context.getConnection();
-    if(...){ // например, получение правильных данных для данного подключения
-        context.connect(connection);
-        return false;
+
+### Это позволяет:
+* Модифицировать данные событий - для этого нужно прервать старое событие и инициировать новое:
+
+```java
+public class SendPrefixHandler extends EventHandler {
+
+    @Override
+    public boolean handleSend(EventInvocationContext context, byte[] data) {
+        byte[] prefix = "[Prefix] ".getBytes();
+        byte[] modified = this.addPrefix(data, prefix);
+        context.send(modified); // Инициируем событие с измененными данными
+        return false; // Прерываем текущее
     }
-    return true;
+
+    private byte[] addPrefix(byte[] input, byte[] prefix) {
+        byte[] result = new byte[prefix.length + input.length];
+        System.arraycopy(prefix, 0, result, 0, prefix.length);
+        System.arraycopy(input, 0, result, prefix.length, input.length);
+        return result;
+    }
+
 }
 ```
 
-## Модификация данных
+* Откладывать событие до нужного момента:
+``` java
+public class PrefixHandler extends EventHandler {
 
+    private final List<TCPConnection> postponeList = Collections.synchronizedList(new ArrayList<>());
 
+    @Override
+    public boolean handleConnect(EventInvocationContext context) {
+        postponeList.add(context.getConnection()); // Сохраняем соединения, чтобы позже инициировать `connect` для них
+        return false; // Прерываем `connect` события на этом обработчике.
+    }
+
+    @Override
+    public boolean handleReceive(EventInvocationContext context, byte[] data) {
+        TCPConnection connection = context.getConnection();
+
+        boolean isRightConnection = postponeList.contains(connection);
+        boolean isRightData = ...; // Например, если получены определенные данные для данного подключения
+
+        if(isRightConnection && isRightData) {
+            postponeList.remove(connection);
+            context.connect(connection); // Инициируем `connect` к следующим обработчикам
+            return false; // Не передаем дальше данные, предназначенные для этого обработчика
+        }
+        return true;
+    }
+
+}
+```
+
+---
 
 *[Главная страница](index.md)*
 
-*Следующая - [.]()*
+*Следующая - [Пакеты](packets.md)*

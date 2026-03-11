@@ -8,7 +8,7 @@ import generaloss.resourceflow.stream.BinaryOutputStream;
 import java.io.IOException;
 
 @PacketID(1)
-public class TestDisconnectPacket extends NetPacket<TestPacketHandler> {
+public class TestDisconnectPacket extends NetPacket {
 
     private String reason;
 
@@ -28,9 +28,8 @@ public class TestDisconnectPacket extends NetPacket<TestPacketHandler> {
         reason = stream.readByteString();
     }
 
-    @Override
-    public void handle(TestPacketHandler handler) {
-        handler.handleDisconnect(reason);
+    public String getReason() {
+        return reason;
     }
 
 }

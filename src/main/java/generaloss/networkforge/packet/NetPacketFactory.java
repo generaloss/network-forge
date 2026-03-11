@@ -1,7 +1,7 @@
 package generaloss.networkforge.packet;
 
-public interface NetPacketFactory<H> {
+public interface NetPacketFactory<P extends NetPacket> {
 
-    NetPacket<H> create() throws Exception;
+    P create() throws Exception;
 
 }

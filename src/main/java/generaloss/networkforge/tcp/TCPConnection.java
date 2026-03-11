@@ -200,7 +200,7 @@ public class TCPConnection implements Sendable, Closeable {
     }
 
     @Override
-    public boolean send(NetPacket<?> packet) {
+    public boolean send(NetPacket packet) {
         return eventPipeline.fireSend(this, packet);
     }
 

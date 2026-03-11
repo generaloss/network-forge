@@ -15,6 +15,6 @@ public interface Sendable {
 
     boolean send(BinaryStreamWriter streamWriter);
 
-    boolean send(NetPacket<?> packet);
+    boolean send(NetPacket packet);
 
 }

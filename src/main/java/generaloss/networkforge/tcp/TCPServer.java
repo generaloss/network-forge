@@ -377,7 +377,7 @@ public class TCPServer {
         }
     }
 
-    public int broadcast(NetPacket<?> packet) {
+    public int broadcast(NetPacket packet) {
         if(packet == null)
             throw new IllegalArgumentException("Argument 'packet' cannot be null");
 
@@ -391,7 +391,7 @@ public class TCPServer {
         }
     }
 
-    public int broadcast(TCPConnection except, NetPacket<?> packet) {
+    public int broadcast(TCPConnection except, NetPacket packet) {
         if(packet == null)
             throw new IllegalArgumentException("Argument 'packet' cannot be null");
 
