@@ -7,7 +7,7 @@ import generaloss.resourceflow.stream.BinaryOutputStream;
 
 import java.io.IOException;
 
-@PacketID(1)
+@PacketID(-10000)
 public class TestDisconnectPacket extends NetPacket {
 
     private String reason;

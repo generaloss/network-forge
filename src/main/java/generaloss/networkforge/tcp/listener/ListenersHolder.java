@@ -1,16 +1,16 @@
-package generaloss.networkforge.tcp.pipeline;
+package generaloss.networkforge.tcp.listener;
 
 import generaloss.networkforge.tcp.TCPConnection;
-import generaloss.networkforge.tcp.listener.*;
 
 import java.util.LinkedList;
 import java.util.List;
 
 public class ListenersHolder {
 
-    private final List<ConnectListener> connectListeners;
+    private final List<TCPConnectionConsumer> connectListeners;
     private final List<DisconnectListener> disconnectListener;
     private final List<DataListener> receiveListeners;
+    private final List<TCPConnectionConsumer> readCompleteListeners;
     private final List<ErrorListener> errorListeners;
     private final List<DataListener> sendListeners;
 
@@ -18,22 +18,27 @@ public class ListenersHolder {
         this.connectListeners = new LinkedList<>();
         this.disconnectListener = new LinkedList<>();
         this.receiveListeners = new LinkedList<>();
+        this.readCompleteListeners = new LinkedList<>();
         this.errorListeners = new LinkedList<>();
         this.sendListeners = new LinkedList<>();
     }
 
-    public void registerOnConnect(ConnectListener onConnect) {
+    public void registerOnConnect(TCPConnectionConsumer onConnect) {
         connectListeners.add(onConnect);
     }
 
     public void registerOnDisconnect(DisconnectListener onClose) {
         disconnectListener.add(onClose);
     }
-    
+
     public void registerOnReceive(DataListener onReceive) {
         receiveListeners.add(onReceive);
     }
-    
+
+    public void registerOnReadComplete(TCPConnectionConsumer onReadComplete) {
+        readCompleteListeners.add(onReadComplete);
+    }
+
     public void registerOnError(ErrorListener onError) {
         errorListeners.add(onError);
     }
@@ -43,7 +48,7 @@ public class ListenersHolder {
     }
 
 
-    public boolean unregisterOnConnect(ConnectListener onConnect) {
+    public boolean unregisterOnConnect(TCPConnectionConsumer onConnect) {
         return connectListeners.remove(onConnect);
     }
 
@@ -53,6 +58,10 @@ public class ListenersHolder {
 
     public boolean unregisterOnReceive(DataListener onReceive) {
         return receiveListeners.remove(onReceive);
+    }
+
+    public boolean unregisterOnReadComplete(TCPConnectionConsumer onReadComplete) {
+        return readCompleteListeners.remove(onReadComplete);
     }
 
     public boolean unregisterOnError(ErrorListener onError) {
@@ -65,8 +74,8 @@ public class ListenersHolder {
 
 
     public void invokeConnect(TCPConnection connection) {
-        for(ConnectListener onConnect : connectListeners)
-            onConnect.onConnect(connection);
+        for(TCPConnectionConsumer onConnect : connectListeners)
+            onConnect.accept(connection);
     }
 
     public void invokeDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
@@ -77,6 +86,11 @@ public class ListenersHolder {
     public void invokeReceive(TCPConnection connection, byte[] data) {
         for(DataListener onReceive : receiveListeners)
             onReceive.onData(connection, data);
+    }
+
+    public void invokeReadComplete(TCPConnection connection) {
+        for(TCPConnectionConsumer onReadComplete : readCompleteListeners)
+            onReadComplete.accept(connection);
     }
 
     public void invokeError(TCPConnection connection, ErrorSource source, Throwable throwable) {

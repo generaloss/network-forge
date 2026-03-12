@@ -1,15 +1,19 @@
 # Кодеки
 
-## Введение
+---
+
+## Что такое кодек
 
 **Кодеки** - это классы отвечающие за то, в какой форме сервер и клиент будут обмениваться данными.
 
 Каждое соединение TCPConnection использует **кодек**.
 
 ---
+
 ## Использование
 
 Для предсказуемой работы, должен быть установлен один тип кодека:
+
 - и для соедниения клиента
 - и для соответствующего соединения на сервере.
 
@@ -18,19 +22,23 @@
 ![](/docs/connection-codecs.png)
 
 Чтобы установить кодек для TCPClient используйте метод:
+
 ``` java
 client.setCodec(CodecType); // Enum
 client.setCodec(ConnectionCodec connectionCodec); // Существующие или свои реализации
 ```
+
 То же для отдельных соединений TCPConnection.
 
 Для TCPServer:
+
 ``` java
 server.setCodecFactory(CodecType codecType); // Enum
 server.setCodecFactory(ConnectionCodecFactory codecFactory); // Factory для существующих или своих реализаций
 ```
 
 ---
+
 ## Типы кодеков
 
 В библиотеке есть следующие реализации:

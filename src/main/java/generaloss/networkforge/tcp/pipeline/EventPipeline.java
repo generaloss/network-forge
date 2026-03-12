@@ -4,6 +4,7 @@ import generaloss.networkforge.packet.NetPacket;
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.CloseReason;
 import generaloss.networkforge.tcp.listener.ErrorSource;
+import generaloss.networkforge.tcp.listener.ListenersHolder;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
 import java.io.IOException;
@@ -101,6 +102,28 @@ public class EventPipeline extends EventHandlerRegistry {
     }
 
 
+    public void fireReadComplete(EventHandler[] handlers, int handlerIndexFrom, TCPConnection connection) {
+        if(connection == null)
+            throw new RuntimeException("Argument 'connection' cannot be null");
+
+        if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
+            target.invokeReadComplete(connection);
+            return;
+        }
+
+        final EventInvocationContext context = new EventInvocationContext(this, connection, handlers);
+        do {
+            context.setHandlerIndex(handlerIndexFrom++);
+        } while (
+            context.invokeReadComplete()
+        );
+    }
+
+    public void fireReadComplete(TCPConnection connection) {
+        this.fireReadComplete(super.getHandlers(), 0, connection);
+    }
+
+
     public boolean fireSend(EventHandler[] handlers, int handlerIndexFrom,
                             TCPConnection connection, byte[] data) {
         if(connection == null)
@@ -172,7 +195,7 @@ public class EventPipeline extends EventHandlerRegistry {
             return this.fireSend(handlers, handlerIndexFrom, connection, byteArray);
 
         } catch (IOException e) {
-            this.fireError(handlers, handlerIndexFrom, connection, ErrorSource.SEND, e);
+            this.fireError(handlers, handlerIndexFrom, connection, ErrorSource.SEND_HANDLER, e);
             return false;
         }
     }
@@ -193,7 +216,7 @@ public class EventPipeline extends EventHandlerRegistry {
             return this.fireSend(handlers, handlerIndexFrom, connection, byteArray);
 
         } catch (IOException e) {
-            this.fireError(handlers, handlerIndexFrom, connection, ErrorSource.SEND, e);
+            this.fireError(handlers, handlerIndexFrom, connection, ErrorSource.SEND_HANDLER, e);
             return false;
         }
     }

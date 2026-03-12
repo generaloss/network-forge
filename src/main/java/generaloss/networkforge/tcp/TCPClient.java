@@ -4,7 +4,7 @@ import generaloss.networkforge.ConnectionState;
 import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.listener.*;
-import generaloss.networkforge.tcp.pipeline.ListenersHolder;
+import generaloss.networkforge.tcp.listener.ListenersHolder;
 import generaloss.networkforge.tcp.pipeline.EventPipeline;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.packet.NetPacket;
@@ -220,7 +220,7 @@ public class TCPClient implements Sendable {
         initialOptions.copyTo(connection.getOptions());
 
         state = ConnectionState.CONNECTED;
-        connection.onConnectOp();
+        connection.onConnected();
     }
 
     private String makeConnectionName() {
@@ -299,7 +299,7 @@ public class TCPClient implements Sendable {
     }
 
 
-    public TCPClient registerOnConnect(ConnectListener onConnect) {
+    public TCPClient registerOnConnect(TCPConnectionConsumer onConnect) {
         listeners.registerOnConnect(onConnect);
         return this;
     }
@@ -314,6 +314,11 @@ public class TCPClient implements Sendable {
         return this;
     }
 
+    public TCPClient registerOnReadComplete(TCPConnectionConsumer onReadComplete) {
+        listeners.registerOnReadComplete(onReadComplete);
+        return this;
+    }
+
     public TCPClient registerOnError(ErrorListener onError) {
         listeners.registerOnError(onError);
         return this;
@@ -325,7 +330,7 @@ public class TCPClient implements Sendable {
     }
 
 
-    public TCPClient unregisterOnConnect(ConnectListener onConnect) {
+    public TCPClient unregisterOnConnect(TCPConnectionConsumer onConnect) {
         listeners.unregisterOnConnect(onConnect);
         return this;
     }
@@ -337,6 +342,11 @@ public class TCPClient implements Sendable {
 
     public TCPClient unregisterOnReceive(DataListener onReceive) {
         listeners.unregisterOnReceive(onReceive);
+        return this;
+    }
+
+    public TCPClient unregisterOnReadComplete(TCPConnectionConsumer onReadComplete) {
+        listeners.unregisterOnReadComplete(onReadComplete);
         return this;
     }
 

@@ -11,7 +11,7 @@ import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.tcp.pipeline.EventHandler;
 import generaloss.networkforge.tcp.pipeline.EventPipeline;
 import generaloss.networkforge.tcp.pipeline.EventInvocationContext;
-import generaloss.networkforge.tcp.pipeline.ListenersHolder;
+import generaloss.networkforge.tcp.listener.ListenersHolder;
 
 import java.io.IOException;
 import java.util.Arrays;

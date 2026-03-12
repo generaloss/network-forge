@@ -1,11 +1,20 @@
 package generaloss.networkforge.tcp.crypto;
 
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
 
 public class CipherPair {
 
-    private Cipher encryptCipher;
-    private Cipher decryptCipher;
+    private volatile Cipher encryptCipher;
+    private volatile Cipher decryptCipher;
+    private final Object encryptLock;
+    private final Object decryptLock;
+
+    public CipherPair() {
+        this.encryptLock = new Object();
+        this.decryptLock = new Object();
+    }
 
     public Cipher getEncryptCipher() {
         return encryptCipher;
@@ -31,42 +40,56 @@ public class CipherPair {
     }
 
 
-    public synchronized byte[] encrypt(byte[] data) {
-        if(encryptCipher == null)
-            return data;
+    public byte[] encrypt(byte[] data) throws IllegalStateException {
         if(data == null)
             return null;
 
-        try {
-            return encryptCipher.doFinal(data);
-        } catch (Exception e) {
-            throw new IllegalStateException("Encryption error: " + e.getMessage());
+        final Cipher cipher = encryptCipher;
+        if(cipher == null)
+            return data;
+
+        synchronized (encryptLock) {
+            try {
+                return cipher.doFinal(data);
+            }catch(Exception e){
+                throw new IllegalStateException("Encryption error", e);
+            }
         }
     }
 
-    public synchronized byte[] decrypt(byte[] data) {
-        if(decryptCipher == null)
-            return data;
+    public byte[] decrypt(byte[] data) throws IllegalStateException {
         if(data == null)
             return null;
 
-        try {
-            return decryptCipher.doFinal(data);
-        } catch (Exception e) {
-            throw new IllegalStateException("Decryption error: " + e.getMessage());
+        final Cipher cipher = decryptCipher;
+        if(cipher == null)
+            return data;
+
+        synchronized (decryptLock) {
+            try {
+                return cipher.doFinal(data);
+            }catch(IllegalBlockSizeException | BadPaddingException e){
+                throw new IllegalStateException("Decryption error", e);
+            }
         }
     }
 
-    public synchronized int getEncryptedSize(int inputSize) {
+    public int getEncryptedSize(int inputSize) {
         if(encryptCipher == null)
             return inputSize;
-        return encryptCipher.getOutputSize(inputSize);
+
+        synchronized (encryptLock) {
+            return encryptCipher.getOutputSize(inputSize);
+        }
     }
 
-    public synchronized int getDecryptedSize(int inputSize) {
+    public int getDecryptedSize(int inputSize) {
         if(decryptCipher == null)
             return inputSize;
-        return decryptCipher.getOutputSize(inputSize);
+
+        synchronized (decryptLock) {
+            return decryptCipher.getOutputSize(inputSize);
+        }
     }
 
 }

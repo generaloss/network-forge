@@ -5,7 +5,7 @@ import generaloss.networkforge.tcp.codec.ConnectionCodecFactory;
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.listener.*;
 import generaloss.networkforge.tcp.pipeline.EventPipeline;
-import generaloss.networkforge.tcp.pipeline.ListenersHolder;
+import generaloss.networkforge.tcp.listener.ListenersHolder;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
@@ -96,7 +96,7 @@ public class TCPServer {
     }
 
 
-    public TCPServer registerOnConnect(ConnectListener onConnect) {
+    public TCPServer registerOnConnect(TCPConnectionConsumer onConnect) {
         listeners.registerOnConnect(onConnect);
         return this;
     }
@@ -111,6 +111,11 @@ public class TCPServer {
         return this;
     }
 
+    public TCPServer registerOnReadComplete(TCPConnectionConsumer onReadComplete) {
+        listeners.registerOnReadComplete(onReadComplete);
+        return this;
+    }
+
     public TCPServer registerOnError(ErrorListener onError) {
         listeners.registerOnError(onError);
         return this;
@@ -122,7 +127,7 @@ public class TCPServer {
     }
 
 
-    public TCPServer unregisterOnConnect(ConnectListener onConnect) {
+    public TCPServer unregisterOnConnect(TCPConnectionConsumer onConnect) {
         listeners.unregisterOnConnect(onConnect);
         return this;
     }
@@ -134,6 +139,11 @@ public class TCPServer {
 
     public TCPServer unregisterOnReceive(DataListener onReceive) {
         listeners.unregisterOnReceive(onReceive);
+        return this;
+    }
+
+    public TCPServer unregisterOnReadComplete(TCPConnectionConsumer onReadComplete) {
+        listeners.unregisterOnReadComplete(onReadComplete);
         return this;
     }
 
@@ -242,7 +252,7 @@ public class TCPServer {
 
             connections.add(connection);
 
-            connection.onConnectOp();
+            connection.onConnected();
         } catch (IOException e) {
             eventPipeline.fireError(null, ErrorSource.CONNECT, e);
         }

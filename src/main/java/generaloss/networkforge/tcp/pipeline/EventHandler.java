@@ -17,6 +17,10 @@ public abstract class EventHandler {
         return true;
     }
 
+    public boolean handleReadComplete(EventInvocationContext context) {
+        return true;
+    }
+
     public boolean handleError(EventInvocationContext context, ErrorSource source, Throwable throwable) {
         return true;
     }

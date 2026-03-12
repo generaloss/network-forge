@@ -23,6 +23,8 @@ import org.junit.Test;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -212,8 +214,8 @@ public class StressTests {
         final String message = "Hello, Data! ".repeat(1000000);
         final AtomicReference<String> result = new AtomicReference<>();
 
-        final TCPConnectionOptionsHolder options = new TCPConnectionOptionsHolder()
-                                                       .setMaxFrameSize(message.length());
+        final TCPConnectionOptionsHolder options = new TCPConnectionOptionsHolder();
+        options.setMaxFrameSize(message.length());
 
         final TCPServer server = new TCPServer();
         server.setInitialOptions(options);
@@ -743,6 +745,101 @@ public class StressTests {
         });
 
         server.close();
+    }
+
+    @Test
+    public void packet_batching() throws Exception {
+        TimeUtils.delayMillis(100);
+
+        final String message = "Hello, World!";
+        final AtomicReference<String> result = new AtomicReference<>();
+        final AtomicInteger counter = new AtomicInteger();
+        final int sendCount = 500;
+        final AtomicInteger maxBatched = new AtomicInteger();
+
+        final PacketReader packetReader = new PacketReader();
+        final PacketDispatcher packetDispatcher = new PacketDispatcher();
+
+        packetReader.register(TestMessagePacket.class);
+        packetDispatcher.register(TestMessagePacket.class, (connection, packet) -> {
+            result.set(message);
+            counter.incrementAndGet();
+        });
+
+        final List<NetPacket> packetsBatchList = new ArrayList<>();
+
+        final TCPServer server = new TCPServer();
+        server.registerOnReceive((sender, data) -> {
+            packetReader.tryRead(data)
+                .ifPresent(packetsBatchList::add);
+        });
+        server.registerOnReadComplete((connection) -> {
+            if(packetsBatchList.isEmpty())
+                return;
+
+            packetDispatcher.dispatch(connection, packetsBatchList);
+            final int batched = packetsBatchList.size();
+            maxBatched.set(Math.max(maxBatched.get(), batched));
+            packetsBatchList.clear();
+        });
+        server.run(5422);
+
+        final TCPClient client = new TCPClient();
+        client.connect("localhost", 5422);
+
+        for(int i = 0; i < sendCount; i++)
+            client.send(new TestMessagePacket(message));
+
+        TimeUtils.waitFor(() -> (counter.get() == sendCount), 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
+        server.close();
+        Assert.assertEquals(message, result.get());
+    }
+
+    @Test
+    public void packet_async_handling() throws Exception {
+        TimeUtils.delayMillis(100);
+
+        final String message = "Hello, World!";
+        final AtomicReference<String> result = new AtomicReference<>();
+        final AtomicInteger counter = new AtomicInteger();
+        final int sendCount = 10;
+        final AtomicInteger maxBatched = new AtomicInteger();
+
+        final PacketReader packetReader = new PacketReader();
+        final PacketDispatcher packetDispatcher = new PacketDispatcher()
+            .async(Executors.newSingleThreadExecutor());
+
+        packetReader.register(TestMessagePacket.class);
+        packetDispatcher.register(TestMessagePacket.class, (connection, packet) -> {
+            result.set(message);
+            counter.incrementAndGet();
+        });
+
+        final TCPServer server = new TCPServer();
+        server.registerOnReceive((sender, data) -> {
+            final NetPacket packet = packetReader.readOrNull(data);
+            if(packet != null)
+                packetDispatcher.dispatch(sender, packet);
+        });
+        server.run(5423);
+
+        final TCPClient client = new TCPClient();
+        client.connect("localhost", 5423);
+
+        for(int i = 0; i < sendCount; i++)
+            client.send(new TestMessagePacket(message));
+
+        TimeUtils.waitFor(() -> (counter.get() == sendCount), 3000, () -> {
+            client.close();
+            server.close();
+            Assert.fail();
+        });
+        server.close();
+        Assert.assertEquals(message, result.get());
     }
 
 }

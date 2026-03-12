@@ -93,6 +93,22 @@ public class EventInvocationContext {
         }
     }
 
+    protected boolean invokeReadComplete() {
+        if(handlerIndex == handlersShapshot.length) {
+            pipeline.getTarget().invokeReadComplete(connection);
+            return false; // break
+        }
+
+        try {
+            final EventHandler handler = handlersShapshot[handlerIndex];
+            return handler.handleReadComplete(this);
+
+        } catch (Throwable t) {
+            this.error(ErrorSource.READ_COMPLETE_HANDLER, t);
+            return false; // break
+        }
+    }
+
     protected boolean invokeError(ErrorSource source, Throwable throwable) {
         if(handlerIndex == handlersShapshot.length) {
             pipeline.getTarget().invokeError(connection, source, throwable);
@@ -205,6 +221,16 @@ public class EventInvocationContext {
 
     public boolean receive(NetPacket packet) {
         return this.receive(connection, packet);
+    }
+
+
+    public void readComplete(TCPConnection connection) {
+        final int nextIndex = (handlerIndex - 1);
+        pipeline.fireReadComplete(handlersShapshot, nextIndex, connection);
+    }
+
+    public void readComplete() {
+        this.readComplete(connection);
     }
 
 

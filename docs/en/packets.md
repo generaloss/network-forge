@@ -1,208 +1,354 @@
-What are packets?
-
-Instead of working with **raw bytes** in network communication, it’s more convenient to think in terms of **packets**.
-	
-- has a unique `ID` (can be set manually or automatically computed from the class name);
-	
-- can **write itself** to a stream (`write`);
-	
-- can **read itself** from a stream (`read`);
-	
-- can **handle itself** (`handle`), once delivered to a handler.
-
-
-This way, the logic of network interaction is separated from the low-level byte protocol.
+# Пакеты
 
 ---
-## Core Components
 
-### `NetPacket<H>`
+## Что такое пакет
 
-The base abstract packet class.
-	
-- `write(BinaryOutputStream stream)`  -  serialization to a stream.
-	
-- `read(BinaryInputStream stream)`  -  deserialization from a stream.
-	
-- `handle(H handler)`  -  processing logic.
-	
-- `getPacketID()`  -  returns the unique packet ID.
-	
-- `toByteArray()`  -  converts the packet into a byte array for sending.
+TCP передаёт **просто поток байтов**.
 
-Minimal example:
+Для большинства приложений удобнее работать не с сырыми байтами,
+а со структурированными сообщениями.
 
-``` java
-@PacketID(1) // can be set manually, otherwise computed from class name
-public class ChatMessagePacket extends NetPacket<ChatHandler> {
-	
+Для этого в библиотеке существует концепция **пакетов**.
+
+Пакет - это объект, который:
+
+* сериализуется в поток байтов
+* восстанавливается из потока
+* содержит структурированные данные.
+
+Пакеты являются **дополнительным слоем поверх TCP**.
+
+---
+
+## Базовый класс пакета
+
+Все пакеты наследуются от
+[NetPacket](/src/main/java/generaloss/networkforge/packet/NetPacket.java).
+
+Минимальный пакет выглядит так:
+
+```java
+@PacketID(0)
+public class ChatMessagePacket extends NetPacket {
+
     private String message;
-	
-    public ChatMessagePacket() {} // no-arg constructor required
-	
+
+    public ChatMessagePacket() { }
+
     public ChatMessagePacket(String message) {
         this.message = message;
     }
-	
+
     @Override
-    public void write(BinaryOutputStream stream) throws IOException {
-        stream.writeStringUTF(message);
+    protected void write(BinaryOutputStream stream) throws IOException {
+        stream.writeByteString(message);
     }
-	
+
     @Override
-    public void read(BinaryInputStream stream) throws IOException {
-        this.message = stream.readStringUTF();
+    protected void read(BinaryInputStream stream) throws IOException {
+        message = stream.readByteString();
     }
-	
-    @Override
-    public void handle(ChatHandler handler) {
-        handler.onChatMessage(message);
+
+    public String getMessage() {
+        return message;
     }
+
 }
 ```
 
-### `PacketID`
-
-Annotation for assigning a packet ID.
-	
-- If not specified, the ID is computed from the class name hash.
-    
-- It’s recommended to specify it explicitly for protocol stability.
+Каждый пакет определяет два метода:
+* `write()` - для сериализации данных
+* `read()` - для десериализации
 
 ---
-### `NetPacketFactory<H>`
 
-Factory for creating new packet instances.
+## Формат пакета
 
-Usually not needed directly — `PacketDispatcher` generates it automatically via reflection when registering a packet class.
+Каждый пакет в сети имеет следующий формат:
 
----
-### `PacketDispatcher`
+```
+[ packetID ][ packet data... ]
+```
 
-The main packet manager. It does three things:
-	
-1. **Registers packets** (`register(...)`).
-    
-2. **Reads a packet from a byte array** (`dispatch(...)`).
+* `packetID` -  это `short`
+* затем записываются данные пакета
 
-3. *With enabled `directHandling` packet is immediately* **processed** *in `dispatch(...)`, otherwise it is queued for processing.*
-    
-4. **Processes the packet queue** (`handlePackets()`).
+Метод `toByteArray()` автоматически записывает ID и вызывает `write()`.
 
 ---
-## Step-by-step workflow
-	
-1. The networking layer receives a byte array from a TCP connection.
-    
-2. The first `short` in the array is the `packetID`.
-    
-3. `PacketDispatcher` finds the factory for that ID.
-    
-4. A new packet instance is created, and `read()` is called.
-    
-5. The packet is queued.
-    
-6. When `handlePackets()` is invoked, `packet.handle(handler)` is executed.
 
----
-## Usage Example
+## ID пакетов
 
-### 1. Handler
+Каждый пакет имеет уникальный `packetID`.
 
-Interface/class that will receive packets:
+Его можно задать явно:
 
 ``` java
-public interface ChatHandler {
-    void onChatMessage(String message);
+@PacketID(5)
+public class LoginPacket extends NetPacket { ... }
+```
+
+Если аннотация отсутствует, ID вычисляется автоматически
+из имени класса.
+
+Это удобно для:
+
+* быстрых прототипов
+* внутренних протоколов
+
+Для стабильных протоколов рекомендуется задавать ID вручную.
+
+---
+
+# Чтение пакетов
+
+Чтением пакетов занимается класс [PacketReader](/src/main/java/generaloss/networkforge/packet/PacketReader.java).
+
+Он выполняет:
+
+1. чтение `packetID`
+2. создание объекта пакета
+3. десериализацию данных
+
+---
+
+## Регистрация пакетов
+
+Перед чтением пакеты необходимо зарегистрировать.
+
+``` java
+PacketReader reader = new PacketReader();
+
+reader.register(ChatMessagePacket.class);
+reader.register(LoginPacket.class);
+```
+
+Регистрация связывает:
+
+```
+packetID → factory
+```
+
+Factory используется для создания экземпляра пакета.
+Его можно задавать вручную:
+
+``` java
+reader.register(ChatMessagePacket.class, ChatMessagePacket:new);
+```
+
+---
+
+## Автоматическая регистрация
+
+Можно автоматически зарегистрировать пакеты из package:
+
+``` java
+reader.registerAllFromPackageRecursive(
+    Resource.classpath("myapp/network/packet")
+);
+```
+
+Будут найдены все классы:
+
+* наследующие `NetPacket`
+* не являющиеся `abstract`.
+
+---
+
+## Чтение пакета
+
+После регистрации пакеты можно читать:
+
+``` java
+NetPacket packet = reader.readOrNull(data);
+```
+
+или подробно с исключениями:
+
+``` java
+try {
+    NetPacket packet = reader.read(data);
+} catch (IOException e) {
+    ...
 }
 ```
 
-### 2. Packet
+или безопасно с помощью `Optional`:
 
-See `ChatMessagePacket` above.
+``` java
+reader.tryRead(data).ifPresent(packet -> {
+    ...
+});
+```
 
-### 3. Packet Registration
+---
+
+# Обработка пакетов
+
+После чтения пакет необходимо передать обработчику.
+
+Для этого используется [PacketDispatcher](/src/main/java/generaloss/networkforge/packet/PacketDispatcher.java).
+
+Dispatcher хранит таблицу:
+
+```
+packetClass → handler
+```
+
+---
+
+## Регистрация обработчиков
 
 ``` java
 PacketDispatcher dispatcher = new PacketDispatcher();
 
-// register with a manual factory
-dispatcher.register(ChatMessagePacket.class, ChatMessagePacket::new);
-// register with auto-generated factory
-dispatcher.register(ChatMessagePacket.class);
-// register a group of packets with auto-generated factories
-dispatcher.registerAll(FirstPacket.class, SecondPacket.class, ...);
-```
-
-### 4. Sending
-
-``` java
-ChatMessagePacket packet = new ChatMessagePacket("Hello, world!");
-// send through TCP connection
-connection.send(packet);
-```
-
-### 5. Receiving & Handling
-
-``` java
-// handler instance
-ChatHandler chatHandler = new ChatHandler() {
-    @Override
-    public void onChatMessage(String message) {
-        System.out.println("Got: " + message);
+dispatcher.register(ChatMessagePacket.class,
+    (connection, packet) -> {
+        System.out.println(packet.getMessage());
     }
-};
-
-// assume bytes came from TCP
-dispatcher.dispatch(receivedBytes, chatHandler);
-// then process the queue (if directHandling disabled)
-dispatcher.handlePackets();
-```
-
-Output:
-```
-Got: Hello, world!
-```
-
-> [!TIP]
-> If you need to select a packet handler dynamically based on the packet's contents, you can provide a custom handler-selector function to the dispatch method:
-``` java
-NetPacketFunction<Object> handlerFunction = (packet) -> {
-    switch(packet.getPacketID()) {
-        case 1: return specialHandler;
-        case 2: return secondaryHandler;
-        default: return defaultHandler;
-    }
-};
-
-dispatcher.dispatch(receivedBytes, handlerFunction);
-```
-
-## Handling Multiple Packets
-
-You can register multiple packets at once:
-
-``` java
-dispatcher.registerAll(
-    ChatMessagePacket.class,
-    PlayerJoinPacket.class,
-    PlayerLeavePacket.class
 );
 ```
 
-## Usage Tips
-
-- **Protocol stability:** always specify `@PacketID` manually; otherwise, renaming a class changes its ID.
-    
-- **Performance:** packets are queued and processed asynchronously. You can call `dispatcher.handlePackets()` inside your game/main loop.
-    
-- **Thread safety:** uses `ConcurrentHashMap` and `ConcurrentLinkedQueue`, so packets can be processed across multiple receive threads.
+Handler получает соединение и пакет.
 
 ---
-## Summary
 
-- `NetPacket` = data unit + logic.
-    
-- `PacketDispatcher` = registration, reading, and processing
-    
-- The code becomes cleaner, more maintainable, and extensible.
+## Обработка пакета
+
+После чтения пакет можно передать dispatcher:
+
+``` java
+NetPacket packet = reader.readOrNull(data);
+if(packet != null)
+    dispatcher.dispatch(connection, packet);
+```
+
+Dispatcher автоматически находит обработчик нужного типа и вызывает его.
+
+---
+
+## Асинхронная обработка с Executor
+
+Событие `receive` вызывается из selector-потока, который нельзя нагружать.
+
+Если обработка пакетов может быть дорогой, можно передавать обработку пакетов **в отдельный поток**.
+
+``` java
+dispatcher.async(Executors.newSingleThreadExecutor());
+```
+
+Теперь все вызовы `dispatch()` **публикуются в Executor**, а основной I/O поток не блокируется.
+
+---
+
+## Батчинг пакетов
+
+Когда сервер начинает получать много маленьких пакетов, возникает проблема - каждый пакет вызывает отдельную обработку.
+
+Прочитанные за раз пакеты можно собирать **в одну группу** и обрабатывать вместе:
+
+``` java
+List<NetPacket> packetsBatch = new ArrayList<>();
+
+dispatcher.async(Executors.newFixedThreadPool(2));
+
+// собираем пакеты
+server.registerOnReceive((sender, data) -> {
+    reader.tryRead(data)
+        .ifPresent(packetsBatch::add);
+});
+
+// отправляем на обработку
+server.registerOnReadComplete(connection -> {
+    if(packetsBatch.isEmpty())
+        return;
+
+    dispatcher.dispatch(connection, packetsBatch);
+    packetsBatch.clear();
+});
+```
+
+Чтение произойдет из одного `connection`, а `onReadComplete` послужит сигналом завершения чтения.
+
+Внутри `PacketDispatcher` каждый пакет из батча будет передан своему обработчику в правильном порядке.
+
+Вся обработка Executor-ом пройдет за одно выполнение.
+
+---
+
+# Использование с TCPServer
+
+Пример обработки пакетов на сервере:
+
+``` java
+PacketReader reader = new PacketReader();
+PacketDispatcher dispatcher = new PacketDispatcher();
+
+reader.register(ChatMessagePacket.class);
+
+dispatcher.register(ChatMessagePacket.class,
+    (connection, packet) -> {
+        System.out.println(packet.getMessage());
+    }
+);
+
+TCPServer server = new TCPServer();
+
+server.registerOnReceive((connection, data) -> {
+    NetPacket packet = reader.readOrNull(data);
+    if(packet != null)
+        dispatcher.dispatch(connection, packet);
+});
+
+server.run(5410);
+```
+
+---
+
+# Отправка пакетов
+
+Пакет можно отправить напрямую:
+
+``` java
+client.send(new ChatMessagePacket("Hello"));
+```
+
+Пакет автоматически сериализуется в формат:
+
+```
+packetID + packetData
+```
+
+---
+
+# Когда использовать пакеты
+
+Пакеты полезны если:
+
+* используется собственный сетевой протокол
+* сообщения имеют структуру
+* требуется типобезопасная обработка
+
+Если приложение работает с сырыми `byte[]`,
+использование пакетов не требуется.
+
+---
+
+# Итог
+
+Система пакетов состоит из трёх компонентов:
+
+| Компонент          | Задача                    |
+|--------------------|---------------------------|
+| `NetPacket`        | Описание структуры пакета |
+| `PacketReader`     | Десериализация            |
+| `PacketDispatcher` | Маршрутизация пакетов     |
+
+Это позволяет построить типобезопасный протокол поверх TCP.
+
+---
+
+*[Главная страница](index.md)*
+
+*Следующая - [.]()*

@@ -7,6 +7,7 @@ import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.crypto.CipherPair;
 import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.listener.CloseReason;
+import generaloss.networkforge.tcp.listener.ErrorSource;
 import generaloss.networkforge.tcp.pipeline.EventPipeline;
 import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.resourceflow.ResUtils;
@@ -174,7 +175,7 @@ public class TCPConnection implements Sendable, Closeable {
         this.close(CloseReason.CLOSE_CONNECTION, null);
     }
 
-    protected void onConnectOp() {
+    protected void onConnected() {
         eventPipeline.fireConnect(this);
     }
 
@@ -239,12 +240,25 @@ public class TCPConnection implements Sendable, Closeable {
     }
 
     private void readOperationAvailable() {
-        final byte[] data = codec.read();
-        if(data == null)
-            return;
+        int readCount = 0;
 
-        final byte[] decryptedData = ciphers.decrypt(data);
-        eventPipeline.fireReceive(this, decryptedData);
+        while(true) {
+            final byte[] data = codec.read();
+            if(data == null)
+                break;
+
+            try {
+                final byte[] decryptedData = ciphers.decrypt(data);
+                eventPipeline.fireReceive(this, decryptedData);
+                readCount++;
+
+            } catch (IllegalStateException e) {
+                eventPipeline.fireError(this, ErrorSource.READ, e);
+            }
+        }
+
+        if(readCount > 0)
+            eventPipeline.fireReadComplete(this);
     }
 
     private void writeOperationAvailable() {

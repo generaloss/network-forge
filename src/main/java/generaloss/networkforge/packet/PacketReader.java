@@ -27,9 +27,9 @@ public class PacketReader {
             throw new IllegalArgumentException("Cannot register abstract net-packet class '" + packetClass.getSimpleName() + "'");
 
         final short packetID = NetPacket.calculatePacketID(packetClass);
-        // validate ID
+        // check duplicate
         if(factories.containsKey(packetID))
-            throw new IllegalStateException("Duplicate net-packet ID: " + packetID + " for '" + packetClass.getSimpleName() + "'");
+            throw new IllegalStateException("Factory already registered for net-packet '" + packetClass.getSimpleName() + "' (ID=" + packetID + ")");
 
         factories.put(packetID, factory);
         return this;
