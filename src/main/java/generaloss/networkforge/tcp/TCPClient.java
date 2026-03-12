@@ -56,43 +56,6 @@ public class TCPClient implements Sendable {
     }
 
 
-    public TCPClient setCodec(ConnectionCodec connectionCodec) {
-        if(connectionCodec == null)
-            throw new IllegalArgumentException("Argument 'connectionCodec' cannot be null");
-
-        this.connectionCodec = connectionCodec;
-        return this;
-    }
-
-    public TCPClient setCodec(CodecType codecType) {
-        if(codecType == null)
-            throw new IllegalArgumentException("Argument 'codecType' cannot be null");
-
-        this.connectionCodec = codecType.getFactory().create();
-        return this;
-    }
-
-    public TCPConnectionOptionsHolder getInitialOptions() {
-        return initialOptions;
-    }
-
-    public TCPClient setInitialOptions(TCPConnectionOptionsHolder initialOptions) {
-        if(initialOptions == null)
-            throw new IllegalArgumentException("Argument 'initialOptions' cannot be null");
-
-        this.initialOptions = initialOptions;
-        return this;
-    }
-
-    public EventPipeline getEventPipeline() {
-        return eventPipeline;
-    }
-
-    public TCPConnection getConnection() {
-        return connection;
-    }
-
-
     public TCPClient connect(SocketAddress socketAddress, int timeoutMillis) throws IOException, AlreadyConnectedException {
         if(state != ConnectionState.CLOSED)
             throw new AlreadyConnectedException();
@@ -228,19 +191,6 @@ public class TCPClient implements Sendable {
     }
 
 
-    public boolean isOpen() {
-        return (state == ConnectionState.CONNECTED);
-    }
-
-    public boolean isClosed() {
-        return (state != ConnectionState.CONNECTED);
-    }
-
-    public ConnectionState getState() {
-        return state;
-    }
-
-
     public void awaitWriteDrain(long timeoutMillis) throws InterruptedException {
         if(state == ConnectionState.CONNECTED)
             connection.awaitWriteDrain(timeoutMillis);
@@ -296,6 +246,58 @@ public class TCPClient implements Sendable {
     private void stop() {
         selectorLoop.close();
         state = ConnectionState.CLOSED;
+    }
+
+
+    public ConnectionState getState() {
+        return state;
+    }
+
+    public boolean isOpen() {
+        return (state == ConnectionState.CONNECTED);
+    }
+
+    public boolean isClosed() {
+        return (state != ConnectionState.CONNECTED);
+    }
+
+
+    public TCPClient setCodec(ConnectionCodec connectionCodec) {
+        if(connectionCodec == null)
+            throw new IllegalArgumentException("Argument 'connectionCodec' cannot be null");
+
+        this.connectionCodec = connectionCodec;
+        return this;
+    }
+
+    public TCPClient setCodec(CodecType codecType) {
+        if(codecType == null)
+            throw new IllegalArgumentException("Argument 'codecType' cannot be null");
+
+        this.connectionCodec = codecType.getFactory().create();
+        return this;
+    }
+
+
+    public TCPConnectionOptionsHolder getInitialOptions() {
+        return initialOptions;
+    }
+
+    public TCPClient setInitialOptions(TCPConnectionOptionsHolder initialOptions) {
+        if(initialOptions == null)
+            throw new IllegalArgumentException("Argument 'initialOptions' cannot be null");
+
+        this.initialOptions = initialOptions;
+        return this;
+    }
+
+
+    public EventPipeline getEventPipeline() {
+        return eventPipeline;
+    }
+
+    public TCPConnection getConnection() {
+        return connection;
     }
 
 

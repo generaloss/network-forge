@@ -58,8 +58,9 @@ public class ChatMessagePacket extends NetPacket {
 ```
 
 Каждый пакет определяет два метода:
+
 * `write()` - для сериализации данных
-* `read()` - для десериализации
+* `read()` - для десериализации.
 
 ---
 
@@ -71,7 +72,7 @@ public class ChatMessagePacket extends NetPacket {
 [ packetID ][ packet data... ]
 ```
 
-* `packetID` -  это `short`
+* `packetID` - это `short`
 * затем записываются данные пакета
 
 Метод `toByteArray()` автоматически записывает ID и вызывает `write()`.
@@ -103,7 +104,8 @@ public class LoginPacket extends NetPacket { ... }
 
 # Чтение пакетов
 
-Чтением пакетов занимается класс [PacketReader](/src/main/java/generaloss/networkforge/packet/PacketReader.java).
+Чтением пакетов занимается класс 
+[PacketReader](/src/main/java/generaloss/networkforge/packet/PacketReader.java).
 
 Он выполняет:
 
@@ -164,7 +166,7 @@ reader.registerAllFromPackageRecursive(
 NetPacket packet = reader.readOrNull(data);
 ```
 
-или подробно с исключениями:
+Или подробно с исключениями:
 
 ``` java
 try {
@@ -174,7 +176,7 @@ try {
 }
 ```
 
-или безопасно с помощью `Optional`:
+Или безопасно с помощью `Optional`:
 
 ``` java
 reader.tryRead(data).ifPresent(packet -> {
@@ -188,7 +190,8 @@ reader.tryRead(data).ifPresent(packet -> {
 
 После чтения пакет необходимо передать обработчику.
 
-Для этого используется [PacketDispatcher](/src/main/java/generaloss/networkforge/packet/PacketDispatcher.java).
+Для этого используется 
+[PacketDispatcher](/src/main/java/generaloss/networkforge/packet/PacketDispatcher.java).
 
 Dispatcher хранит таблицу:
 
@@ -244,7 +247,8 @@ dispatcher.async(Executors.newSingleThreadExecutor());
 
 ## Батчинг пакетов
 
-Когда сервер начинает получать много маленьких пакетов, возникает проблема - каждый пакет вызывает отдельную обработку.
+Когда сервер начинает получать много маленьких пакетов, возникает проблема: 
+каждый пакет вызывает отдельную обработку.
 
 Прочитанные за раз пакеты можно собирать **в одну группу** и обрабатывать вместе:
 
@@ -350,5 +354,3 @@ packetID + packetData
 ---
 
 *[Главная страница](index.md)*
-
-*Следующая - [.]()*

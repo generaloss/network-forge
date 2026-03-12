@@ -1,32 +1,32 @@
-# Пакеты
+# Packets
 
 ---
 
-## Что такое пакет
+## What is a packet
 
-TCP передаёт **просто поток байтов**.
+TCP transmits **just a stream of bytes**.
 
-Для большинства приложений удобнее работать не с сырыми байтами,
-а со структурированными сообщениями.
+For most applications it is more convenient to work not with raw bytes,
+but with structured messages.
 
-Для этого в библиотеке существует концепция **пакетов**.
+For this purpose the library provides the concept of **packets**.
 
-Пакет - это объект, который:
+A packet is an object that:
 
-* сериализуется в поток байтов
-* восстанавливается из потока
-* содержит структурированные данные.
+* serializes into a byte stream
+* can be reconstructed from the stream
+* contains structured data.
 
-Пакеты являются **дополнительным слоем поверх TCP**.
+Packets are an **additional layer on top of TCP**.
 
 ---
 
-## Базовый класс пакета
+## Base packet class
 
-Все пакеты наследуются от
+All packets inherit from  
 [NetPacket](/src/main/java/generaloss/networkforge/packet/NetPacket.java).
 
-Минимальный пакет выглядит так:
+A minimal packet looks like this:
 
 ```java
 @PacketID(0)
@@ -57,65 +57,67 @@ public class ChatMessagePacket extends NetPacket {
 }
 ```
 
-Каждый пакет определяет два метода:
-* `write()` - для сериализации данных
-* `read()` - для десериализации
+Each packet defines two methods:
+
+* `write()` - for serialization
+* `read()` - for deserialization.
 
 ---
 
-## Формат пакета
+## Packet format
 
-Каждый пакет в сети имеет следующий формат:
+Each packet sent over the network has the following format:
 
 ```
 [ packetID ][ packet data... ]
 ```
 
-* `packetID` -  это `short`
-* затем записываются данные пакета
+* `packetID` is a `short`
+* then the packet data is written
 
-Метод `toByteArray()` автоматически записывает ID и вызывает `write()`.
+The `toByteArray()` method automatically writes the ID and calls `write()`.
 
 ---
 
-## ID пакетов
+## Packet IDs
 
-Каждый пакет имеет уникальный `packetID`.
+Each packet has a unique `packetID`.
 
-Его можно задать явно:
+It can be specified explicitly:
 
 ``` java
 @PacketID(5)
 public class LoginPacket extends NetPacket { ... }
 ```
 
-Если аннотация отсутствует, ID вычисляется автоматически
-из имени класса.
+If the annotation is absent, the ID is automatically calculated
+from the class name.
 
-Это удобно для:
+This is convenient for:
 
-* быстрых прототипов
-* внутренних протоколов
+* quick prototypes
+* internal protocols
 
-Для стабильных протоколов рекомендуется задавать ID вручную.
-
----
-
-# Чтение пакетов
-
-Чтением пакетов занимается класс [PacketReader](/src/main/java/generaloss/networkforge/packet/PacketReader.java).
-
-Он выполняет:
-
-1. чтение `packetID`
-2. создание объекта пакета
-3. десериализацию данных
+For stable protocols it is recommended to assign IDs manually.
 
 ---
 
-## Регистрация пакетов
+# Reading packets
 
-Перед чтением пакеты необходимо зарегистрировать.
+Packet reading is handled by the class
+[PacketReader](/src/main/java/generaloss/networkforge/packet/PacketReader.java).
+
+It performs:
+
+1. reading the `packetID`
+2. creating the packet object
+3. deserializing the data
+
+---
+
+## Packet registration
+
+Before reading packets, they must be registered.
 
 ``` java
 PacketReader reader = new PacketReader();
@@ -124,24 +126,24 @@ reader.register(ChatMessagePacket.class);
 reader.register(LoginPacket.class);
 ```
 
-Регистрация связывает:
+Registration creates a mapping:
 
 ```
 packetID → factory
 ```
 
-Factory используется для создания экземпляра пакета.
-Его можно задавать вручную:
+The factory is used to create packet instances.
+It can also be specified manually:
 
 ``` java
-reader.register(ChatMessagePacket.class, ChatMessagePacket:new);
+reader.register(ChatMessagePacket.class, ChatMessagePacket::new);
 ```
 
 ---
 
-## Автоматическая регистрация
+## Automatic registration
 
-Можно автоматически зарегистрировать пакеты из package:
+Packets can be automatically registered from a package:
 
 ``` java
 reader.registerAllFromPackageRecursive(
@@ -149,22 +151,22 @@ reader.registerAllFromPackageRecursive(
 );
 ```
 
-Будут найдены все классы:
+All classes will be discovered that:
 
-* наследующие `NetPacket`
-* не являющиеся `abstract`.
+* inherit from `NetPacket`
+* are not `abstract`.
 
 ---
 
-## Чтение пакета
+## Reading a packet
 
-После регистрации пакеты можно читать:
+After registration, packets can be read:
 
-``` java
+```java
 NetPacket packet = reader.readOrNull(data);
 ```
 
-или подробно с исключениями:
+Or with exceptions:
 
 ``` java
 try {
@@ -174,7 +176,7 @@ try {
 }
 ```
 
-или безопасно с помощью `Optional`:
+Or safely using `Optional`:
 
 ``` java
 reader.tryRead(data).ifPresent(packet -> {
@@ -184,13 +186,14 @@ reader.tryRead(data).ifPresent(packet -> {
 
 ---
 
-# Обработка пакетов
+# Packet handling
 
-После чтения пакет необходимо передать обработчику.
+After reading, the packet must be passed to a handler.
 
-Для этого используется [PacketDispatcher](/src/main/java/generaloss/networkforge/packet/PacketDispatcher.java).
+For this purpose there is
+[PacketDispatcher](/src/main/java/generaloss/networkforge/packet/PacketDispatcher.java).
 
-Dispatcher хранит таблицу:
+The dispatcher maintains a table:
 
 ```
 packetClass → handler
@@ -198,7 +201,7 @@ packetClass → handler
 
 ---
 
-## Регистрация обработчиков
+## Registering handlers
 
 ``` java
 PacketDispatcher dispatcher = new PacketDispatcher();
@@ -210,13 +213,13 @@ dispatcher.register(ChatMessagePacket.class,
 );
 ```
 
-Handler получает соединение и пакет.
+The handler receives the connection and the packet.
 
 ---
 
-## Обработка пакета
+## Dispatching a packet
 
-После чтения пакет можно передать dispatcher:
+After reading, the packet can be passed to the dispatcher:
 
 ``` java
 NetPacket packet = reader.readOrNull(data);
@@ -224,42 +227,43 @@ if(packet != null)
     dispatcher.dispatch(connection, packet);
 ```
 
-Dispatcher автоматически находит обработчик нужного типа и вызывает его.
+The dispatcher automatically finds the correct handler and invokes it.
 
 ---
 
-## Асинхронная обработка с Executor
+## Asynchronous processing with Executor
 
-Событие `receive` вызывается из selector-потока, который нельзя нагружать.
+The `receive` event is executed from the selector thread, which should not be heavily loaded.
 
-Если обработка пакетов может быть дорогой, можно передавать обработку пакетов **в отдельный поток**.
+If packet processing may be expensive, you can delegate packet handling **to another thread**.
 
 ``` java
 dispatcher.async(Executors.newSingleThreadExecutor());
 ```
 
-Теперь все вызовы `dispatch()` **публикуются в Executor**, а основной I/O поток не блокируется.
+Now every `dispatch()` call is **published to the Executor**, and the main I/O thread is not blocked.
 
 ---
 
-## Батчинг пакетов
+## Packet batching
 
-Когда сервер начинает получать много маленьких пакетов, возникает проблема - каждый пакет вызывает отдельную обработку.
+When a server starts receiving many small packets, a problem appears:
+each packet triggers a separate processing call.
 
-Прочитанные за раз пакеты можно собирать **в одну группу** и обрабатывать вместе:
+Packets read during the same read cycle can be collected **into a batch** and processed together:
 
 ``` java
 List<NetPacket> packetsBatch = new ArrayList<>();
 
 dispatcher.async(Executors.newFixedThreadPool(2));
 
-// собираем пакеты
+// collect packets
 server.registerOnReceive((sender, data) -> {
     reader.tryRead(data)
         .ifPresent(packetsBatch::add);
 });
 
-// отправляем на обработку
+// dispatch them
 server.registerOnReadComplete(connection -> {
     if(packetsBatch.isEmpty())
         return;
@@ -269,17 +273,17 @@ server.registerOnReadComplete(connection -> {
 });
 ```
 
-Чтение произойдет из одного `connection`, а `onReadComplete` послужит сигналом завершения чтения.
+Reading happens from a single `connection`, and `onReadComplete` acts as the signal that reading is finished.
 
-Внутри `PacketDispatcher` каждый пакет из батча будет передан своему обработчику в правильном порядке.
+Inside `PacketDispatcher`, each packet in the batch will be routed to its handler in the correct order.
 
-Вся обработка Executor-ом пройдет за одно выполнение.
+All processing performed by the Executor happens within a single task execution.
 
 ---
 
-# Использование с TCPServer
+# Using with TCPServer
 
-Пример обработки пакетов на сервере:
+Example of packet handling on a server:
 
 ``` java
 PacketReader reader = new PacketReader();
@@ -306,15 +310,15 @@ server.run(5410);
 
 ---
 
-# Отправка пакетов
+# Sending packets
 
-Пакет можно отправить напрямую:
+A packet can be sent directly:
 
 ``` java
 client.send(new ChatMessagePacket("Hello"));
 ```
 
-Пакет автоматически сериализуется в формат:
+The packet is automatically serialized into the format:
 
 ```
 packetID + packetData
@@ -322,33 +326,31 @@ packetID + packetData
 
 ---
 
-# Когда использовать пакеты
+# When to use packets
 
-Пакеты полезны если:
+Packets are useful if:
 
-* используется собственный сетевой протокол
-* сообщения имеют структуру
-* требуется типобезопасная обработка
+* a custom network protocol is used
+* messages have structure
+* type-safe handling is required
 
-Если приложение работает с сырыми `byte[]`,
-использование пакетов не требуется.
-
----
-
-# Итог
-
-Система пакетов состоит из трёх компонентов:
-
-| Компонент          | Задача                    |
-|--------------------|---------------------------|
-| `NetPacket`        | Описание структуры пакета |
-| `PacketReader`     | Десериализация            |
-| `PacketDispatcher` | Маршрутизация пакетов     |
-
-Это позволяет построить типобезопасный протокол поверх TCP.
+If the application works directly with raw `byte[]`,
+using packets is not required.
 
 ---
 
-*[Главная страница](index.md)*
+# Summary
 
-*Следующая - [.]()*
+The packet system consists of three components:
+
+| Component          | Responsibility              |
+|--------------------|-----------------------------|
+| `NetPacket`        | Packet structure definition |
+| `PacketReader`     | Deserialization             |
+| `PacketDispatcher` | Packet routing              |
+
+This allows building a type-safe protocol on top of TCP.
+
+---
+
+*[Main Page](index.md)*
