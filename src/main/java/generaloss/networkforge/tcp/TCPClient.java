@@ -8,7 +8,6 @@ import generaloss.networkforge.tcp.listener.ListenersHolder;
 import generaloss.networkforge.tcp.pipeline.EventPipeline;
 import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.packet.NetPacket;
-import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
 import java.io.IOException;
@@ -18,8 +17,9 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 
 public class TCPClient implements Sendable {
@@ -36,9 +36,8 @@ public class TCPClient implements Sendable {
     private volatile TCPConnection connection;
     
     private volatile ConnectionState state;
-
-    private volatile SocketChannel channel;
-    private final AsyncConnectState asyncConnect;
+    private final SyncSocketConnector syncConnector;
+    private final Map<SocketChannel, AsyncSocketConnector> asyncConnectors;
 
     public TCPClient() {
         this.setCodec(CodecType.DEFAULT);
@@ -52,7 +51,8 @@ public class TCPClient implements Sendable {
         this.eventPipeline = new EventPipeline(listeners);
 
         this.state = ConnectionState.CLOSED;
-        this.asyncConnect = new AsyncConnectState();
+        this.syncConnector = new SyncSocketConnector();
+        this.asyncConnectors = new ConcurrentHashMap<>();
     }
 
 
@@ -63,8 +63,10 @@ public class TCPClient implements Sendable {
         state = ConnectionState.CONNECTING;
 
         // channel
-        channel = SocketChannel.open();
+        final SocketChannel channel = SocketChannel.open();
         initialOptions.applyPreConnect(channel);
+
+        syncConnector.set(channel);
 
         // blocking connect
         channel.configureBlocking(true);
@@ -73,7 +75,7 @@ public class TCPClient implements Sendable {
 
         // create non-blocking connection
         selectorLoop.open();
-        this.createConnection();
+        this.createTCPConnection(channel);
         this.startSelectorLoop();
 
         return this;
@@ -99,24 +101,30 @@ public class TCPClient implements Sendable {
         state = ConnectionState.CONNECTING;
 
         // channel
-        channel = SocketChannel.open();
+        final SocketChannel channel = SocketChannel.open();
         initialOptions.applyPreConnect(channel);
         channel.configureBlocking(false);
+
+        final AsyncSocketConnector connector = new AsyncSocketConnector(channel, timeoutMillis);
+        asyncConnectors.put(channel, connector);
+        System.out.println("  connectAsync() created async connector (" + asyncConnectors.size() + ")");
 
         // try instant connect
         final boolean connected = channel.connect(socketAddress);
         selectorLoop.open();
 
-        asyncConnect.begin(timeoutMillis);
         if(connected) {
-            this.createConnection();
-            asyncConnect.end(connection);
+            this.createTCPConnection(channel);
+            this.completeConnector(connector, connection);
+            System.out.println("  instant connect");
         } else {
             selectorLoop.registerConnectKey(channel);
+            System.out.println(" register connect key");
         }
         this.startSelectorLoop();
+        System.out.println("  start selector loop");
 
-        return asyncConnect.future;
+        return connector.getResultFuture();
     }
 
     public CompletableFuture<TCPConnection> connectAsync(SocketAddress socketAddress) throws IOException, AlreadyConnectedException  {
@@ -138,114 +146,155 @@ public class TCPClient implements Sendable {
     }
 
     private long getNextSelectionTimeout() {
-        if(!asyncConnect.hasDeadline)
-            return 0L;
+        System.out.println("  getNextSelectionTimeout()");
+        long minMillisLeft = Long.MAX_VALUE;
+        for(AsyncSocketConnector connector : asyncConnectors.values()) {
+            if(!connector.hasDeadline())
+                continue;
 
-        final long nanosLeft = (asyncConnect.deadlineNanos - System.nanoTime());
-        final long millisLeft = TimeUnit.NANOSECONDS.toMillis(nanosLeft);
+            final long millisLeft = (connector.getDeadlineMillis() - System.currentTimeMillis());
 
-        if(millisLeft <= 0L) {
-            if(asyncConnect.active && state == ConnectionState.CONNECTING)
-                this.abortAsyncConnect(new TimeoutException());
-            return 0L;
+            System.out.println("  getNextSelectionTimeout() connector " + connector + " left=" + millisLeft + "ms with state=" + state);
+
+            if(millisLeft <= 0L) {
+                if(state == ConnectionState.CONNECTING) {
+                    asyncConnectors.remove(connector.getChannel());
+                    System.out.println("  getNextSelectionTimeout() removed async connector (" + asyncConnectors.size() + ")");
+
+                    if(asyncConnectors.isEmpty()) {
+                        connector.getResultFuture().completeExceptionally(new TimeoutException());
+                        this.close();
+                        System.out.println("  getNextSelectionTimeout() future exeception + null");
+                    }
+                }
+                continue;
+            }
+
+            minMillisLeft = Math.min(minMillisLeft, millisLeft);
         }
+        if(minMillisLeft == Long.MAX_VALUE)
+            return 0L;
 
-        return millisLeft;
+        System.out.println("  getNextSelectionTimeout() next selector timeout: " + minMillisLeft);
+
+        return minMillisLeft;
     }
 
     private void onKeySelected(SelectionKey key) {
+        System.out.println("  onKeySelected(" + key.toString() + ") {");
         if(state == ConnectionState.CONNECTED) {
+            System.out.println("    onKeySelected() stage CONNECT-ED");
             connection.onKeySelected();
         }
         else if(state == ConnectionState.CONNECTING && key.isConnectable()) {
-            channel = (SocketChannel) key.channel();
+            System.out.println("    onKeySelected() stage CONNECT-ING");
+            final SocketChannel channel = (SocketChannel) key.channel();
+            final AsyncSocketConnector connector = asyncConnectors.get(channel);
 
             try {
+                System.out.println("      onKeySelected() [try] finishConnect()");
                 channel.finishConnect();
+
+                if(!channel.isConnected() || !channel.isOpen()) {
+                    System.out.println("      onKeySelected() [try] finishConnect() failed");
+                    asyncConnectors.remove(channel);
+
+                    if(asyncConnectors.isEmpty()) {
+                        connector.getResultFuture().completeExceptionally(new IOException("Connection closed during connect"));
+                        System.out.println("      onKeySelected() [try] future exception + null");
+                    }
+                    return;
+                }
+
+                System.out.println("      onKeySelected() [try] finishConnect() success");
+
                 key.interestOpsAnd(~SelectionKey.OP_CONNECT);
                 key.selector().wakeup();
-                this.createConnection();
-                asyncConnect.end(connection);
+                this.createTCPConnection(channel);
+                this.completeConnector(connector, connection);
+                System.out.println("      onKeySelected() [try] future complete! + null");
 
             } catch (IOException e) {
-                this.abortAsyncConnect(e);
+                System.out.println("      onKeySelected() [catch]");
+                eventPipeline.fireError(null, ErrorSource.CONNECT, e);
+
+                asyncConnectors.remove(channel);
+                System.out.println("        onKeySelected() [catch] removed async connector (" + asyncConnectors.size() + ")");
+
+                if(asyncConnectors.isEmpty()) {
+                    connector.getResultFuture().completeExceptionally(e);
+                    System.out.println("        onKeySelected() [catch] future exeption + null");
+                }
             }
         }
     }
 
-    private void createConnection() throws IOException {
+    private void createTCPConnection(SocketChannel channel) throws IOException {
         initialOptions.applyPostConnect(channel);
 
         final SelectionKey key = selectorLoop.registerReadKey(channel);
 
         connection = new TCPConnection(channel, key, connectionCodec, eventPipeline);
-        connection.setName(this.makeConnectionName());
+        final String name = (CLASS_NAME + "-connection-#" + this.hashCode());
+        connection.setName(name);
         initialOptions.copyTo(connection.getOptions());
 
         state = ConnectionState.CONNECTED;
         connection.onConnected();
     }
 
-    private String makeConnectionName() {
-        return (CLASS_NAME + "-connection-#" + this.hashCode());
+
+    private void completeConnector(AsyncSocketConnector connector, TCPConnection connection) {
+        connector.getResultFuture().complete(connection);
+        asyncConnectors.remove(connector.getChannel());
+        this.clearConnectors();
     }
 
+    private void clearConnectors() {
+        syncConnector.cancel();
 
-    public void awaitWriteDrain(long timeoutMillis) throws InterruptedException {
-        if(state == ConnectionState.CONNECTED)
-            connection.awaitWriteDrain(timeoutMillis);
+        for(AsyncSocketConnector connector : asyncConnectors.values())
+            connector.cancel();
+        System.out.println("  clearConnectors() cleared async connectors " + asyncConnectors.size());
+        asyncConnectors.clear();
     }
 
 
     public void close() {
         if(state == ConnectionState.CONNECTED) {
-            this.closeConnection();
+            System.out.println("  close() close connection");
+            state = ConnectionState.CLOSING;
+
+            connection.close(CloseReason.CLOSE_CLIENT, null); // will call onConnectionClosed(...)
+
+            this.flushState();
         } else if(state == ConnectionState.CONNECTING) {
-            if(asyncConnect.active) {
-                this.abortAsyncConnect();
-            } else {
-                this.abortConnect();
-            }
-        }
-    }
+            System.out.println("  close() abort connection");
+            state = ConnectionState.CLOSING;
 
-    private void closeConnection() {
-        state = ConnectionState.CLOSING;
-        connection.close(CloseReason.CLOSE_CLIENT, null); // will call onConnectionClosed(...)
-        this.stop();
-    }
+            this.clearConnectors();
+            System.out.println("  close() future cancel + null");
 
-    private void abortConnect() {
-        state = ConnectionState.CLOSING;
-        ResUtils.close(channel);
-        channel = null;
-        this.stop();
-    }
-
-    private void abortAsyncConnect(Exception e) {
-        this.abortConnect();
-        asyncConnect.end(e);
-        eventPipeline.fireError(null, ErrorSource.CONNECT, e);
-    }
-
-    private void abortAsyncConnect() {
-        this.abortConnect();
-        asyncConnect.end();
+            this.flushState();
+        } else
+            System.out.println("  close() executed when " + state);
     }
 
     private void onConnectionClosed(TCPConnection connection, CloseReason reason, Exception e) {
-        // is that was client close
+        // client close call
         if(reason == CloseReason.CLOSE_CLIENT)
             return;
 
-        // calls when occurs: TCPConnection internal error
+        // close by other side / error
         state = ConnectionState.CLOSING;
-        this.stop();
+        this.flushState();
     }
 
-    private void stop() {
+    private void flushState() {
         selectorLoop.close();
+        connection = null;
         state = ConnectionState.CLOSED;
+        System.out.println("    flushState()");
     }
 
 
@@ -363,39 +412,45 @@ public class TCPClient implements Sendable {
     }
 
 
+    public void awaitWriteDrain(long timeoutMillis) throws InterruptedException {
+        if(state == ConnectionState.CONNECTED)
+            connection.awaitWriteDrain(timeoutMillis);
+    }
+
+
     @Override
     public boolean send(byte[] data) {
-        if(state != ConnectionState.CONNECTED)
-            return false;
-        return connection.send(data);
+        if(state == ConnectionState.CONNECTED)
+            return connection.send(data);
+        return false;
     }
 
     @Override
     public boolean send(ByteBuffer buffer) {
-        if(state != ConnectionState.CONNECTED)
-            return false;
-        return connection.send(buffer);
+        if(state == ConnectionState.CONNECTED)
+            return connection.send(buffer);
+        return false;
     }
 
     @Override
     public boolean send(String string) {
-        if(state != ConnectionState.CONNECTED)
-            return false;
-        return connection.send(string);
+        if(state == ConnectionState.CONNECTED)
+            return connection.send(string);
+        return false;
     }
 
     @Override
     public boolean send(BinaryStreamWriter streamWriter) {
-        if(state != ConnectionState.CONNECTED)
-            return false;
-        return connection.send(streamWriter);
+        if(state == ConnectionState.CONNECTED)
+            return connection.send(streamWriter);
+        return false;
     }
 
     @Override
     public boolean send(NetPacket packet) {
-        if(state != ConnectionState.CONNECTED)
-            return false;
-        return connection.send(packet);
+        if(state == ConnectionState.CONNECTED)
+            return connection.send(packet);
+        return false;
     }
 
 }

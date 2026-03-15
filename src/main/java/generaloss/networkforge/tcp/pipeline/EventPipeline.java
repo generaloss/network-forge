@@ -37,7 +37,7 @@ public class EventPipeline extends EventHandlerRegistry {
             throw new RuntimeException("Argument 'connection' cannot be null");
 
         if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
-            target.invokeConnect(connection);
+            target.invokeOnConnect(connection);
             return;
         }
 
@@ -60,7 +60,7 @@ public class EventPipeline extends EventHandlerRegistry {
             throw new RuntimeException("Argument 'connection' cannot be null");
 
         if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
-            target.invokeDisconnect(connection, reason, e);
+            target.invokeOnDisconnect(connection, reason, e);
             return;
         }
 
@@ -85,7 +85,7 @@ public class EventPipeline extends EventHandlerRegistry {
             throw new RuntimeException("Argument 'data' cannot be null");
 
         if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
-            target.invokeReceive(connection, data);
+            target.invokeOnReceive(connection, data);
             return;
         }
 
@@ -107,7 +107,7 @@ public class EventPipeline extends EventHandlerRegistry {
             throw new RuntimeException("Argument 'connection' cannot be null");
 
         if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
-            target.invokeReadComplete(connection);
+            target.invokeOnReadComplete(connection);
             return;
         }
 
@@ -131,7 +131,7 @@ public class EventPipeline extends EventHandlerRegistry {
         if(data == null)
             throw new RuntimeException("Argument 'data' cannot be null");
 
-        target.invokeSend(connection, data);
+        target.invokeOnSend(connection, data);
 
         if(this.isNoHandlersFor(handlers, handlerIndexFrom))
             return connection.sendDirect(data);
@@ -233,7 +233,7 @@ public class EventPipeline extends EventHandlerRegistry {
         // Argument 'connection' can be null
 
         if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
-            target.invokeError(connection, source, throwable);
+            target.invokeOnError(connection, source, throwable);
             return;
         }
 

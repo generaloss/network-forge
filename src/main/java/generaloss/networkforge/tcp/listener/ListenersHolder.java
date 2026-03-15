@@ -2,7 +2,8 @@ package generaloss.networkforge.tcp.listener;
 
 import generaloss.networkforge.tcp.TCPConnection;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class ListenersHolder {
@@ -15,12 +16,12 @@ public class ListenersHolder {
     private final List<DataListener> sendListeners;
 
     public ListenersHolder() {
-        this.connectListeners = new LinkedList<>();
-        this.disconnectListener = new LinkedList<>();
-        this.receiveListeners = new LinkedList<>();
-        this.readCompleteListeners = new LinkedList<>();
-        this.errorListeners = new LinkedList<>();
-        this.sendListeners = new LinkedList<>();
+        this.connectListeners = Collections.synchronizedList(new ArrayList<>());
+        this.disconnectListener = Collections.synchronizedList(new ArrayList<>());
+        this.receiveListeners = Collections.synchronizedList(new ArrayList<>());
+        this.readCompleteListeners = Collections.synchronizedList(new ArrayList<>());
+        this.errorListeners = Collections.synchronizedList(new ArrayList<>());
+        this.sendListeners = Collections.synchronizedList(new ArrayList<>());
     }
 
     public void registerOnConnect(TCPConnectionConsumer onConnect) {
@@ -73,32 +74,32 @@ public class ListenersHolder {
     }
 
 
-    public void invokeConnect(TCPConnection connection) {
+    public void invokeOnConnect(TCPConnection connection) {
         for(TCPConnectionConsumer onConnect : connectListeners)
             onConnect.accept(connection);
     }
 
-    public void invokeDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
+    public void invokeOnDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
         for(DisconnectListener onDisconnect : disconnectListener)
             onDisconnect.onDisconnect(connection, reason, e);
     }
 
-    public void invokeReceive(TCPConnection connection, byte[] data) {
+    public void invokeOnReceive(TCPConnection connection, byte[] data) {
         for(DataListener onReceive : receiveListeners)
             onReceive.onData(connection, data);
     }
 
-    public void invokeReadComplete(TCPConnection connection) {
+    public void invokeOnReadComplete(TCPConnection connection) {
         for(TCPConnectionConsumer onReadComplete : readCompleteListeners)
             onReadComplete.accept(connection);
     }
 
-    public void invokeError(TCPConnection connection, ErrorSource source, Throwable throwable) {
+    public void invokeOnError(TCPConnection connection, ErrorSource source, Throwable throwable) {
         for(ErrorListener onError : errorListeners)
             onError.onError(connection, source, throwable);
     }
 
-    public void invokeSend(TCPConnection connection, byte[] data) {
+    public void invokeOnSend(TCPConnection connection, byte[] data) {
         for(DataListener onSend : sendListeners)
             onSend.onData(connection, data);
     }

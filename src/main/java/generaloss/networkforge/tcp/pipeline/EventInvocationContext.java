@@ -47,7 +47,7 @@ public class EventInvocationContext {
 
     protected boolean invokeConnect() {
         if(handlerIndex == handlersShapshot.length) {
-            pipeline.getTarget().invokeConnect(connection);
+            pipeline.getTarget().invokeOnConnect(connection);
             return false; // break
         }
         
@@ -63,7 +63,7 @@ public class EventInvocationContext {
 
     protected boolean invokeDisconnect(CloseReason reason, Exception e) {
         if(handlerIndex == handlersShapshot.length) {
-            pipeline.getTarget().invokeDisconnect(connection, reason, e);
+            pipeline.getTarget().invokeOnDisconnect(connection, reason, e);
             return false; // break
         }
         
@@ -79,7 +79,7 @@ public class EventInvocationContext {
 
     protected boolean invokeReceive(byte[] data) {
         if(handlerIndex == handlersShapshot.length) {
-            pipeline.getTarget().invokeReceive(connection, data);
+            pipeline.getTarget().invokeOnReceive(connection, data);
             return false; // break
         }
         
@@ -95,7 +95,7 @@ public class EventInvocationContext {
 
     protected boolean invokeReadComplete() {
         if(handlerIndex == handlersShapshot.length) {
-            pipeline.getTarget().invokeReadComplete(connection);
+            pipeline.getTarget().invokeOnReadComplete(connection);
             return false; // break
         }
 
@@ -111,7 +111,7 @@ public class EventInvocationContext {
 
     protected boolean invokeError(ErrorSource source, Throwable throwable) {
         if(handlerIndex == handlersShapshot.length) {
-            pipeline.getTarget().invokeError(connection, source, throwable);
+            pipeline.getTarget().invokeOnError(connection, source, throwable);
             return false; // break
         }
         

@@ -161,13 +161,17 @@ public class TCPConnection implements Sendable, Closeable {
     }
 
     public void close(CloseReason reason, Exception e) {
-        if(!channel.isOpen())
+        System.out.println("    TCPConnection.close()");
+        if(!channel.isOpen()) {
+            System.out.println("    TCPConnection.close() when channel is not open");
             return;
+        }
 
         key.cancel();
         ResUtils.close(channel);
 
         eventPipeline.fireDisconnect(this, reason, e);
+        System.out.println("    TCPConnection.fireDisconnect('" + reason + "', " + e + ")");
     }
 
     @Override

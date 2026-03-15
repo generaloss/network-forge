@@ -13,20 +13,41 @@ public class SelectorLoop {
 
     private volatile Selector selector;
     private volatile Thread selectorThread;
+    private final Object openLock;
+
+    public SelectorLoop() {
+        this.openLock = new Object();
+    }
+
 
     public void open() throws IOException {
-        selector = Selector.open();
+        synchronized (openLock) {
+            if(selector == null)
+                selector = Selector.open();
+        }
     }
 
     public void close() {
-        if(selector != null)
-            selector.wakeup();
+        synchronized (openLock) {
+            if(selectorThread != null)
+                selectorThread.interrupt();
 
-        if(selectorThread != null)
-            selectorThread.interrupt();
+            if(selector != null)
+                selector.wakeup();
 
-        ResUtils.close(selector);
-        selector = null;
+            // wait interrupted
+            if(selectorThread != null) {
+                System.out.println("  wait thread interrupt");
+                try {
+                    selectorThread.join();
+                } catch(InterruptedException ignored) { }
+                System.out.println("  thread interrupted");
+            }
+
+            ResUtils.close(selector);
+            selector = null;
+            selectorThread = null;
+        }
     }
 
     private SelectionKey registerKey(AbstractSelectableChannel channel, int ops) throws ClosedChannelException {
@@ -49,13 +70,16 @@ public class SelectorLoop {
 
 
     public void startSelectionLoopThread(String threadName, SelectionKeyConsumer onKeySelected, LongSupplier nextTimeoutGetter) {
+        if(selectorThread != null)
+            return;
+
         selectorThread = new Thread(() -> {
-            while(!Thread.interrupted()) {
+            while(!Thread.currentThread().isInterrupted()) {
                 try {
                     this.selectKeys(onKeySelected, nextTimeoutGetter);
                 } catch(ClosedSelectorException | CancelledKeyException | NullPointerException ignored) {
                 } catch (Exception e) {
-                    //noinspection CallToPrintStackTrace
+                    // noinspection CallToPrintStackTrace
                     e.printStackTrace();
                 }
             }

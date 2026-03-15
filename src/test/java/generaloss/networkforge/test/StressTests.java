@@ -38,11 +38,13 @@ public class StressTests {
         final AtomicInteger counter = new AtomicInteger();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnConnect((connection) -> counter.incrementAndGet());
         server.registerOnDisconnect((connection, reason, e) -> counter.incrementAndGet());
         server.run(5401);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         for(int i = 0; i < reconnectsNum; i++){
             client.connectAsync("localhost", 5401);
             TimeUtils.waitFor(client::isOpen, 3000, () -> {
@@ -59,10 +61,11 @@ public class StressTests {
     @Test
     public void reconnect_client_2() throws Exception {
         TimeUtils.delayMillis(100);
-        final int reconnectsNum = 100;
-        final AtomicInteger counter = new AtomicInteger();
+        final var reconnectsNum = 100;
+        final var counter = new AtomicInteger();
 
-        final TCPServer server = new TCPServer();
+        final var server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnConnect((connection) -> {
             counter.incrementAndGet();
             connection.close();
@@ -70,23 +73,32 @@ public class StressTests {
         server.registerOnDisconnect((connection, reason, e) -> counter.incrementAndGet());
         server.run(5402);
 
-        final AtomicBoolean disconnected = new AtomicBoolean();
+        final var disconnected = new AtomicBoolean();
 
-        final TCPClient client = new TCPClient();
-        client.registerOnDisconnect((connection, reason, e) -> disconnected.set(true));
+        final var client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
+        client.registerOnDisconnect((connection, reason, e) -> {
+            System.out.println("          ON DISCONNECT");
+            disconnected.set(true);
+        });
+
         for(int i = 0; i < reconnectsNum; i++) {
-            var future = client.connectAsync("localhost", 5402);
+            System.out.println("STAGE connect " + i);
+            final var future = client.connectAsync("localhost", 5402);
+            System.out.println("STAGE wait connect " + i);
             TimeUtils.waitFor(future::isDone, 8000, () -> {
                 server.close();
                 Assert.fail();
             });
+            System.out.println("STAGE disconnect " + i);
             client.close();
-
+            System.out.println("STAGE wait disconnect " + i);
             TimeUtils.waitFor(disconnected::get, 8000, () -> {
                 server.close();
                 Assert.fail();
             });
             disconnected.set(false);
+            System.out.println("STAGE next cycle " + i);
         }
 
         TimeUtils.waitFor(() -> counter.get() == reconnectsNum * 2, 500, () -> {
@@ -103,10 +115,12 @@ public class StressTests {
         final AtomicBoolean closed = new AtomicBoolean();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnConnect(TCPConnection::close);
         server.run(5403);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.registerOnDisconnect((connection, reason, e) -> closed.set(true));
         client.connect("localhost", 5403);
 
@@ -124,10 +138,12 @@ public class StressTests {
         final AtomicBoolean closed = new AtomicBoolean();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnDisconnect((connection, reason, e) -> closed.set(true));
         server.run(5404);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.connectAsync("localhost", 5404);
         TimeUtils.waitFor(client::isOpen, 3000, () -> {
             server.close();
@@ -151,6 +167,7 @@ public class StressTests {
         final AtomicBoolean hasNotEqual = new AtomicBoolean();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.getEventPipeline().addHandlerFirst(new DeflateHandler());
         server.registerOnReceive((sender, bytes) -> {
             final String received = new String(bytes);
@@ -166,6 +183,7 @@ public class StressTests {
         final int iterations = 10000;
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.getEventPipeline().addHandlerFirst(new DeflateHandler());
         client.registerOnConnect(connection -> {
             for(int i = 0; i < iterations; i++)
@@ -189,10 +207,12 @@ public class StressTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnConnect((connection) -> connection.send(message));
         server.run(5406);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.registerOnReceive((connection, bytes) -> {
             result.set(new String(bytes));
             connection.close();
@@ -218,6 +238,7 @@ public class StressTests {
         options.setMaxFrameSize(message.length());
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.setInitialOptions(options);
         server.registerOnReceive((sender, bytes) -> {
             result.set(new String(bytes));
@@ -226,6 +247,7 @@ public class StressTests {
         server.run(5407);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.setInitialOptions(options);
         client.connect("localhost", 5407);
 
@@ -247,6 +269,7 @@ public class StressTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnReceive((sender, bytes) -> {
             result.set(new String(bytes));
             sender.close();
@@ -259,6 +282,7 @@ public class StressTests {
         server.run(5408);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.connect("localhost", 5408);
 
         client.send(message.repeat(2)); // reach bytes limit => will be ignored
@@ -282,6 +306,7 @@ public class StressTests {
         final AtomicBoolean hasNotEqual = new AtomicBoolean();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnReceive((sender, bytes) -> {
             final String received = new String(bytes);
             if(!received.equals(message))
@@ -293,6 +318,7 @@ public class StressTests {
         final ConcurrentLinkedQueue<TCPClient> clients = new ConcurrentLinkedQueue<>();
         for(int i = 0; i < clientsAmount; i++){
             final TCPClient client = new TCPClient();
+            client.registerOnError(ErrorListener::printError);
             client.connect("localhost", 5409);
             clients.add(client);
         }
@@ -335,6 +361,7 @@ public class StressTests {
         final Executor executor = Executors.newSingleThreadExecutor();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnReceive((sender, data) -> {
             packetReader.tryRead(data).ifPresent(
                 (packet) -> packetDispatcher.dispatch(sender, packet)
@@ -343,6 +370,7 @@ public class StressTests {
         server.run(5410);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.connect("localhost", 5410);
 
         client.send(new TestMessagePacket(message));
@@ -372,6 +400,7 @@ public class StressTests {
         packetDispatcher.register(TestDisconnectPacket.class, (connection, packet) -> counter.incrementAndGet());
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnReceive((sender, data) -> {
             packetReader.tryRead(data).ifPresent(
                 (packet) -> packetDispatcher.dispatch(sender, packet)
@@ -380,6 +409,7 @@ public class StressTests {
         server.run(5411);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.connect("localhost", 5411);
 
         client.send(new TestMessagePacket("Hello, World!").createStreamWriter());
@@ -411,23 +441,23 @@ public class StressTests {
         });
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.getEventPipeline().addHandlerFirst(new ServerSecureHandler());
         server.registerOnReceive((sender, data) -> {
             packetReader.tryRead(data).ifPresent(
                 (packet) -> packetDispatcher.dispatch(sender, packet)
             );
         });
-        server.registerOnError(ErrorListener::printError);
         server.run(5412);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.getEventPipeline().addHandlerFirst(new ClientSecureHandler());
         client.connect("localhost", 5412);
         client.registerOnConnect(connection -> {
             client.send(new TestMessagePacket(message));
             client.send(new TestMessagePacket(message));
         });
-        client.registerOnError(ErrorListener::printError);
 
         TimeUtils.waitFor(() -> (counter.get() == 2), 3000, () -> {
             client.close();
@@ -445,6 +475,7 @@ public class StressTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnReceive((sender, bytes) -> {
             result.set(new String(bytes));
             sender.close();
@@ -452,6 +483,7 @@ public class StressTests {
         server.run(5413);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.connect("localhost", 5413);
         client.send(message);
 
@@ -475,6 +507,7 @@ public class StressTests {
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnConnect((connection) -> connection.getCiphers().setCiphers(encryptCipher, decryptCipher));
         server.registerOnReceive((sender, bytes) -> {
             result.set(new String(bytes));
@@ -483,6 +516,7 @@ public class StressTests {
         server.run(5414);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.registerOnConnect((connection) -> {
             connection.getCiphers().setCiphers(encryptCipher, decryptCipher);
             client.send(message);
@@ -511,6 +545,7 @@ public class StressTests {
         final AtomicBoolean hasNotEqual = new AtomicBoolean();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnConnect((connection) -> connection.getCiphers().setCiphers(encryptCipher, decryptCipher));
         server.registerOnReceive((sender, bytes) -> {
             final String received = new String(bytes);
@@ -524,6 +559,7 @@ public class StressTests {
         server.run(5415, 5416);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.registerOnConnect((connection) -> connection.getCiphers().setCiphers(encryptCipher, decryptCipher));
         client.connect("localhost", 5415 + (int) Math.round(Math.random()));
 
@@ -543,11 +579,13 @@ public class StressTests {
     @Test
     public void async_connect_timeout() throws Exception {
         TimeUtils.delayMillis(100);
+
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
 
         final long timeoutMillis = 1000L;
 
-        CompletableFuture<TCPConnection> future = client.connectAsync("google.com", 65000, timeoutMillis);
+        final CompletableFuture<TCPConnection> future = client.connectAsync("google.com", 65000, timeoutMillis);
 
         try {
             // noinspection resource
@@ -561,7 +599,9 @@ public class StressTests {
     @Test
     public void send_zero_length_payload_framed() throws Exception {
         TimeUtils.delayMillis(100);
+
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.setCodecFactory(CodecType.FRAMED);
         server.registerOnReceive((c, data) -> {
             if(data.length == 0)
@@ -570,6 +610,7 @@ public class StressTests {
         server.run(5417);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.setCodec(CodecType.FRAMED);
         client.connect("localhost", 5417);
         client.send(new byte[0]);
@@ -585,11 +626,12 @@ public class StressTests {
     public void one_client_multithreaded_send_storm() throws Exception {
         TimeUtils.delayMillis(100);
 
-        AtomicInteger counter = new AtomicInteger();
+        final AtomicInteger counter = new AtomicInteger();
         final byte[] testData = new byte[] { 54 };
         final int sends = 512;
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.setCodecFactory(CodecType.FRAMED);
         server.registerOnReceive((c, data) -> {
             if(data.length == 1 && data[0] == testData[0])
@@ -598,6 +640,7 @@ public class StressTests {
         server.run(5418);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.setCodec(CodecType.FRAMED);
         client.connect("localhost", 5418);
 
@@ -625,11 +668,12 @@ public class StressTests {
     public void multithreaded_send_storm() throws Exception {
         TimeUtils.delayMillis(100);
 
-        AtomicInteger counter = new AtomicInteger();
+        final AtomicInteger counter = new AtomicInteger();
         final byte[] testData = new byte[] { 54 };
         final int sends = 512;
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.setCodecFactory(CodecType.FRAMED);
         server.registerOnReceive((c, data) -> {
             if(data.length == 1 && data[0] == testData[0])
@@ -642,6 +686,7 @@ public class StressTests {
             final Thread thread = new Thread(() -> {
                 try {
                     final TCPClient client = new TCPClient();
+                    client.registerOnError(ErrorListener::printError);
                     client.connect("localhost", 5419);
                     client.send(testData);
                     client.close();
@@ -672,6 +717,7 @@ public class StressTests {
         final AtomicInteger counter = new AtomicInteger();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnDisconnect((connection, reason, e) -> {
             if(reason == CloseReason.CLOSE_BY_OTHER_SIDE) {
                 final int count = counter.incrementAndGet();
@@ -684,6 +730,7 @@ public class StressTests {
         server.run(5420);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         for(int i = 0; i < iterations; i++) {
             client.connect("localhost", 5420);
             client.close();
@@ -701,6 +748,7 @@ public class StressTests {
         TimeUtils.delayMillis(100);
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.setInitialOptions(
             (TCPConnectionOptionsHolder) new TCPConnectionOptionsHolder().setLinger(1)
         );
@@ -711,6 +759,7 @@ public class StressTests {
         server.run(5421);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         // send => Handler_2 => Handler_1     => Server
         // send => A.        => A. (ch.by_h2) => A. (ch.by_h2) (ch.by_h1)
         //         send      => A. B.         => A. B. (ch.by_h1)
@@ -769,6 +818,7 @@ public class StressTests {
         final List<NetPacket> packetsBatchList = new ArrayList<>();
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnReceive((sender, data) -> {
             packetReader.tryRead(data)
                 .ifPresent(packetsBatchList::add);
@@ -785,6 +835,7 @@ public class StressTests {
         server.run(5422);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.connect("localhost", 5422);
 
         for(int i = 0; i < sendCount; i++)
@@ -820,6 +871,7 @@ public class StressTests {
         });
 
         final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
         server.registerOnReceive((sender, data) -> {
             final NetPacket packet = packetReader.readOrNull(data);
             if(packet != null)
@@ -828,6 +880,7 @@ public class StressTests {
         server.run(5423);
 
         final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
         client.connect("localhost", 5423);
 
         for(int i = 0; i < sendCount; i++)
