@@ -2,6 +2,157 @@
 
 ---
 
+## Запуск `TCPServer`
+
+### Несколько портов одновременно
+
+Сервер умеет слушать сразу несколько адресов:
+
+``` java
+server.run(InetSocketAddress... addresses);
+server.run(String hostname, int... ports);
+server.run(int... ports);
+```
+
+Примеры:
+
+``` java
+server.run(8080, 8081, 8082);
+server.run("localhost", 9000, 9001);
+```
+
+---
+
+### Автоматический выбор порта
+
+Если указать `0`, операционная система сама выберет свободный порт:
+
+``` java
+server.run(0);
+// или
+server.run();
+```
+
+Получить выбранный порт:
+
+```java
+final int port = server.getPorts()[0];
+```
+
+Несколько случайных портов:
+
+``` java
+server.run(0, 0);
+
+final int[] ports = server.getPorts();
+final int port1 = ports[0];
+final int port2 = ports[1];
+```
+
+---
+
+## Подключение клиента
+
+### Блокирующее подключение
+
+```j ava
+client.connect(SocketAddress address, long timeoutMs);
+client.connect(SocketAddress address);
+
+client.connect(String hostname, int port, long timeoutMs);
+client.connect(String hostname, int port);
+```
+
+---
+
+### Асинхронное подключение
+
+``` java
+CompletableFuture<TCPConnection> future;
+
+future = client.connectAsync(SocketAddress address, long timeoutMs);
+future = client.connectAsync(SocketAddress address);
+
+future = client.connectAsync(String hostname, int port, long timeoutMs);
+future = client.connectAsync(String hostname, int port);
+```
+
+---
+
+### Подключение к самому быстрому серверу
+
+Если есть несколько адресов и нужно выбрать тот, кто ответит первым:
+
+``` java
+CompletableFuture<TCPConnection> future;
+
+future = client.connectFastest(SocketAddress[] addresses, long timeoutMs);
+future = client.connectFastest(SocketAddress[] addresses);
+```
+
+---
+
+## Опции соединения
+
+``` java
+TCPConnectionOptionsHolder options = new TCPConnectionOptionsHolder();
+
+// Socket options
+options.setLinger(1);
+options.setTcpNoDelay(true);
+
+// Library options
+options.setMaxReadFrameSize(8 * 1024 * 1024); // 8 MB
+options.setFrameBufferSizeUpperBound(...);
+```
+
+**Важно про `setFrameBufferSizeUpperBound()`**
+
+* Используется только в `Framed` кодеке (`FramedTCPConnectionCodec`).
+* Ограничивает рост буфера чтения:
+* Если задано, буфер может сжиматься после получения больших пакетов данных;
+* Если значение = `0`, буфер никогда не уменьшается.
+
+### Применение опций
+
+#### Для сервера
+
+``` java
+TCPServer server = new TCPServer();
+server.setInitialOptions(options);
+server.run(5555);
+```
+
+Все новые соединения будут создаваться с этими настройками.
+
+#### Для клиента
+
+``` java
+TCPClient client = new TCPClient();
+client.setInitialOptions(options);
+client.connect("localhost", 5555);
+```
+
+Опции применяются к следующему подключению.
+
+---
+
+## Отладка и диагностика
+
+Минимальный способ включить логирование ошибок:
+
+``` java
+TCPClient client = new TCPClient();
+client.registerOnError(ErrorListener::printError);
+
+TCPServer server = new TCPServer();
+server.registerOnError(ErrorListener::printError);
+```
+
+Это позволит увидеть ошибки в пайплайне и обработчиках.
+
+---
+
 ## Attachment
 
 Каждое `TCPConnection` может хранить **произвольный объект**, привязанный к соединению.
@@ -50,7 +201,7 @@ server.registerOnReceive((connection, data) -> {
 Для этого используется:
 
 ``` java
-connection.awaitWriteDrain(timeoutMillis);
+connection.awaitWriteDrain(timeoutMs);
 ```
 
 ### Пример

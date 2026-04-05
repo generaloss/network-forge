@@ -79,9 +79,9 @@ public class ListenersHolder {
             onConnect.accept(connection);
     }
 
-    public void invokeOnDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
+    public void invokeOnDisconnect(TCPConnection connection, CloseReason reason) {
         for(DisconnectListener onDisconnect : disconnectListener)
-            onDisconnect.onDisconnect(connection, reason, e);
+            onDisconnect.onDisconnect(connection, reason);
     }
 
     public void invokeOnReceive(TCPConnection connection, byte[] data) {

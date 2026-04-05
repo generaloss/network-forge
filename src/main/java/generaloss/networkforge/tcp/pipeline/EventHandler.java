@@ -9,7 +9,7 @@ public abstract class EventHandler {
         return true;
     }
 
-    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason, Exception e) {
+    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason) {
         return true;
     }
 

@@ -87,7 +87,7 @@ public class ServerSecureHandler extends EventHandler {
 
             final byte[] keyBytes = privateEncryptCipher.doFinal(encryptedSecretKeyBytes);
 
-            try{
+            try {
                 // key
                 final SecretKey key = new SecretKeySpec(keyBytes, "AES");
 
@@ -114,7 +114,7 @@ public class ServerSecureHandler extends EventHandler {
 
                 context.connect();
 
-            }catch(NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
+            } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e){
                 throw new RuntimeException(e);
             }
 
@@ -144,7 +144,7 @@ public class ServerSecureHandler extends EventHandler {
     }
 
     @Override
-    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason, Exception e) {
+    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason) {
         final TCPConnection connection = context.getConnection();
         handshakeCompleted.remove(connection);
         pendingDataMap.remove(connection);

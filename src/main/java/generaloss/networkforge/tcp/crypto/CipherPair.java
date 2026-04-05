@@ -51,7 +51,7 @@ public class CipherPair {
         synchronized (encryptLock) {
             try {
                 return cipher.doFinal(data);
-            }catch(Exception e){
+            } catch (Exception e){
                 throw new IllegalStateException("Encryption error", e);
             }
         }
@@ -68,7 +68,7 @@ public class CipherPair {
         synchronized (decryptLock) {
             try {
                 return cipher.doFinal(data);
-            }catch(IllegalBlockSizeException | BadPaddingException e){
+            } catch (IllegalBlockSizeException | BadPaddingException e){
                 throw new IllegalStateException("Decryption error", e);
             }
         }

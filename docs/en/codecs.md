@@ -25,12 +25,12 @@ To set a codec for `TCPClient`, use:
 
 ``` java
 client.setCodec(CodecType); // Enum
-client.setCodec(ConnectionCodec connectionCodec); // Existing or custom implementations
+client.setCodec(ConnectionCodecFactory codecFactory); // Factory for existing or custom implementations
 ```
 
 The same applies to individual `TCPConnection` instances.
 
-For `TCPServer`:
+Similarly, for `TCPServer`:
 
 ``` java
 server.setCodecFactory(CodecType codecType); // Enum

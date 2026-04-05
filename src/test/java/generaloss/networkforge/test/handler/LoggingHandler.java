@@ -13,7 +13,7 @@ public class LoggingHandler extends EventHandler {
     }
 
     @Override
-    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason, Exception e) {
+    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason) {
         System.out.println("Disconnected: " + reason);
         return true;
     }
@@ -21,6 +21,12 @@ public class LoggingHandler extends EventHandler {
     @Override
     public boolean handleReceive(EventInvocationContext context, byte[] data) {
         System.out.println("Received " + data.length + " bytes");
+        return true;
+    }
+
+    @Override
+    public boolean handleReadComplete(EventInvocationContext context) {
+        System.out.println("Read complete");
         return true;
     }
 

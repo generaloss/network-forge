@@ -7,13 +7,12 @@ import java.io.IOException;
 import java.nio.channels.*;
 import java.nio.channels.spi.AbstractSelectableChannel;
 import java.util.Set;
-import java.util.function.LongSupplier;
 
 public class SelectorLoop {
 
+    private final Object openLock;
     private volatile Selector selector;
     private volatile Thread selectorThread;
-    private final Object openLock;
 
     public SelectorLoop() {
         this.openLock = new Object();
@@ -37,11 +36,9 @@ public class SelectorLoop {
 
             // wait interrupted
             if(selectorThread != null) {
-                System.out.println("  wait thread interrupt");
                 try {
                     selectorThread.join();
-                } catch(InterruptedException ignored) { }
-                System.out.println("  thread interrupted");
+                } catch (InterruptedException ignored) { }
             }
 
             ResUtils.close(selector);
@@ -69,15 +66,16 @@ public class SelectorLoop {
     }
 
 
-    public void startSelectionLoopThread(String threadName, SelectionKeyConsumer onKeySelected, LongSupplier nextTimeoutGetter) {
+    public void startLoopThread(String threadName, SelectionKeyConsumer onKeySelected) {
         if(selectorThread != null)
             return;
 
         selectorThread = new Thread(() -> {
             while(!Thread.currentThread().isInterrupted()) {
                 try {
-                    this.selectKeys(onKeySelected, nextTimeoutGetter);
-                } catch(ClosedSelectorException | CancelledKeyException | NullPointerException ignored) {
+                    if(selector != null)
+                        this.selectKeys(onKeySelected);
+                } catch (ClosedSelectorException | CancelledKeyException | NullPointerException ignored) {
                 } catch (Exception e) {
                     // noinspection CallToPrintStackTrace
                     e.printStackTrace();
@@ -89,30 +87,18 @@ public class SelectorLoop {
         selectorThread.start();
     }
 
-    public void startSelectionLoopThread(String threadName, SelectionKeyConsumer onKeySelected) {
-        final LongSupplier defaultTimeoutGetter = () -> 0L;
-        this.startSelectionLoopThread(threadName, onKeySelected, defaultTimeoutGetter);
-    }
-
-    public void selectKeys(SelectionKeyConsumer onKeySelected, LongSupplier nextTimeoutGetter) throws Exception {
-        if(selector == null)
-            return;
-
+    public void selectKeys(SelectionKeyConsumer onKeySelected) throws Exception {
         try {
-            final long timeoutMillis = nextTimeoutGetter.getAsLong();
-            if(timeoutMillis > 0L) {
-                selector.select(timeoutMillis);
-            } else {
-                selector.select();
-            }
+            // there's ~1% chance that the selector will not wake up
+            // after the other side closes connection
+            // so timeout is must have
+            selector.select(); // 100L - OR ISN'T?
         } catch (IOException ignored) {
             return;
         }
 
-        if(selector == null)
-            return;
-
         final Set<SelectionKey> selectedKeys = selector.selectedKeys();
+
         for(SelectionKey key : selectedKeys)
             if(key.isValid())
                 onKeySelected.accept(key); // may throw any exception

@@ -2,31 +2,31 @@ package generaloss.networkforge.tcp.codec;
 
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.CloseReason;
+import generaloss.networkforge.tcp.listener.ErrorSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 
 public class StreamConnectionCodec implements ConnectionCodec {
 
     private static final String CLASS_NAME = StreamConnectionCodec.class.getSimpleName();
     private static final int DATA_BUFFER_SIZE = 8192; // 8 kb
 
-    private TCPConnection connection;
-    private ByteStreamWriter writer;
-    private ByteStreamReader reader;
+    private final TCPConnection connection;
+    private final ByteStreamWriter writer;
+    private final ByteStreamReader reader;
 
     private final ByteBuffer dataBuffer;
 
-    public StreamConnectionCodec() {
-        this.dataBuffer = ByteBuffer.allocate(DATA_BUFFER_SIZE);
-    }
-
-    @Override
-    public void setup(TCPConnection connection, ByteStreamWriter writer, ByteStreamReader reader) {
+    public StreamConnectionCodec(TCPConnection connection, ByteStreamWriter writer, ByteStreamReader reader) {
         this.connection = connection;
         this.writer = writer;
         this.reader = reader;
+
+        this.dataBuffer = ByteBuffer.allocate(DATA_BUFFER_SIZE);
     }
 
     public boolean write(byte[] data) {
@@ -61,9 +61,13 @@ public class StreamConnectionCodec implements ConnectionCodec {
         // write
         try {
             writer.write(buffer);
-            return true;
+            return true; // success
+
+        } catch (ClosedChannelException | SocketException ignored) {
+            return false;
         } catch (IOException e) {
-            connection.close(CloseReason.INTERNAL_ERROR, e);
+            connection.getEventPipeline().fireError(connection, ErrorSource.SELECTOR_WRITE, e);
+            connection.close(CloseReason.INTERNAL_ERROR);
             return false;
         }
     }
@@ -94,7 +98,7 @@ public class StreamConnectionCodec implements ConnectionCodec {
                 if(bytesStream.size() > connection.getOptions().getMaxReadFrameSize()) {
                     // close connection
                     if(connection.getOptions().isCloseOnFrameReadSizeExceed())
-                        connection.close(CloseReason.FRAME_READ_SIZE_LIMIT_EXCEEDED, null);
+                        connection.close(CloseReason.FRAME_READ_SIZE_LIMIT_EXCEEDED);
 
                     this.discardAvailableBytes();
                     return null;
@@ -103,7 +107,7 @@ public class StreamConnectionCodec implements ConnectionCodec {
 
             // check remote close
             if(length == -1) {
-                connection.close(CloseReason.CLOSE_BY_OTHER_SIDE, null);
+                connection.close(CloseReason.CLOSE_BY_OTHER_SIDE);
                 return null;
             }
 
@@ -112,8 +116,11 @@ public class StreamConnectionCodec implements ConnectionCodec {
 
             return bytesStream.toByteArray();
 
+        } catch (ClosedChannelException | SocketException ignored) {
+            return null;
         } catch (IOException e) {
-            connection.close(CloseReason.INTERNAL_ERROR, e);
+            connection.getEventPipeline().fireError(connection, ErrorSource.SELECTOR_READ, e);
+            connection.close(CloseReason.INTERNAL_ERROR);
             return null;
         }
     }
@@ -129,7 +136,7 @@ public class StreamConnectionCodec implements ConnectionCodec {
                 return;
             // check remote close
             if(read == -1) {
-                connection.close(CloseReason.CLOSE_BY_OTHER_SIDE, null);
+                connection.close(CloseReason.CLOSE_BY_OTHER_SIDE);
                 return;
             }
         }

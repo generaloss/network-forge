@@ -109,7 +109,7 @@ public class PacketReader {
     public <P extends NetPacket> P readOrNull(byte[] data) {
         try {
             return this.read(data);
-        } catch(IOException | IllegalStateException ignored) {
+        } catch (IOException | IllegalStateException ignored) {
             return null;
         }
     }
@@ -118,7 +118,7 @@ public class PacketReader {
         try {
             final P packet = this.read(data);
             return Optional.of(packet);
-        } catch(IOException | IllegalStateException ignored) {
+        } catch (IOException | IllegalStateException ignored) {
             return Optional.empty();
         }
     }

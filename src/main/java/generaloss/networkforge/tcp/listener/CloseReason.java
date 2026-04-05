@@ -2,24 +2,20 @@ package generaloss.networkforge.tcp.listener;
 
 public enum CloseReason {
 
-    ASYNC_CONNECT_ERROR            (true,  "Asynchronous connect error occurred"    , true),
-    ASYNC_CONNECT_TIMEOUT          (true,  "Asynchronous connect timeout"           , false),
-    CLOSE_CONNECTION               (false, "Connection closed"                      , false),
-    CLOSE_CLIENT                   (false, "Client closed"                          , false),
-    CLOSE_SERVER                   (false, "Server closed"                          , false),
-    CLOSE_BY_OTHER_SIDE            (false, "Connection closed by the other side"    , false),
-    FRAME_READ_SIZE_LIMIT_EXCEEDED (true,  "Frame read size limit has been exceeded", false),
-    INVALID_FRAME_SIZE             (true,  "Invalid packet size"                    , false),
-    INTERNAL_ERROR                 (true,  "Internal error occurred"                , true);
+    CLOSE_CONNECTION               (false, "Close connection"                       ),
+    CLOSE_CLIENT                   (false, "Close client"                           ),
+    CLOSE_SERVER                   (false, "Close server"                           ),
+    CLOSE_BY_OTHER_SIDE            (false, "Connection closed by the other side"    ),
+    FRAME_READ_SIZE_LIMIT_EXCEEDED (true,  "Frame read size limit has been exceeded"),
+    INVALID_FRAME_SIZE             (true,  "Invalid packet size"                    ),
+    INTERNAL_ERROR                 (true,  "Internal error occurred"                );
 
     private final boolean isError;
     private final String message;
-    private final boolean hasException;
 
-    CloseReason(boolean isError, String message, boolean hasException) {
+    CloseReason(boolean isError, String message) {
         this.isError = isError;
         this.message = message;
-        this.hasException = hasException;
     }
 
     public boolean isError() {
@@ -28,10 +24,6 @@ public enum CloseReason {
 
     public String getMessage() {
         return message;
-    }
-
-    public boolean hasException() {
-        return hasException;
     }
 
     @Override

@@ -16,24 +16,24 @@ public abstract class NetPacket {
         this.ID = NetPacket.calculatePacketID(this.getClass());
     }
 
-    public short getPacketID() {
+    public final short getPacketID() {
         return ID;
     }
 
 
-    abstract protected void write(BinaryOutputStream stream) throws IOException;
+    protected void write(BinaryOutputStream stream) throws IOException { }
 
-    abstract protected void read(BinaryInputStream stream) throws IOException;
+    protected void read(BinaryInputStream stream) throws IOException { }
 
 
-    public BinaryStreamWriter createStreamWriter() {
+    public final BinaryStreamWriter createStreamWriter() {
         return (stream) -> {
             stream.writeShort(ID);
             this.write(stream);
         };
     }
 
-    public byte[] toByteArray() throws IOException {
+    public final byte[] toByteArray() throws IOException {
         final BinaryStreamWriter streamWriter = this.createStreamWriter();
         return BinaryStreamWriter.toByteArray(streamWriter);
     }

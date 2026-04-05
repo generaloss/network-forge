@@ -1,6 +1,5 @@
 package generaloss.networkforge.tcp;
 
-import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.codec.ConnectionCodecFactory;
 import generaloss.networkforge.tcp.codec.CodecType;
 import generaloss.networkforge.tcp.listener.*;
@@ -51,13 +50,172 @@ public class TCPServer {
 
         this.listeners = new ListenersHolder();
         this.listeners.registerOnDisconnect(
-            (connection, reason, e) -> connections.remove(connection)
+            (connection, _reason) -> connections.remove(connection)
         );
 
         this.eventPipeline = new EventPipeline(listeners);
 
         this.serverChannels = new ServerSocketChannel[0];
         this.pendingConnectionsLimit = 128;
+    }
+
+
+    public synchronized TCPServer run(InetSocketAddress... addresses) throws IOException, IllegalStateException {
+        if(addresses.length < 1)
+            throw new IllegalArgumentException("At least one address must be specified");
+
+        if(this.isRunning())
+            throw new IllegalStateException("TCP server is already running");
+
+        connections.clear();
+        selectorLoop.open();
+
+        serverChannels = new ServerSocketChannel[addresses.length];
+        for(int i = 0; i < addresses.length; i++) {
+            final InetSocketAddress address = addresses[i];
+
+            final ServerSocketChannel serverChannel = ServerSocketChannel.open();
+            initialOptions.applyServerPreBind(serverChannel);
+
+            try {
+                serverChannel.bind(address, pendingConnectionsLimit);
+            } catch (BindException e) {
+                throw new BindException("Failed to bind TCP server to address '" + address + "': " + e.getMessage());
+            }
+
+            serverChannel.configureBlocking(false);
+            selectorLoop.registerAcceptKey(serverChannel);
+
+            serverChannels[i] = serverChannel;
+        }
+
+        selectorLoop.startLoopThread(this.makeSelectorThreadName(), this::onKeySelected);
+
+        running = true;
+        return this;
+    }
+
+    private String makeSelectorThreadName() {
+        return (CLASS_NAME + "-selector-thread-#" + this.hashCode());
+    }
+
+    public TCPServer run(String hostname, int... ports) throws IOException, IllegalStateException {
+        final InetSocketAddress[] addresses = new InetSocketAddress[ports.length];
+        for(int i = 0; i < ports.length; i++)
+            addresses[i] = new InetSocketAddress(hostname, ports[i]);
+
+        return this.run(addresses);
+    }
+
+    public TCPServer run(int... ports) throws IOException, IllegalStateException {
+        return this.run("0.0.0.0", ports);
+    }
+
+    public TCPServer run() throws IOException, IllegalStateException {
+        return this.run(0);
+    }
+
+
+    private void onKeySelected(SelectionKey key) {
+        if(key == null)
+            return;
+
+        if(key.isAcceptable()) {
+            this.acceptNewConnection((ServerSocketChannel) key.channel());
+            return;
+        }
+
+        final TCPConnection connection = ((TCPConnection) key.attachment());
+        connection.onKeySelected();
+    }
+
+    private void acceptNewConnection(ServerSocketChannel serverChannel) {
+        try {
+            final SocketChannel channel = serverChannel.accept();
+            if(channel == null)
+                return;
+
+            channel.configureBlocking(false);
+            initialOptions.applyPostConnect(channel);
+
+            final SelectionKey key = selectorLoop.registerReadKey(channel);
+
+            final TCPConnection connection = new TCPConnection(channel, key, codecFactory, eventPipeline);
+            connection.setName(this.makeConnectionName());
+            initialOptions.copyTo(connection.getOptions());
+            key.attach(connection);
+
+            connections.add(connection);
+
+            connection.onConnected();
+        } catch (IOException e) {
+            eventPipeline.fireError(null, ErrorSource.CONNECT, e);
+        }
+    }
+
+    private String makeConnectionName() {
+        final int number = connectionCounter.getAndIncrement();
+        return (CLASS_NAME + "-connection-" + number);
+    }
+
+
+    public synchronized TCPServer close() {
+        if(!running)
+            return this;
+
+        running = false;
+
+        selectorLoop.close();
+
+        for(TCPConnection connection : connections)
+            connection.close(CloseReason.CLOSE_SERVER);
+        connections.clear();
+
+        for(ServerSocketChannel serverChannel : serverChannels)
+            ResUtils.close(serverChannel);
+        serverChannels = new ServerSocketChannel[0];
+
+        return this;
+    }
+
+
+    public ServerSocketChannel[] getServerChannels() {
+        return serverChannels;
+    }
+    
+    public synchronized InetSocketAddress[] getLocalAddresses() {
+        final InetSocketAddress[] addresses = new InetSocketAddress[serverChannels.length];
+        try {
+            for(int i = 0; i < addresses.length; i++)
+                addresses[i] = (InetSocketAddress) serverChannels[i].getLocalAddress();
+        } catch(IOException e) {
+            return new InetSocketAddress[0];
+        }
+        return addresses;
+    }
+    
+    public int[] getPorts() {
+        final InetSocketAddress[] addresses = this.getLocalAddresses();
+        
+        final int[] ports = new int[addresses.length];
+        for(int i = 0; i < addresses.length; i++)
+            ports[i] = addresses[i].getPort();
+        
+        return ports;
+    }
+
+
+    public Collection<TCPConnection> getConnections() {
+        return connections;
+    }
+    
+
+    public boolean isRunning() {
+        return running;
+    }
+
+    public boolean isClosed() {
+        return !running;
     }
 
 
@@ -165,134 +323,6 @@ public class TCPServer {
 
     public int getPendingConnectionsLimit() {
         return pendingConnectionsLimit;
-    }
-
-
-    public TCPServer run(InetSocketAddress... addresses) throws IOException, IllegalStateException {
-        if(addresses.length < 1)
-            throw new IllegalArgumentException("At least one address must be specified");
-
-        if(this.isRunning())
-            throw new IllegalStateException("TCP server is already running");
-
-        connections.clear();
-        selectorLoop.open();
-
-        serverChannels = new ServerSocketChannel[addresses.length];
-        for(int i = 0; i < addresses.length; i++) {
-            final InetSocketAddress address = addresses[i];
-
-            final ServerSocketChannel serverChannel = ServerSocketChannel.open();
-            initialOptions.applyServerPreBind(serverChannel);
-
-            try {
-                serverChannel.bind(address, pendingConnectionsLimit);
-            } catch (BindException e) {
-                throw new BindException("Failed to bind TCP server to address '" + address + "': " + e.getMessage());
-            }
-
-            serverChannel.configureBlocking(false);
-            selectorLoop.registerAcceptKey(serverChannel);
-
-            serverChannels[i] = serverChannel;
-        }
-
-        selectorLoop.startSelectionLoopThread(this.makeSelectorThreadName(), this::onKeySelected);
-
-        running = true;
-        return this;
-    }
-
-    private String makeSelectorThreadName() {
-        return (CLASS_NAME + "-selector-thread-#" + this.hashCode());
-    }
-
-    public TCPServer run(String hostname, int... ports) throws IOException, IllegalStateException {
-        final InetSocketAddress[] addresses = new InetSocketAddress[ports.length];
-        for(int i = 0; i < ports.length; i++)
-            addresses[i] = new InetSocketAddress(hostname, ports[i]);
-
-        return this.run(addresses);
-    }
-
-    public TCPServer run(int... ports) throws IOException, IllegalStateException {
-        return this.run("0.0.0.0", ports);
-    }
-
-
-    private void onKeySelected(SelectionKey key) {
-        if(key.isAcceptable()) {
-            this.acceptNewConnection((ServerSocketChannel) key.channel());
-            return;
-        }
-
-        final TCPConnection connection = ((TCPConnection) key.attachment());
-        connection.onKeySelected();
-    }
-
-    private void acceptNewConnection(ServerSocketChannel serverChannel) {
-        try {
-            final SocketChannel channel = serverChannel.accept();
-            if(channel == null)
-                return;
-
-            channel.configureBlocking(false);
-            initialOptions.applyPostConnect(channel);
-
-            final SelectionKey key = selectorLoop.registerReadKey(channel);
-
-            final ConnectionCodec codec = codecFactory.create();
-            if(codec == null)
-                throw new IllegalStateException("TCP-connection codec factory returned null");
-
-            final TCPConnection connection = new TCPConnection(channel, key, codec, eventPipeline);
-            connection.setName(this.makeConnectionName());
-            initialOptions.copyTo(connection.getOptions());
-            key.attach(connection);
-
-            connections.add(connection);
-
-            connection.onConnected();
-        } catch (IOException e) {
-            eventPipeline.fireError(null, ErrorSource.CONNECT, e);
-        }
-    }
-
-    private String makeConnectionName() {
-        final int number = connectionCounter.getAndIncrement();
-        return (CLASS_NAME + "-connection-" + number);
-    }
-
-
-    public Collection<TCPConnection> getConnections() {
-        return connections;
-    }
-
-    public boolean isRunning() {
-        return running;
-    }
-
-    public boolean isClosed() {
-        return !running;
-    }
-
-    public TCPServer close() {
-        if(!running)
-            return this;
-
-        running = false;
-
-        selectorLoop.close();
-
-        for(TCPConnection connection : connections)
-            connection.close(CloseReason.CLOSE_SERVER, null);
-        connections.clear();
-
-        for(ServerSocketChannel serverChannel : serverChannels)
-            ResUtils.close(serverChannel);
-        serverChannels = new ServerSocketChannel[0];
-
-        return this;
     }
 
 

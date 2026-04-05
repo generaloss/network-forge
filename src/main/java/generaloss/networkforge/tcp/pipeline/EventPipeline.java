@@ -54,13 +54,12 @@ public class EventPipeline extends EventHandlerRegistry {
     }
     
 
-    public void fireDisconnect(EventHandler[] handlers, int handlerIndexFrom,
-                               TCPConnection connection, CloseReason reason, Exception e) {
+    public void fireDisconnect(EventHandler[] handlers, int handlerIndexFrom, TCPConnection connection, CloseReason reason) {
         if(connection == null)
             throw new RuntimeException("Argument 'connection' cannot be null");
 
         if(this.isNoHandlersFor(handlers, handlerIndexFrom)) {
-            target.invokeOnDisconnect(connection, reason, e);
+            target.invokeOnDisconnect(connection, reason);
             return;
         }
 
@@ -68,12 +67,12 @@ public class EventPipeline extends EventHandlerRegistry {
         do {
             context.setHandlerIndex(handlerIndexFrom++);
         } while (
-            context.invokeDisconnect(reason, e)
+            context.invokeDisconnect(reason)
         );
     }
 
-    public void fireDisconnect(TCPConnection connection, CloseReason reason, Exception e) {
-        this.fireDisconnect(super.getHandlers(), 0, connection, reason, e);
+    public void fireDisconnect(TCPConnection connection, CloseReason reason) {
+        this.fireDisconnect(super.getHandlers(), 0, connection, reason);
     }
 
     
@@ -102,7 +101,8 @@ public class EventPipeline extends EventHandlerRegistry {
     }
 
 
-    public void fireReadComplete(EventHandler[] handlers, int handlerIndexFrom, TCPConnection connection) {
+    public void fireReadComplete(EventHandler[] handlers, int handlerIndexFrom,
+                                 TCPConnection connection) {
         if(connection == null)
             throw new RuntimeException("Argument 'connection' cannot be null");
 

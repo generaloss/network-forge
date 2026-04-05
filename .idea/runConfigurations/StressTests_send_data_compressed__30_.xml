@@ -1,0 +1,18 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="StressTests.send_data_compressed [30]" type="JUnit" factoryName="JUnit" nameIsGenerated="true" repeat_count="30" repeat_mode="N Times">
+    <module name="network-forge" />
+    <extension name="coverage">
+      <pattern>
+        <option name="PATTERN" value="generaloss.networkforge.test.*" />
+        <option name="ENABLED" value="true" />
+      </pattern>
+    </extension>
+    <option name="PACKAGE_NAME" value="generaloss.networkforge.test" />
+    <option name="MAIN_CLASS_NAME" value="generaloss.networkforge.test.StressTests" />
+    <option name="METHOD_NAME" value="send_data_compressed" />
+    <option name="TEST_OBJECT" value="method" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

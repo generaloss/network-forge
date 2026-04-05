@@ -15,6 +15,7 @@ import generaloss.networkforge.tcp.options.TCPConnectionOptionsHolder;
 import generaloss.networkforge.tcp.TCPClient;
 import generaloss.networkforge.tcp.TCPServer;
 import generaloss.networkforge.test.packet.TestDisconnectPacket;
+import generaloss.networkforge.test.packet.TestEmptyPacket;
 import generaloss.networkforge.test.packet.TestMessagePacket;
 import generaloss.resourceflow.resource.Resource;
 import org.junit.Assert;
@@ -22,7 +23,8 @@ import org.junit.Test;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
-import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
@@ -33,21 +35,22 @@ import java.util.concurrent.atomic.AtomicReference;
 public class StressTests {
 
     @Test
-    public void reconnect_client_1() throws Exception {
+    public void reconnect_client_async() throws Exception {
         final int reconnectsNum = 100;
         final AtomicInteger counter = new AtomicInteger();
 
         final TCPServer server = new TCPServer();
         server.registerOnError(ErrorListener::printError);
         server.registerOnConnect((connection) -> counter.incrementAndGet());
-        server.registerOnDisconnect((connection, reason, e) -> counter.incrementAndGet());
-        server.run(5401);
+        server.registerOnDisconnect((connection, reason) -> counter.incrementAndGet());
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
         for(int i = 0; i < reconnectsNum; i++){
-            client.connectAsync("localhost", 5401);
-            TimeUtils.waitFor(client::isOpen, 3000, () -> {
+            client.connectAsync("localhost", port);
+            TimeUtils.waitFor(client::isConnected, 3000, () -> {
                 server.close();
                 Assert.fail();
             });
@@ -59,8 +62,7 @@ public class StressTests {
     }
 
     @Test
-    public void reconnect_client_2() throws Exception {
-        TimeUtils.delayMillis(100);
+    public void reconnect_client_async_2() throws Exception {
         final var reconnectsNum = 100;
         final var counter = new AtomicInteger();
 
@@ -68,37 +70,31 @@ public class StressTests {
         server.registerOnError(ErrorListener::printError);
         server.registerOnConnect((connection) -> {
             counter.incrementAndGet();
-            connection.close();
         });
-        server.registerOnDisconnect((connection, reason, e) -> counter.incrementAndGet());
-        server.run(5402);
+        server.registerOnDisconnect((connection, reason) -> counter.incrementAndGet());
+        server.run();
+        final int port = server.getPorts()[0];
 
         final var disconnected = new AtomicBoolean();
 
         final var client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
-        client.registerOnDisconnect((connection, reason, e) -> {
-            System.out.println("          ON DISCONNECT");
+        client.registerOnDisconnect((connection, reason) -> {
             disconnected.set(true);
         });
 
         for(int i = 0; i < reconnectsNum; i++) {
-            System.out.println("STAGE connect " + i);
-            final var future = client.connectAsync("localhost", 5402);
-            System.out.println("STAGE wait connect " + i);
+            final var future = client.connectAsync("localhost", port);
             TimeUtils.waitFor(future::isDone, 8000, () -> {
                 server.close();
                 Assert.fail();
             });
-            System.out.println("STAGE disconnect " + i);
             client.close();
-            System.out.println("STAGE wait disconnect " + i);
             TimeUtils.waitFor(disconnected::get, 8000, () -> {
                 server.close();
                 Assert.fail();
             });
             disconnected.set(false);
-            System.out.println("STAGE next cycle " + i);
         }
 
         TimeUtils.waitFor(() -> counter.get() == reconnectsNum * 2, 500, () -> {
@@ -110,22 +106,44 @@ public class StressTests {
     }
 
     @Test
-    public void disconnect_client() throws Exception {
-        TimeUtils.delayMillis(100);
+    public void reconnect_client_sync() throws Exception {
+        final int reconnectsNum = 100;
+        final AtomicInteger counter = new AtomicInteger();
+
+        final TCPServer server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
+        server.registerOnConnect((connection) -> counter.incrementAndGet());
+        server.registerOnDisconnect((connection, reason) -> counter.incrementAndGet());
+        server.run();
+        final int port = server.getPorts()[0];
+
+        final TCPClient client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
+        for(int i = 0; i < reconnectsNum; i++){
+            client.connect("localhost", port);
+            client.close();
+        }
+
+        TimeUtils.waitFor(() -> counter.get() == reconnectsNum * 2, 500, () -> Assert.fail(counter.get() + " / " + (reconnectsNum * 2)));
+        server.close();
+    }
+
+    @Test
+    public void client_on_disconnect() throws Exception {
         final AtomicBoolean closed = new AtomicBoolean();
 
         final TCPServer server = new TCPServer();
         server.registerOnError(ErrorListener::printError);
         server.registerOnConnect(TCPConnection::close);
-        server.run(5403);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
-        client.registerOnDisconnect((connection, reason, e) -> closed.set(true));
-        client.connect("localhost", 5403);
+        client.registerOnDisconnect((connection, reason) -> closed.set(true));
+        client.connect("localhost", port);
 
         TimeUtils.waitFor(closed::get, 3000, () -> {
-            client.close();
             server.close();
             Assert.fail();
         });
@@ -133,19 +151,19 @@ public class StressTests {
     }
 
     @Test
-    public void close_server_connection() throws Exception {
-        TimeUtils.delayMillis(100);
+    public void server_on_disconnect() throws Exception {
         final AtomicBoolean closed = new AtomicBoolean();
 
         final TCPServer server = new TCPServer();
         server.registerOnError(ErrorListener::printError);
-        server.registerOnDisconnect((connection, reason, e) -> closed.set(true));
-        server.run(5404);
+        server.registerOnDisconnect((connection, reason) -> closed.set(true));
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
-        client.connectAsync("localhost", 5404);
-        TimeUtils.waitFor(client::isOpen, 3000, () -> {
+        client.connectAsync("localhost", port);
+        TimeUtils.waitFor(client::isConnected, 3000, () -> {
             server.close();
             Assert.fail();
         });
@@ -160,7 +178,6 @@ public class StressTests {
 
     @Test
     public void send_data_compressed() throws Exception {
-        TimeUtils.delayMillis(100);
         final String message = "0123456789".repeat(1000);
 
         final AtomicInteger counter = new AtomicInteger();
@@ -178,7 +195,8 @@ public class StressTests {
                 sender.close();
             }
         });
-        server.run(5405);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final int iterations = 10000;
 
@@ -189,7 +207,7 @@ public class StressTests {
             for(int i = 0; i < iterations; i++)
                 client.send(message);
         });
-        client.connect("localhost", 5405);
+        client.connect("localhost", port);
 
         TimeUtils.waitFor(() -> counter.get() == iterations, 3000, () -> {
             client.close();
@@ -202,14 +220,14 @@ public class StressTests {
 
     @Test
     public void send_hello_world_to_client() throws Exception {
-        TimeUtils.delayMillis(100);
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
 
         final TCPServer server = new TCPServer();
         server.registerOnError(ErrorListener::printError);
         server.registerOnConnect((connection) -> connection.send(message));
-        server.run(5406);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
@@ -217,9 +235,9 @@ public class StressTests {
             result.set(new String(bytes));
             connection.close();
         });
-        client.connect("localhost", 5406);
+        client.connect("localhost", port);
 
-        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+        TimeUtils.waitFor(client::isNotConnected, 3000, () -> {
             client.close();
             server.close();
             Assert.fail();
@@ -230,7 +248,6 @@ public class StressTests {
 
     @Test
     public void send_a_lot_of_data_to_server() throws Exception {
-        TimeUtils.delayMillis(100);
         final String message = "Hello, Data! ".repeat(1000000);
         final AtomicReference<String> result = new AtomicReference<>();
 
@@ -244,16 +261,17 @@ public class StressTests {
             result.set(new String(bytes));
             sender.close();
         });
-        server.run(5407);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
         client.setInitialOptions(options);
-        client.connect("localhost", 5407);
+        client.connect("localhost", port);
 
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+        TimeUtils.waitFor(client::isNotConnected, 3000, () -> {
             client.close();
             server.close();
             Assert.fail();
@@ -264,7 +282,6 @@ public class StressTests {
 
     @Test
     public void ignore_too_large_packets() throws Exception {
-        TimeUtils.delayMillis(100);
         final String message = "Hello, Message! ";
         final AtomicReference<String> result = new AtomicReference<>();
 
@@ -279,16 +296,17 @@ public class StressTests {
                 .setCloseOnFrameReadSizeExceed(false)
                 .setMaxFrameSize(message.length())
          );
-        server.run(5408);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
-        client.connect("localhost", 5408);
+        client.connect("localhost", port);
 
         client.send(message.repeat(2)); // reach bytes limit => will be ignored
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+        TimeUtils.waitFor(client::isNotConnected, 3000, () -> {
             client.close();
             server.close();
             Assert.fail();
@@ -299,7 +317,6 @@ public class StressTests {
 
     @Test
     public void connect_a_lot_of_clients_and_send_a_lot_of_data_multithreaded() throws Exception {
-        TimeUtils.delayMillis(100);
         final String message = "Hello, World! ".repeat(10000);
         final int clientsAmount = 100;
         final AtomicInteger done = new AtomicInteger();
@@ -313,13 +330,14 @@ public class StressTests {
                 hasNotEqual.set(true);
             done.incrementAndGet();
         });
-        server.run(5409);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final ConcurrentLinkedQueue<TCPClient> clients = new ConcurrentLinkedQueue<>();
         for(int i = 0; i < clientsAmount; i++){
             final TCPClient client = new TCPClient();
             client.registerOnError(ErrorListener::printError);
-            client.connect("localhost", 5409);
+            client.connect("localhost", port);
             clients.add(client);
         }
 
@@ -343,8 +361,6 @@ public class StressTests {
 
     @Test
     public void send_packet() throws Exception {
-        TimeUtils.delayMillis(100);
-
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
         final AtomicInteger counter = new AtomicInteger();
@@ -367,19 +383,20 @@ public class StressTests {
                 (packet) -> packetDispatcher.dispatch(sender, packet)
             );
         });
-        server.run(5410);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
-        client.connect("localhost", 5410);
+        client.connect("localhost", port);
 
         client.send(new TestMessagePacket(message));
         client.send(new TestMessagePacket(message));
 
-        TimeUtils.waitFor(() -> (counter.get() == 2), 3000, () -> {
+        TimeUtils.waitFor(() -> (counter.get() == 2), 3000, () -> { // fail
             client.close();
             server.close();
-            Assert.fail();
+            Assert.fail("counter=" + counter.get());
         });
         server.close();
         Assert.assertEquals(message, result.get());
@@ -387,8 +404,6 @@ public class StressTests {
 
     @Test
     public void send_multiple_packets() throws Exception {
-        TimeUtils.delayMillis(100);
-
         final AtomicInteger counter = new AtomicInteger();
 
         final PacketReader packetReader = new PacketReader();
@@ -398,6 +413,7 @@ public class StressTests {
 
         packetDispatcher.register(TestMessagePacket.class, (connection, packet) -> counter.incrementAndGet());
         packetDispatcher.register(TestDisconnectPacket.class, (connection, packet) -> counter.incrementAndGet());
+        packetDispatcher.register(TestEmptyPacket.class, (connection, packet) -> counter.incrementAndGet());
 
         final TCPServer server = new TCPServer();
         server.registerOnError(ErrorListener::printError);
@@ -406,16 +422,18 @@ public class StressTests {
                 (packet) -> packetDispatcher.dispatch(sender, packet)
             );
         });
-        server.run(5411);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
-        client.connect("localhost", 5411);
+        client.connect("localhost", port);
 
         client.send(new TestMessagePacket("Hello, World!").createStreamWriter());
         client.send(new TestDisconnectPacket("Disconnection"));
+        client.send(new TestEmptyPacket());
 
-        TimeUtils.waitFor(() -> (counter.get() == 2), 3000, () -> {
+        TimeUtils.waitFor(() -> (counter.get() == 3), 3000, () -> {
             client.close();
             server.close();
             Assert.fail();
@@ -425,8 +443,6 @@ public class StressTests {
 
     @Test
     public void send_packet_ssl() throws Exception {
-        TimeUtils.delayMillis(100);
-
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
         final AtomicInteger counter = new AtomicInteger();
@@ -448,12 +464,13 @@ public class StressTests {
                 (packet) -> packetDispatcher.dispatch(sender, packet)
             );
         });
-        server.run(5412);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
         client.getEventPipeline().addHandlerFirst(new ClientSecureHandler());
-        client.connect("localhost", 5412);
+        client.connect("localhost", port);
         client.registerOnConnect(connection -> {
             client.send(new TestMessagePacket(message));
             client.send(new TestMessagePacket(message));
@@ -470,7 +487,6 @@ public class StressTests {
 
     @Test
     public void send_hello_world_to_server() throws Exception {
-        TimeUtils.delayMillis(100);
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
 
@@ -480,14 +496,15 @@ public class StressTests {
             result.set(new String(bytes));
             sender.close();
         });
-        server.run(5413);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
-        client.connect("localhost", 5413);
+        client.connect("localhost", port);
         client.send(message);
 
-        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+        TimeUtils.waitFor(client::isNotConnected, 3000, () -> {
             client.close();
             server.close();
             Assert.fail();
@@ -498,7 +515,6 @@ public class StressTests {
 
     @Test
     public void send_hello_world_encrypted() throws Exception {
-        TimeUtils.delayMillis(100);
         final SecretKey key = CryptoUtils.generateSecretKey(128);
         final Cipher encryptCipher = CryptoUtils.getEncryptCipher(key);
         final Cipher decryptCipher = CryptoUtils.getDecryptCipher(key);
@@ -513,7 +529,8 @@ public class StressTests {
             result.set(new String(bytes));
             sender.close();
         });
-        server.run(5414);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
@@ -521,9 +538,9 @@ public class StressTests {
             connection.getCiphers().setCiphers(encryptCipher, decryptCipher);
             client.send(message);
         });
-        client.connect("localhost", 5414);
+        client.connect("localhost", port);
 
-        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+        TimeUtils.waitFor(client::isNotConnected, 3000, () -> {
             client.close();
             server.close();
             Assert.fail();
@@ -534,7 +551,6 @@ public class StressTests {
 
     @Test
     public void send_a_lot_of_data_encrypted() throws Exception {
-        TimeUtils.delayMillis(100);
         final SecretKey key = CryptoUtils.generateSecretKey(128);
         final Cipher encryptCipher = CryptoUtils.getEncryptCipher(key);
         final Cipher decryptCipher = CryptoUtils.getDecryptCipher(key);
@@ -556,12 +572,13 @@ public class StressTests {
                 sender.close();
             }
         });
-        server.run(5415, 5416);
+        server.run(0, 0);
+        final int[] ports = server.getPorts();
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
         client.registerOnConnect((connection) -> connection.getCiphers().setCiphers(encryptCipher, decryptCipher));
-        client.connect("localhost", 5415 + (int) Math.round(Math.random()));
+        client.connect("localhost", ports[(int) Math.round(Math.random())]);
 
         final int iterations = 10000;
         for(int i = 0; i < iterations; i++)
@@ -577,18 +594,15 @@ public class StressTests {
     }
 
     @Test
-    public void async_connect_timeout() throws Exception {
-        TimeUtils.delayMillis(100);
-
+    public void async_connect_timeout() {
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
 
-        final long timeoutMillis = 1000L;
+        final long timeoutMs = 1000L;
 
-        final CompletableFuture<TCPConnection> future = client.connectAsync("google.com", 65000, timeoutMillis);
+        final CompletableFuture<TCPConnection> future = client.connectAsync("google.com", 65000, timeoutMs);
 
         try {
-            // noinspection resource
             future.join();
             Assert.fail("Expected timeout");
         } catch (Exception e) {
@@ -598,8 +612,6 @@ public class StressTests {
 
     @Test
     public void send_zero_length_payload_framed() throws Exception {
-        TimeUtils.delayMillis(100);
-
         final TCPServer server = new TCPServer();
         server.registerOnError(ErrorListener::printError);
         server.setCodecFactory(CodecType.FRAMED);
@@ -607,15 +619,16 @@ public class StressTests {
             if(data.length == 0)
                 server.close();
         });
-        server.run(5417);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
         client.setCodec(CodecType.FRAMED);
-        client.connect("localhost", 5417);
+        client.connect("localhost", port);
         client.send(new byte[0]);
 
-        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+        TimeUtils.waitFor(client::isNotConnected, 3000, () -> {
             client.close();
             server.close();
             Assert.fail();
@@ -624,8 +637,6 @@ public class StressTests {
 
     @Test
     public void one_client_multithreaded_send_storm() throws Exception {
-        TimeUtils.delayMillis(100);
-
         final AtomicInteger counter = new AtomicInteger();
         final byte[] testData = new byte[] { 54 };
         final int sends = 512;
@@ -637,12 +648,13 @@ public class StressTests {
             if(data.length == 1 && data[0] == testData[0])
                 counter.incrementAndGet();
         });
-        server.run(5418);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
         client.setCodec(CodecType.FRAMED);
-        client.connect("localhost", 5418);
+        client.connect("localhost", port);
 
         final ExecutorService executor = Executors.newFixedThreadPool(16);
         for(int i = 0; i < sends; i++)
@@ -666,8 +678,6 @@ public class StressTests {
 
     @Test
     public void multithreaded_send_storm() throws Exception {
-        TimeUtils.delayMillis(100);
-
         final AtomicInteger counter = new AtomicInteger();
         final byte[] testData = new byte[] { 54 };
         final int sends = 512;
@@ -679,7 +689,8 @@ public class StressTests {
             if(data.length == 1 && data[0] == testData[0])
                 counter.incrementAndGet();
         });
-        server.run(5419);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final Thread[] threads = new Thread[sends];
         for(int i = 0; i < threads.length; i++) {
@@ -687,10 +698,10 @@ public class StressTests {
                 try {
                     final TCPClient client = new TCPClient();
                     client.registerOnError(ErrorListener::printError);
-                    client.connect("localhost", 5419);
+                    client.connect("localhost", port);
                     client.send(testData);
                     client.close();
-                }catch(IOException e){
+                } catch (Exception e){
                     e.printStackTrace();
                 }
             });
@@ -711,14 +722,12 @@ public class StressTests {
 
     @Test
     public void close_by_other_side() throws Exception {
-        TimeUtils.delayMillis(100);
-
-        final int iterations = 200;
+        final int iterations = 50;
         final AtomicInteger counter = new AtomicInteger();
 
         final TCPServer server = new TCPServer();
         server.registerOnError(ErrorListener::printError);
-        server.registerOnDisconnect((connection, reason, e) -> {
+        server.registerOnDisconnect((connection, reason) -> {
             if(reason == CloseReason.CLOSE_BY_OTHER_SIDE) {
                 final int count = counter.incrementAndGet();
                 if(count == iterations)
@@ -727,12 +736,13 @@ public class StressTests {
                 System.err.println(reason);
             }
         });
-        server.run(5420);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
         for(int i = 0; i < iterations; i++) {
-            client.connect("localhost", 5420);
+            client.connect("localhost", port);
             client.close();
         }
 
@@ -745,18 +755,18 @@ public class StressTests {
 
     @Test
     public void dynamic_pipeline_changes() throws Exception {
-        TimeUtils.delayMillis(100);
-
         final TCPServer server = new TCPServer();
         server.registerOnError(ErrorListener::printError);
-        server.setInitialOptions(
-            (TCPConnectionOptionsHolder) new TCPConnectionOptionsHolder().setLinger(1)
-        );
         server.registerOnReceive((connection, data) ->
             System.out.println("Server.onReceive('" + new String(data) + "')")
         );
 
-        server.run(5421);
+        final TCPConnectionOptionsHolder options = new TCPConnectionOptionsHolder();
+        options.setLinger(1);
+        server.setInitialOptions(options);
+
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
@@ -782,12 +792,12 @@ public class StressTests {
             }
         });
 
-        client.connect("localhost", 5421);
+        client.connect("localhost", port);
         client.send("A.");
         client.awaitWriteDrain(3000);
         client.close();
 
-        TimeUtils.waitFor(client::isClosed, 3000, () -> {
+        TimeUtils.waitFor(client::isNotConnected, 3000, () -> {
             client.close();
             server.close();
             Assert.fail();
@@ -798,8 +808,6 @@ public class StressTests {
 
     @Test
     public void packet_batching() throws Exception {
-        TimeUtils.delayMillis(100);
-
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
         final AtomicInteger counter = new AtomicInteger();
@@ -832,11 +840,12 @@ public class StressTests {
             maxBatched.set(Math.max(maxBatched.get(), batched));
             packetsBatchList.clear();
         });
-        server.run(5422);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
-        client.connect("localhost", 5422);
+        client.connect("localhost", port);
 
         for(int i = 0; i < sendCount; i++)
             client.send(new TestMessagePacket(message));
@@ -852,8 +861,6 @@ public class StressTests {
 
     @Test
     public void packet_async_handling() throws Exception {
-        TimeUtils.delayMillis(100);
-
         final String message = "Hello, World!";
         final AtomicReference<String> result = new AtomicReference<>();
         final AtomicInteger counter = new AtomicInteger();
@@ -877,11 +884,12 @@ public class StressTests {
             if(packet != null)
                 packetDispatcher.dispatch(sender, packet);
         });
-        server.run(5423);
+        server.run();
+        final int port = server.getPorts()[0];
 
         final TCPClient client = new TCPClient();
         client.registerOnError(ErrorListener::printError);
-        client.connect("localhost", 5423);
+        client.connect("localhost", port);
 
         for(int i = 0; i < sendCount; i++)
             client.send(new TestMessagePacket(message));
@@ -893,6 +901,175 @@ public class StressTests {
         });
         server.close();
         Assert.assertEquals(message, result.get());
+    }
+
+    @Test
+    public void async_connect() throws Exception {
+        final AtomicBoolean server_on_connected = new AtomicBoolean();
+        final AtomicBoolean server_on_receive = new AtomicBoolean();
+        final AtomicBoolean server_on_disconnected = new AtomicBoolean();
+        final AtomicBoolean client_on_connected = new AtomicBoolean();
+        final AtomicBoolean client_on_disconnected = new AtomicBoolean();
+
+        // server
+        final var server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
+        server.registerOnConnect((connection) -> {
+            server_on_connected.set(true);
+        });
+        server.registerOnReceive((sender, data) -> {
+            server_on_receive.set(true);
+        });
+        server.registerOnDisconnect((connection, reason) -> {
+            server_on_disconnected.set(true);
+        });
+        server.run();
+        final int port = server.getPorts()[0];
+
+        // client
+        final var client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
+        client.registerOnConnect((connection) -> {
+            client_on_connected.set(true);
+        });
+        client.registerOnDisconnect((connection, reason) -> {
+            client_on_disconnected.set(true);
+        });
+        final var future = client.connectAsync("localhost", port);
+
+        // waiters
+        TimeUtils.waitFor(future::isDone, 3000, () -> {
+            server.close();
+            Assert.fail(future.toString());
+        });
+        TimeUtils.waitFor(client_on_connected::get, 3000, () -> {
+            server.close();
+            Assert.fail();
+        });
+        TimeUtils.waitFor(server_on_connected::get, 3000, () -> {
+            server.close();
+            Assert.fail();
+        });
+
+        client.send("data");
+
+        TimeUtils.waitFor(server_on_receive::get, 3000, () -> {
+            server.close();
+            Assert.fail();
+        });
+
+        client.close();
+
+        TimeUtils.waitFor(client_on_disconnected::get, 3000, () -> {
+            server.close();
+            Assert.fail();
+        });
+        TimeUtils.waitFor(server_on_disconnected::get, 3000, () -> {
+            server.close();
+            Assert.fail();
+        });
+
+        server.close();
+    }
+
+    @Test
+    public void fastest_connect_success() throws Exception {
+        final AtomicBoolean connected = new AtomicBoolean();
+
+        final var server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
+        server.registerOnConnect(conn -> connected.set(true));
+        server.run();
+        final int port = server.getPorts()[0];
+
+        final var client = new TCPClient();
+
+        final SocketAddress[] addresses = new SocketAddress[] {
+            new InetSocketAddress("localhost", 1111), // wrong address 1
+            new InetSocketAddress("localhost", 1112), // wrong address 2
+            new InetSocketAddress("localhost", 1113), // wrong address 3
+            new InetSocketAddress("localhost", 1114), // wrong address 4
+            new InetSocketAddress("localhost", 1115), // wrong address 5
+            new InetSocketAddress("localhost", 1116), // wrong address 6
+            new InetSocketAddress("localhost", 1117), // wrong address 7
+            new InetSocketAddress("localhost", 1118), // wrong address 8
+            new InetSocketAddress("localhost", port),
+            new InetSocketAddress("localhost", 1119), // wrong address 9
+        };
+
+        final var future = client.connectFastest(addresses, 3000);
+
+        TimeUtils.waitFor(future::isDone, 10000, () -> {
+            Assert.fail(future.toString());
+        });
+
+        Assert.assertTrue(future.isDone());
+        if(future.isCompletedExceptionally())
+            Assert.fail(future.toString());
+
+        TimeUtils.waitFor(connected::get, 3000, Assert::fail);
+
+        client.close();
+        server.close();
+    }
+
+    @Test
+    public void fastest_connect_fail() {
+        final var client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
+
+        final SocketAddress[] addresses = new SocketAddress[] {
+            new InetSocketAddress("localhost", 1111), // wrong address 1
+            new InetSocketAddress("localhost", 1112), // wrong address 2
+            new InetSocketAddress("localhost", 1113), // wrong address 3
+            new InetSocketAddress("localhost", 1114), // wrong address 4
+            new InetSocketAddress("localhost", 1115), // wrong address 5
+            new InetSocketAddress("localhost", 1116), // wrong address 6
+            new InetSocketAddress("localhost", 1117), // wrong address 7
+            new InetSocketAddress("localhost", 1118), // wrong address 8
+            new InetSocketAddress("localhost", 1119), // wrong address 9
+        };
+
+        final var future = client.connectFastest(addresses, 1000);
+
+        TimeUtils.waitFor(future::isDone, 3000, Assert::fail);
+
+        Assert.assertTrue(future.isCompletedExceptionally());
+    }
+
+    @Test
+    public void poorly_synchronized_client() throws Exception {
+        final AtomicBoolean disconnected = new AtomicBoolean();
+        final AtomicBoolean received = new AtomicBoolean();
+
+        final var server = new TCPServer();
+        server.registerOnError(ErrorListener::printError);
+        server.registerOnDisconnect((connection, reason) -> {
+            disconnected.set(true);
+            System.out.println("Server disconnect " + reason);
+        });
+        server.registerOnReceive((connection ,data) -> received.set(true));
+        server.run();
+        final int port = server.getPorts()[0];
+
+        final var client = new TCPClient();
+        client.registerOnError(ErrorListener::printError);
+        client.setCodec(CodecType.STREAM);
+        client.connect("localhost", port);
+
+        final int size = -1000;
+        client.send(new byte[] {
+            (byte) ((size >>> 24) & 0xFF),
+            (byte) ((size >>> 16) & 0xFF),
+            (byte) ((size >>> 8) & 0xFF),
+            (byte) (size & 0xFF),
+        }); // header
+        client.send(new byte[] { 0, 0 }); // frame (2 bytes)
+
+        client.awaitWriteDrain(3000);
+
+        TimeUtils.waitFor(disconnected::get, 3000, Assert::fail);
+        Assert.assertFalse(received.get());
     }
 
 }

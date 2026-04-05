@@ -61,15 +61,15 @@ public class EventInvocationContext {
         }
     }
 
-    protected boolean invokeDisconnect(CloseReason reason, Exception e) {
+    protected boolean invokeDisconnect(CloseReason reason) {
         if(handlerIndex == handlersShapshot.length) {
-            pipeline.getTarget().invokeOnDisconnect(connection, reason, e);
+            pipeline.getTarget().invokeOnDisconnect(connection, reason);
             return false; // break
         }
         
         try {
             final EventHandler handler = handlersShapshot[handlerIndex];
-            return handler.handleDisconnect(this, reason, e);
+            return handler.handleDisconnect(this, reason);
 
         } catch (Throwable t) {
             this.error(ErrorSource.DISCONNECT_HANDLER, t);
@@ -147,13 +147,13 @@ public class EventInvocationContext {
     }
 
 
-    public void disconnect(TCPConnection connection, CloseReason reason, Exception e) {
+    public void disconnect(TCPConnection connection, CloseReason reason) {
         final int nextIndex = (handlerIndex + 1);
-        pipeline.fireDisconnect(handlersShapshot, nextIndex, connection, reason, e);
+        pipeline.fireDisconnect(handlersShapshot, nextIndex, connection, reason);
     }
 
-    public void disconnect(CloseReason reason, Exception e) {
-        this.disconnect(connection, reason, e);
+    public void disconnect(CloseReason reason) {
+        this.disconnect(connection, reason);
     }
 
 

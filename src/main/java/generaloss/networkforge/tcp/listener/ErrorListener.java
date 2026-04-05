@@ -9,8 +9,7 @@ public interface ErrorListener {
     static void printError(TCPConnection connection, ErrorSource source, Throwable throwable) {
         System.err.println(
             "[ErrorHandler] Error in " + source + ".\n" +
-            "TCPConnection name: '" + connection.getName() + "'.\n" +
-            "Caught and ignored to prevent server crash:"
+            "TCPConnection name: '" + connection.getName() + "':"
         );
         throwable.printStackTrace(System.err);
         System.err.println();

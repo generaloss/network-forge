@@ -1,0 +1,18 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="StressTests.one_client_multithreaded_send_storm [1000]" type="JUnit" factoryName="JUnit" nameIsGenerated="true" repeat_count="1000" repeat_mode="N Times">
+    <module name="network-forge" />
+    <extension name="coverage">
+      <pattern>
+        <option name="PATTERN" value="generaloss.networkforge.test.*" />
+        <option name="ENABLED" value="true" />
+      </pattern>
+    </extension>
+    <option name="PACKAGE_NAME" value="generaloss.networkforge.test" />
+    <option name="MAIN_CLASS_NAME" value="generaloss.networkforge.test.StressTests" />
+    <option name="METHOD_NAME" value="one_client_multithreaded_send_storm" />
+    <option name="TEST_OBJECT" value="method" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

@@ -4,6 +4,7 @@ import generaloss.networkforge.tcp.TCPConnection;
 
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.function.Function;
 
 public class PacketDispatcher {
 
@@ -30,6 +31,11 @@ public class PacketDispatcher {
 
         handlers[index] = handler;
         return this;
+    }
+
+    public final <H, P extends VisitorNetPacket<H>> PacketDispatcher register(Class<P> packetClass, Function<TCPConnection, H> handlerFunction) {
+        final NetPacketHandler<P> handler = (connection, packet) -> packet.handle(handlerFunction.apply(connection));
+        return this.register(packetClass, handler);
     }
 
     public PacketDispatcher async(Executor executor) {

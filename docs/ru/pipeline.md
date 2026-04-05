@@ -36,6 +36,46 @@
 
 ---
 
+## События
+
+### `Connect`
+Соединение успешно установлено.
+
+* Для клиента - завершение подключения к серверу.
+* Для сервера - принятие нового входящего соединения.
+
+### `Disconnect`
+Соединение закрыто.
+
+Вызывается при явном закрытии (`close()`) или при разрыве соединения удалённой стороной.
+
+### `Receive`
+Получен один блок данных.
+Представляет собой:
+
+* либо сырой массив байтов,
+* либо один полный фрейм при использовании `FramedTCPConnectionCodec`.
+
+### `Read Complete`
+Текущий цикл чтения завершён.
+Вызывается, когда на данный момент больше нет доступных данных для чтения из сокета.
+
+### `Error`
+Произошла ошибка во время обработки.
+
+Включает:
+
+* исключения в обработчиках (handlers),
+* ошибки в listener'ах,
+* ошибки чтения/записи.
+
+### `Send`
+Выполнена отправка данных.
+
+Событие отражает факт передачи данных в сокет (без гарантий доставки удалённой стороне).
+
+---
+
 ## Направления движения событий
 
 В системе существуют два направления распространения:
@@ -57,6 +97,7 @@ Handler_0 → Handler_1 → Handler_2 → Target
 
 * `connect`
 * `receive`
+* `read complete`
 * `disconnect`
 * `error`
 
@@ -133,7 +174,7 @@ public class LoggingHandler extends EventHandler {
     }
 
     @Override
-    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason, Exception e) {
+    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason) {
         System.out.println("Disconnected: " + reason);
         return true;
     }
@@ -141,6 +182,12 @@ public class LoggingHandler extends EventHandler {
     @Override
     public boolean handleReceive(EventInvocationContext context, byte[] data) {
         System.out.println("Received " + data.length + " bytes");
+        return true;
+    }
+
+    @Override
+    public boolean handleReadComplete(EventInvocationContext context) {
+        System.out.println("Read complete");
         return true;
     }
 

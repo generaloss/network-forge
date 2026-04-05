@@ -13,7 +13,6 @@ import generaloss.networkforge.tcp.pipeline.EventPipeline;
 import generaloss.networkforge.tcp.pipeline.EventInvocationContext;
 import generaloss.networkforge.tcp.listener.ListenersHolder;
 
-import java.io.IOException;
 import java.util.Arrays;
 
 public class VulnerabilitiesCheck {
@@ -22,7 +21,7 @@ public class VulnerabilitiesCheck {
         memoryOverflow(); // 26.2.1 passed
     }
 
-    private static void memoryOverflow() throws IOException {
+    private static void memoryOverflow() throws Exception {
         final TCPConnectionOptionsHolder options = new TCPConnectionOptionsHolder();
         options.setCloseOnFrameReadSizeExceed(false);
 
@@ -42,7 +41,7 @@ public class VulnerabilitiesCheck {
 
         // trying to overflow the memory on the server
         final byte[] message = "DATA".repeat(10_000).getBytes();
-        while(client.isOpen()) {
+        while(client.isConnected()) {
             client.send(message);
             TimeUtils.delayMillis(1);
         }
@@ -50,16 +49,19 @@ public class VulnerabilitiesCheck {
         TimeUtils.waitFor(server::isClosed, 60_000);
     }
 
-    public static void pipelineTest() throws IOException {
+    public static void pipelineTest() throws Exception {
         final ListenersHolder target = new ListenersHolder();
         target.registerOnConnect((connection) ->
                                      System.out.println("Target.handleConnect(" + connection + ")")
         );
-        target.registerOnDisconnect((connection, reason, e) ->
+        target.registerOnDisconnect((connection, reason) ->
                                         System.out.println("Target.handleDisconnect(" + connection + ")")
         );
         target.registerOnReceive((connection, data) ->
                                      System.out.println("Target.handleReceive(" + connection + ")")
+        );
+        target.registerOnReadComplete((connection) ->
+                                     System.out.println("Target.readComplete(" + connection + ")")
         );
         target.unregisterOnError((connection, source, throwable) ->
                                      System.out.println("Target.handleError(" + connection + ")")
@@ -72,27 +74,32 @@ public class VulnerabilitiesCheck {
             @Override
             public boolean handleConnect(EventInvocationContext context) {
                 System.out.println("Layer_1.handleConnect(" + context.getConnection() + ")");
-                return super.handleConnect(context);
+                return true;
             }
             @Override
-            public boolean handleDisconnect(EventInvocationContext context, CloseReason reason, Exception e) {
-                System.out.println("Layer_1.handleDisconnect(" + context.getConnection() + ", " + reason + ", " + e + ")");
-                return super.handleDisconnect(context, reason, e);
+            public boolean handleDisconnect(EventInvocationContext context, CloseReason reason) {
+                System.out.println("Layer_1.handleDisconnect(" + context.getConnection() + ", " + reason + ")");
+                return true;
             }
             @Override
             public boolean handleReceive(EventInvocationContext context, byte[] data) {
                 System.out.println("Layer_1.handleReceive(" + context.getConnection() + ", " + Arrays.toString(data) + ")");
-                return super.handleReceive(context, data);
+                return true;
+            }
+            @Override
+            public boolean handleReadComplete(EventInvocationContext context) {
+                System.out.println("Layer_1.handleReadComplete(" + context.getConnection() + ")");
+                return true;
             }
             @Override
             public boolean handleError(EventInvocationContext context, ErrorSource source, Throwable throwable) {
                 System.out.println("Layer_1.handleError(" + context.getConnection() + ", " + source + ", " + throwable + ")");
-                return super.handleError(context, source, throwable);
+                return true;
             }
             @Override
             public boolean handleSend(EventInvocationContext context, byte[] data) {
                 System.out.println("Layer_1.handleSend(" + context.getConnection() + ", " + Arrays.toString(data) + ")");
-                return super.handleSend(context, data);
+                return true;
             }
         };
 
@@ -100,27 +107,32 @@ public class VulnerabilitiesCheck {
             @Override
             public boolean handleConnect(EventInvocationContext context) {
                 System.out.println("Layer_2.handleConnect(" + context.getConnection() + ")");
-                return super.handleConnect(context);
+                return true;
             }
             @Override
-            public boolean handleDisconnect(EventInvocationContext context, CloseReason reason, Exception e) {
-                System.out.println("Layer_2.handleDisconnect(" + context.getConnection() + ", " + reason + ", " + e + ")");
-                return super.handleDisconnect(context, reason, e);
+            public boolean handleDisconnect(EventInvocationContext context, CloseReason reason) {
+                System.out.println("Layer_2.handleDisconnect(" + context.getConnection() + ", " + reason + ")");
+                return true;
             }
             @Override
             public boolean handleReceive(EventInvocationContext context, byte[] data) {
                 System.out.println("Layer_2.handleReceive(" + context.getConnection() + ", " + Arrays.toString(data) + ")");
-                return super.handleReceive(context, data);
+                return true;
+            }
+            @Override
+            public boolean handleReadComplete(EventInvocationContext context) {
+                System.out.println("Layer_2.handleReadComplete(" + context.getConnection() + ")");
+                return true;
             }
             @Override
             public boolean handleError(EventInvocationContext context, ErrorSource source, Throwable throwable) {
                 System.out.println("Layer_2.handleError(" + context.getConnection() + ", " + source + ", " + throwable + ")");
-                return super.handleError(context, source, throwable);
+                return true;
             }
             @Override
             public boolean handleSend(EventInvocationContext context, byte[] data) {
                 System.out.println("Layer_2.handleSend(" + context.getConnection() + ", " + Arrays.toString(data) + ")");
-                return super.handleSend(context, data);
+                return true;
             }
         };
 

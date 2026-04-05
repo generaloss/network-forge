@@ -4,6 +4,7 @@ public enum CodecType {
 
     FRAMED (FramedConnectionCodec::new),
     STREAM (StreamConnectionCodec::new);
+    public static final CodecType DEFAULT = FRAMED;
 
     private final ConnectionCodecFactory factory;
 
@@ -14,7 +15,5 @@ public enum CodecType {
     public ConnectionCodecFactory getFactory() {
         return factory;
     }
-
-    public static final CodecType DEFAULT = FRAMED;
 
 }

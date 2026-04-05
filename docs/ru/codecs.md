@@ -25,12 +25,12 @@
 
 ``` java
 client.setCodec(CodecType); // Enum
-client.setCodec(ConnectionCodec connectionCodec); // Существующие или свои реализации
+client.setCodec(ConnectionCodecFactory codecFactory); // Factory для существующих или своих реализаций
 ```
 
 То же для отдельных соединений TCPConnection.
 
-Для TCPServer:
+Аналогично для TCPServer:
 
 ``` java
 server.setCodecFactory(CodecType codecType); // Enum

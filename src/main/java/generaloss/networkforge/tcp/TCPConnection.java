@@ -1,11 +1,8 @@
 package generaloss.networkforge.tcp;
 
 import generaloss.networkforge.packet.NetPacket;
-import generaloss.networkforge.tcp.codec.ByteStreamReader;
-import generaloss.networkforge.tcp.codec.ByteStreamWriter;
-import generaloss.networkforge.tcp.codec.CodecType;
+import generaloss.networkforge.tcp.codec.*;
 import generaloss.networkforge.tcp.crypto.CipherPair;
-import generaloss.networkforge.tcp.codec.ConnectionCodec;
 import generaloss.networkforge.tcp.listener.CloseReason;
 import generaloss.networkforge.tcp.listener.ErrorSource;
 import generaloss.networkforge.tcp.pipeline.EventPipeline;
@@ -13,7 +10,6 @@ import generaloss.networkforge.tcp.options.TCPConnectionOptions;
 import generaloss.resourceflow.ResUtils;
 import generaloss.resourceflow.stream.BinaryStreamWriter;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
@@ -23,7 +19,7 @@ import java.nio.channels.SocketChannel;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class TCPConnection implements Sendable, Closeable {
+public class TCPConnection implements Sendable {
 
     private static final String CLASS_NAME = TCPConnection.class.getSimpleName();
 
@@ -41,7 +37,7 @@ public class TCPConnection implements Sendable, Closeable {
     private final Queue<ByteBuffer> sendQueue;
     private final Object writeLock;
 
-    public TCPConnection(SocketChannel channel, SelectionKey key, ConnectionCodec codec, EventPipeline eventPipeline) {
+    public TCPConnection(SocketChannel channel, SelectionKey key, ConnectionCodecFactory codecFactory, EventPipeline eventPipeline) {
         if(channel == null)
             throw new IllegalArgumentException("Argument 'channel' cannot be null");
         if(key == null)
@@ -52,7 +48,7 @@ public class TCPConnection implements Sendable, Closeable {
         this.channel = channel;
         this.key = key;
 
-        this.setCodec(codec);
+        this.setCodec(codecFactory);
 
         this.ciphers = new CipherPair();
         this.eventPipeline = eventPipeline;
@@ -77,30 +73,31 @@ public class TCPConnection implements Sendable, Closeable {
         return codec;
     }
 
-    public void setCodec(ConnectionCodec codec) {
-        if(codec == null)
-            throw new IllegalArgumentException("Argument 'codec' cannot be null");
+    public void setCodec(ConnectionCodecFactory codecFactory) {
+        if(codecFactory == null)
+            throw new IllegalArgumentException("Argument 'codecFactory' cannot be null");
 
         final ByteStreamWriter writer = this::onCodecWrite;
         final ByteStreamReader reader = channel::read;
-        codec.setup(this, writer, reader);
 
-        if(this.codec != null)
-            this.codec.setup(null, null, null);
-
-        this.codec = codec;
+        codec = codecFactory.create(this, writer, reader);
+        if(codec == null)
+            throw new IllegalStateException("TCP-connection codec factory returned null");
     }
 
     public void setCodec(CodecType codecType) {
         if(codecType == null)
             throw new IllegalArgumentException("Argument 'codecType' cannot be null");
 
-        final ConnectionCodec codec = codecType.getFactory().create();
-        this.setCodec(codec);
+        this.setCodec(codecType.getFactory());
     }
 
     public CipherPair getCiphers() {
         return ciphers;
+    }
+
+    public EventPipeline getEventPipeline() {
+        return eventPipeline;
     }
 
     public TCPConnectionOptions getOptions() {
@@ -160,24 +157,21 @@ public class TCPConnection implements Sendable, Closeable {
         return (!channel.isConnected() || !channel.isOpen());
     }
 
-    public void close(CloseReason reason, Exception e) {
-        System.out.println("    TCPConnection.close()");
-        if(!channel.isOpen()) {
-            System.out.println("    TCPConnection.close() when channel is not open");
-            return;
-        }
+    public boolean close(CloseReason reason) {
+        if(!channel.isOpen())
+            return false;
 
         key.cancel();
         ResUtils.close(channel);
 
-        eventPipeline.fireDisconnect(this, reason, e);
-        System.out.println("    TCPConnection.fireDisconnect('" + reason + "', " + e + ")");
+        eventPipeline.fireDisconnect(this, reason);
+        return true;
     }
 
-    @Override
     public void close() {
-        this.close(CloseReason.CLOSE_CONNECTION, null);
+        this.close(CloseReason.CLOSE_CONNECTION);
     }
+
 
     protected void onConnected() {
         eventPipeline.fireConnect(this);
@@ -257,7 +251,7 @@ public class TCPConnection implements Sendable, Closeable {
                 readCount++;
 
             } catch (IllegalStateException e) {
-                eventPipeline.fireError(this, ErrorSource.READ, e);
+                eventPipeline.fireError(this, ErrorSource.SELECTOR_READ, e);
             }
         }
 
@@ -275,15 +269,18 @@ public class TCPConnection implements Sendable, Closeable {
                 }
             }
         } catch (Exception e) {
-            this.close(CloseReason.INTERNAL_ERROR, e);
+            eventPipeline.fireError(this, ErrorSource.SELECTOR_WRITE, e);
+            this.close(CloseReason.INTERNAL_ERROR);
         }
     }
 
+    /** @return false if any sendQueue data remains **/
     private boolean writeQueuedBuffers() throws Exception {
         while(!sendQueue.isEmpty()) {
             final ByteBuffer buffer = sendQueue.peek();
 
-            channel.write(buffer);
+            if(channel.write(buffer) == 0L)
+                return false;
 
             // check is it can no longer write
             if(buffer.hasRemaining())
@@ -295,8 +292,8 @@ public class TCPConnection implements Sendable, Closeable {
         return true;
     }
 
-    public void awaitWriteDrain(long timeoutMillis) throws InterruptedException {
-        final long deadlineNanos = (System.nanoTime() + timeoutMillis * 1_000_000L);
+    public void awaitWriteDrain(long timeoutMs) throws InterruptedException {
+        final long deadlineNanos = (System.nanoTime() + timeoutMs * 1_000_000L);
 
         synchronized(writeLock) {
             while(true) {
@@ -312,11 +309,11 @@ public class TCPConnection implements Sendable, Closeable {
                 if(remainingNanos <= 0L)
                     throw new IllegalStateException("Write drain timeout");
 
-                long waitMillis = (remainingNanos / 1_000_000L);
-                if(waitMillis == 0L)
-                    waitMillis = 1L;
+                long waitMs = (remainingNanos / 1_000_000L);
+                if(waitMs == 0L)
+                    waitMs = 1L;
 
-                writeLock.wait(waitMillis);
+                writeLock.wait(waitMs);
             }
         }
     }

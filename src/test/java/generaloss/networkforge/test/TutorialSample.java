@@ -25,7 +25,7 @@ public class TutorialSample {
         server.run(5555);
     }
 
-    private static void createClient() throws IOException, InterruptedException {
+    private static void createClient() throws Exception {
         TCPClient client = new TCPClient();
         client.connect("localhost", 5555);
 

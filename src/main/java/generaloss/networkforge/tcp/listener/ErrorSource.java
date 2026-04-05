@@ -3,7 +3,8 @@ package generaloss.networkforge.tcp.listener;
 public enum ErrorSource {
 
     CONNECT,
-    READ,
+    SELECTOR_READ,
+    SELECTOR_WRITE,
     BROADCAST,
 
     CONNECT_HANDLER,

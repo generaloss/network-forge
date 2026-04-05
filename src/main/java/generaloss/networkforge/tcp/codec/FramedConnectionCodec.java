@@ -2,41 +2,46 @@ package generaloss.networkforge.tcp.codec;
 
 import generaloss.networkforge.tcp.TCPConnection;
 import generaloss.networkforge.tcp.listener.CloseReason;
+import generaloss.networkforge.tcp.listener.ErrorSource;
 
 import java.io.IOException;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 
+/** Basically, this is state machine:
+ * [Read header] → [Read data] → [Read header]
+ *            ↓
+ *      [Discard bytes]
+ *            ↓
+ *      [Read header]
+ * */
 public class FramedConnectionCodec implements ConnectionCodec {
 
     private static final String CLASS_NAME = FramedConnectionCodec.class.getSimpleName();
     private static final int HEADER_BUFFER_SIZE = Integer.BYTES; // 4 bytes for data size
     private static final int DISCARD_BUFFER_SIZE = 8192; // 8 kb
 
-    private TCPConnection connection;
-    private ByteStreamWriter writer;
-    private ByteStreamReader reader;
+    private final TCPConnection connection;
+    private final ByteStreamWriter writer;
+    private final ByteStreamReader reader;
 
     private final ByteBuffer headerBuffer;
     private ByteBuffer dataBuffer;
+    private ByteBuffer discardBuffer;
     private int discardRemaining;
 
-    public FramedConnectionCodec() {
-        this.headerBuffer = ByteBuffer.allocate(HEADER_BUFFER_SIZE);
-    }
-
-    @Override
-    public void setup(TCPConnection connection, ByteStreamWriter writer, ByteStreamReader reader) {
+    public FramedConnectionCodec(TCPConnection connection, ByteStreamWriter writer, ByteStreamReader reader) {
         this.connection = connection;
         this.writer = writer;
         this.reader = reader;
 
-        this.headerBuffer.clear();
-        this.discardRemaining = 0;
+        this.headerBuffer = ByteBuffer.allocate(HEADER_BUFFER_SIZE);
     }
 
     @Override
     public boolean write(byte[] data) {
-        if(connection == null || connection.isClosed())
+        if(connection.isClosed())
             return false;
 
         // check data size
@@ -63,99 +68,89 @@ public class FramedConnectionCodec implements ConnectionCodec {
         // write
         try {
             writer.write(buffer);
-            return true;
+            return true; // success
+
+        } catch (ClosedChannelException | SocketException ignored) {
+            return false;
         } catch (IOException e) {
-            connection.close(CloseReason.INTERNAL_ERROR, e);
+            connection.getEventPipeline().fireError(connection, ErrorSource.SELECTOR_WRITE, e);
+            connection.close(CloseReason.INTERNAL_ERROR);
             return false;
         }
     }
 
     @Override
-    public byte[] read() {
-        if(connection == null)
-            return null;
-
+    public synchronized byte[] read() {
         try {
-            // auxiliary loop
             while(true) {
-                // if discard required
-                if(discardRemaining > 0)
-                    if(!this.drainDiscardBytes())
+                // discard mode
+                if(discardRemaining > 0) {
+                    if(!this.discard())
                         return null; // continue reading/discarding next time
 
-                // if needed to read header
+                    headerBuffer.clear(); // start read header
+                }
+
+                // read header
                 if(headerBuffer.hasRemaining()) {
-                    // read header
-                    final boolean headerFullyRead = this.readPartiallyTo(headerBuffer);
-                    if(!headerFullyRead)
+                    if(!this.readFully(headerBuffer))
                         return null; // continue reading header next time
 
                     // get data size
                     headerBuffer.flip();
-                    final int dataSize = headerBuffer.getInt();
+                    final int size = headerBuffer.getInt();
 
                     // check data size
-                    final int checkResult = this.checkDataSize(dataSize);
-                    if(checkResult == -1) {
-                        // connection closed
+                    final int check = this.checkDataSize(size);
+                    if(check == -1) // connection closed
                         return null;
-                    } else if(checkResult == 1) {
-                        // discard
-                        if(this.drainDiscardBytes())
-                            continue;
-                        return null; // continue reading/discarding next time
-                    }
-
-                    // setup buffer
-                    this.setupDataBuffer(dataSize);
-                }
-
-                // if discard required
-                if(discardRemaining > 0) {
-                    if(this.drainDiscardBytes())
+                    if(check == 1) // discard
                         continue;
-                    return null; // continue reading/discarding next time
+
+                    // 0 -> setup buffer
+                    this.prepareDataBuffer(size);
                 }
 
                 // read data
-                final boolean dataFullyRead = this.readPartiallyTo(dataBuffer);
-                if(!dataFullyRead)
+                if(!this.readFully(dataBuffer))
                     return null; // continue reading data next time
 
-                // prepare header buffer for next frame
-                headerBuffer.clear();
                 // get data
                 dataBuffer.flip();
                 final byte[] data = new byte[dataBuffer.remaining()];
                 dataBuffer.get(data);
+                dataBuffer.clear();
+
+                headerBuffer.clear(); // start read header next time
+
                 return data;
             }
 
+        } catch (ClosedChannelException | SocketException ignored) {
+            return null;
         } catch (IOException e) {
-            connection.close(CloseReason.INTERNAL_ERROR, e);
+            connection.getEventPipeline().fireError(connection, ErrorSource.SELECTOR_READ, e);
+            connection.close(CloseReason.INTERNAL_ERROR);
             return null;
         }
     }
 
-    private void setupDataBuffer(int size) {
+    private void prepareDataBuffer(int size) {
         final int sizeUpperBound = connection.getOptions().getFrameBufferSizeUpperBound();
 
         final boolean allocateBuffer = (
                 dataBuffer == null ||        // initialize buffer
-                size > dataBuffer.capacity() // expand
+                dataBuffer.capacity() < size // expand
         );
-        final boolean exceedsUpperBound = (size > sizeUpperBound);
         final boolean reduceBufferSize = (
-                !allocateBuffer &&     // buffer exists & bigger than required
-                sizeUpperBound != 0 && // can be reduced
-                exceedsUpperBound      // exceeds size bound
+                !allocateBuffer &&      // buffer exists & no need to expand
+                sizeUpperBound != 0 &&  // may be reduced
+                (size > sizeUpperBound) // exceeds size bound
         );
 
         if(allocateBuffer || reduceBufferSize) {
-            // allocate
             dataBuffer = ByteBuffer.allocate(size);
         } else {
-            // set limit
             dataBuffer.clear();
             dataBuffer.limit(size);
         }
@@ -168,71 +163,68 @@ public class FramedConnectionCodec implements ConnectionCodec {
     private int checkDataSize(int size) throws IOException {
         // illegal data size received - close connection
         if(size < 0) {
-            connection.close(CloseReason.INVALID_FRAME_SIZE, null);
+            connection.close(CloseReason.INVALID_FRAME_SIZE);
             return -1;
         }
 
         // oversized frame handling
-        final int maxSize = connection.getOptions().getMaxReadFrameSize();
-        if(size > maxSize) {
+        final int max = connection.getOptions().getMaxReadFrameSize();
+
+        if(size > max) {
             // close connection if needed
             if(connection.getOptions().isCloseOnFrameReadSizeExceed()) {
-                connection.close(CloseReason.FRAME_READ_SIZE_LIMIT_EXCEEDED, null);
+                connection.close(CloseReason.FRAME_READ_SIZE_LIMIT_EXCEEDED);
                 return -1;
             }
 
             // enter discard mode
             discardRemaining = size;
-
-            // reset header buffer for next frame
-            headerBuffer.clear();
-
-            // setup data buffer for discarding
-            if(dataBuffer == null || dataBuffer.capacity() < DISCARD_BUFFER_SIZE)
-                dataBuffer = ByteBuffer.allocate(DISCARD_BUFFER_SIZE);
-
             return 1; // discard
         }
         return 0;
     }
 
-    private boolean readPartiallyTo(ByteBuffer buffer) throws IOException {
-        // check read necessity
-        if(!buffer.hasRemaining())
-            return true;
+    private boolean readFully(ByteBuffer buffer) throws IOException {
+        int readTotal = 0;
+        while(buffer.hasRemaining()) {
+            final int read = reader.read(buffer);
+            readTotal += read;
 
-        // read bytes
-        final int bytesRead = reader.read(buffer);
-        // check remote close
-        if(bytesRead == -1){
-            connection.close(CloseReason.CLOSE_BY_OTHER_SIDE, null);
-            return false; // continue to read
-        }
-
-        // is fully read
-        return !buffer.hasRemaining();
-    }
-
-    private boolean drainDiscardBytes() throws IOException {
-        dataBuffer.clear();
-        while(true) {
-            // limit
-            final int toRead = Math.min(dataBuffer.capacity(), discardRemaining);
-            dataBuffer.limit(toRead);
-            // read
-            final int read = reader.read(dataBuffer);
-            dataBuffer.clear();
-            // check if no data
             if(read == 0)
-                break;
-            // check remote close
+                break; // there's nothing to read
+
             if(read == -1) {
-                connection.close(CloseReason.CLOSE_BY_OTHER_SIDE, null);
+                connection.close(CloseReason.CLOSE_BY_OTHER_SIDE);
                 break;
             }
+        }
+
+        return !buffer.hasRemaining(); // check is fully read
+    }
+
+    private boolean discard() throws IOException {
+        if(discardBuffer == null)
+            discardBuffer = ByteBuffer.allocate(DISCARD_BUFFER_SIZE);
+
+        while(discardRemaining > 0) {
+            discardBuffer.clear();
+
+            final int toRead = Math.min(discardBuffer.capacity(), discardRemaining);
+            discardBuffer.limit(toRead);
+
+            final int read = reader.read(discardBuffer);
+            if(read == 0)
+                break; // there's nothing to discard
+
+            if(read == -1) {
+                connection.close(CloseReason.CLOSE_BY_OTHER_SIDE);
+                break;
+            }
+
             discardRemaining -= read;
         }
-        return (discardRemaining == 0);
+
+        return (discardRemaining == 0); // check is fully discard
     }
 
 }

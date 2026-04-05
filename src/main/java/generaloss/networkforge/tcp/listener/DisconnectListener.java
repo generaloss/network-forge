@@ -5,6 +5,6 @@ import generaloss.networkforge.tcp.TCPConnection;
 @FunctionalInterface
 public interface DisconnectListener {
 
-    void onDisconnect(TCPConnection connection, CloseReason reason, Exception e);
+    void onDisconnect(TCPConnection connection, CloseReason reason);
 
 }

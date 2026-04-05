@@ -36,6 +36,46 @@ An event is not broadcast. Instead, it travels step by step through the chain, w
 
 ---
 
+## Events
+
+### `Connect`
+The connection has been successfully established.
+
+* For clients - completion of connection to the server.
+* For servers - acceptance of a new incoming connection.
+
+### `Disconnect`
+The connection has been closed.
+
+Triggered on explicit close (`close()`) or when the remote side disconnects.
+
+### `Receive`
+A single unit of data has been received.
+Represents:
+
+* either a raw byte array,
+* or a complete frame when using `FramedTCPConnectionCodec`.
+
+### `Read Complete`
+The current read cycle has finished.
+Triggered when there is no more data available to read from the socket at the moment.
+
+### `Error`
+An error occurred during processing.
+
+Includes:
+
+* exceptions in handlers,
+* listener errors,
+* read/write failures.
+
+### `Send`
+Data has been sent.
+
+Represents the act of writing data to the socket (without delivery guarantees to the remote side).
+
+---
+
 ## Event propagation directions
 
 There are two directions of event propagation in the system:
@@ -55,10 +95,11 @@ Handler_0 → Handler_1 → Handler_2 → Target
 
 These include:
 
-* `connect`
-* `receive`
-* `disconnect`
-* `error`
+* `Connect`
+* `Receive`
+* `Read Complete`
+* `Disconnect`
+* `Error`
 
 Each handler decides whether the chain should continue.  
 If a method returns `false`, propagation stops.
@@ -67,7 +108,7 @@ If a method returns `false`, propagation stops.
 
 ### Outbound (outgoing events)
 
-The `send` event travels **in the opposite direction**:
+The `Send` event travels **in the opposite direction**:
 
 ```
 
@@ -133,7 +174,7 @@ public class LoggingHandler extends EventHandler {
     }
 
     @Override
-    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason, Exception e) {
+    public boolean handleDisconnect(EventInvocationContext context, CloseReason reason) {
         System.out.println("Disconnected: " + reason);
         return true;
     }
@@ -141,6 +182,12 @@ public class LoggingHandler extends EventHandler {
     @Override
     public boolean handleReceive(EventInvocationContext context, byte[] data) {
         System.out.println("Received " + data.length + " bytes");
+        return true;
+    }
+
+    @Override
+    public boolean handleReadComplete(EventInvocationContext context) {
+        System.out.println("Read complete");
         return true;
     }
 
