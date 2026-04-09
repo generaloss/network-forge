@@ -239,10 +239,11 @@ public class LoggingHandler extends EventHandler {
 ```java
 @Override
 public boolean handleReceive(EventInvocationContext context, byte[] data) {
-    context.send(message_to_send);
-    context.receive(message_to_receive);
     context.connect(connection);
     context.disconnect(connection, CloseReason.INTERNAL_ERROR, exception);
+    context.receive(message_to_receive);
+    context.readComplete(connection);
+    context.send(message_to_send);
     context.error(ErrorSource.RECEIVE_HANDLER, throwable);
     return true;
 }
