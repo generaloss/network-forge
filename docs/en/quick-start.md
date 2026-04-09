@@ -9,14 +9,14 @@
 <dependency>
     <groupId>io.github.generaloss</groupId>
     <artifactId>network-forge</artifactId>
-    <version>26.2.1</version>
+    <version>26.4.1</version>
 </dependency>
 ```
 
 #### *Gradle*
 
 ``` kotlin
-implementation("io.github.generaloss:network-forge:26.1.2")
+implementation("io.github.generaloss:network-forge:26.4.1")
 ```
 
 ---
